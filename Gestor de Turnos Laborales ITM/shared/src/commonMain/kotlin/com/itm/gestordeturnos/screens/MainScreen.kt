@@ -47,6 +47,7 @@ import com.itm.gestordeturnos.CafeBackgroundLight
 import com.itm.gestordeturnos.CafeDarkBrown
 import com.itm.gestordeturnos.components.DrawerMenuItem
 import com.itm.gestordeturnos.components.UserProfileInfo
+import com.itm.gestordeturnos.viewmodel.AsistenciaViewModel
 import com.itm.gestordeturnos.viewmodel.CambiosTurnoViewModel
 import com.itm.gestordeturnos.viewmodel.EmpleadosViewModel
 import com.itm.gestordeturnos.viewmodel.MainViewModel
@@ -199,7 +200,7 @@ fun DashboardNavHost(navController: NavHostController, usuario: UsuarioActual?) 
         composable("novedades") { NovedadesScreen(viewModel = viewModel { NovedadesViewModel() }) }
         composable("cambios") { CambiosTurnoScreen(viewModel = viewModel { CambiosTurnoViewModel() }) }
         composable("cambios_empleado") { CambiosTurnoScreen(viewModel = viewModel { CambiosTurnoViewModel() }) }
-        composable("asistencia") { Text("Pantalla de Control de Asistencia", fontSize = 24.sp) }
+        composable("asistencia") { AsistenciaScreen(viewModel = viewModel { AsistenciaViewModel() }) }
         composable("reportar_novedad") { Text("Pantalla de Reportar Novedad", fontSize = 24.sp) }
         composable("marcar_asistencia") { Text("Pantalla de Marcar Asistencia", fontSize = 24.sp) }
     }
