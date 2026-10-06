@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="webApp-js">
+    <output-path>$PROJECT_DIR$/Gestor de Turnos Laborales ITM/webApp/build/libs</output-path>
+    <root id="archive" name="webApp-js.jar">
+      <element id="module-output" name="GestordeTurnosLaboralesITM.webApp.jsMain" />
+    </root>
+  </artifact>
+</component>
