@@ -140,116 +140,131 @@ fun UserProfileInfo(
 }
 
 @Composable
-fun TurnoCard(turno: TurnoAsignado){
-    val colorBorde = if (turno.esDescanso) CafeAccentYellow else CafeBorderColor
+fun TurnoCard(turno: TurnoAsignado) {
+    // Color del borde (Amarillo si es descanso, gris si no)
+    val colorBorde = if (turno.esDescanso) CafeAccentYellow else Color(0xFFE0E0E0)
+
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp,colorBorde),
-        shape = MaterialTheme.shapes.extraSmall
-    ){
+        border = BorderStroke(1.dp, colorBorde),
+        shape = RoundedCornerShape(2.dp) // Bordes casi cuadrados
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min) // Crítico: iguala el alto de la línea separadora
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
-        ){
+        ) {
+
+            // 1. Columna Izquierda: LUN 14
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.width(48.dp)
-            ){
+                modifier = Modifier.width(40.dp)
+            ) {
                 Text(
-                    turno.diaSemana.uppercase(),
-                    fontSize = 12.sp,
+                    text = turno.diaSemana,
                     color = CafeTextSecondary,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
                 )
                 Text(
-                    turno.numeroDia,
-                    fontSize = 24.sp,
+                    text = turno.numeroDia,
                     color = CafeTextPrimary,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
+            // 2. Línea Divisoria Vertical
+            Spacer(modifier = Modifier.width(16.dp))
             Box(
                 modifier = Modifier
-                    .padding(horizontal = 16.dp)
                     .width(1.dp)
-                    .height(40.dp)
-                    .background(CafeBorderColor)
+                    .fillMaxHeight()
+                    .background(Color(0xFFE0E0E0))
             )
+            Spacer(modifier = Modifier.width(16.dp))
 
-            if(turno.esDescanso){
-                Box(
-                    modifier = Modifier
-                        .background(Color(0xFFDCE8EF))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ){
-                    Text(
-                        "DESCANSO",
-                        color = Color(0xFF6B8CA3),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                }
-            }else{
-                Column{
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ){
-                        Text(
-                            turno.nombreTurno,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CafeTextPrimary
-                        )
-
-                        if (turno.modificadoEtiqueta != null){
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .background(Color(0xFFF3E5D8))
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            ){
-                                Text(
-                                    turno.modificadoEtiqueta.uppercase(),
-                                    color = Color(0xFFA04E35),
-                                    fontSize = 9.sp,
-                                    letterSpacing = 1.sp
-                                )
-                            }
+            // 3. Columna Central: Apertura / Cierre / Descanso
+            Column(modifier = Modifier.weight(1f)) {
+                when {
+                    turno.esDescanso -> {
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFFD3E3FD), RoundedCornerShape(2.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "DESCANSO",
+                                color = Color(0xFF0B57D0),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
                         }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        turno.rangoHoras,
-                        fontSize = 14.sp,
-                        color = CafeTextSecondary
-                    )
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                if(!turno.esDescanso){
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ){
-                        SucursalChip(
-                            sucursal = turno.sucursal,
-                            borderColor = CafeAccentYellow,
-                            textColor = CafeAccentYellow
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
+                    turno.sinAsignar -> {
                         Text(
-                            turno.duracion,
+                            text = "Sin turno asignado",
+                            color = CafeTextSecondary,
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CafeDarkBrown
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                         )
                     }
+                    else -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = turno.tipoTurno ?: "",
+                                color = CafeTextPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            // Etiqueta de "MODIFICADO"
+                            if (turno.etiquetaModificado != null) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color(0xFFF3E7C9), RoundedCornerShape(2.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = turno.etiquetaModificado,
+                                        color = CafeDarkBrown,
+                                        fontSize = 10.sp,
+                                        letterSpacing = 1.sp
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = turno.horario ?: "",
+                            color = CafeTextSecondary,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+
+            // 4. Columna Derecha: Sucursal y Total Horas
+            if (!turno.esDescanso && !turno.sinAsignar) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SucursalChip(
+                        sucursal = turno.sucursal ?: "",
+                        borderColor = CafeAccentYellow,
+                        textColor = CafeAccentYellow
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = turno.duracion ?: "",
+                        color = CafeTextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }
@@ -497,10 +512,10 @@ fun EmpeladoCard(empleado: Empleado){
 }
 
 @Composable
-fun SolicitudCambioCard(solicitud: SolicitudCambio) {
+fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
     BoxWithConstraints {
         val isCompact = maxWidth < 600.dp
-        
+
         Card(
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -509,6 +524,7 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio) {
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
 
+                // 1. ENCABEZADO
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -525,7 +541,7 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio) {
                     }
 
                     val isAceptada = solicitud.estadoResumen == "ACEPTADA POR EL COMPAÑERO"
-                    val bgEstado = if (isAceptada) Color(0xFFD3E3FD) else CafeAccentYellow
+                    val bgEstado = if (isAceptada) Color(0xFFD3E3FD) else Color(0xFFF3E7C9) // Azul o Amarillo suave
                     val textEstado = if (isAceptada) Color(0xFF0B57D0) else CafeDarkBrown
 
                     Box(modifier = Modifier.background(bgEstado, RoundedCornerShape(2.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
@@ -535,9 +551,10 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio) {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // 2. CAJAS DE INTERCAMBIO
                 if (isCompact) {
                     Column(
-                        modifier = Modifier.fillMaxWidth(), 
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         TurnoDetalleBox(modifier = Modifier.fillMaxWidth(), label = "ENTREGA", nombre = solicitud.nombreEntrega, tipo = solicitud.tipoTurnoEntrega, detalle = solicitud.detalleTurnoEntrega)
@@ -556,13 +573,14 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio) {
                 HorizontalDivider(color = Color(0xFFE0E0E0))
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // 3. MOTIVO
                 Text("MOTIVO", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(solicitud.motivo, color = CafeTextPrimary, fontSize = 14.sp)
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                if (solicitud.validacionesOk) {
+                // 4. CAJA DE VALIDACIONES (SOLO ADMINISTRADOR)
+                if (isRolAdmin && solicitud.validacionesOk) {
+                    Spacer(modifier = Modifier.height(12.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth().background(Color(0xFFF8F9FA)).border(1.dp, Color(0xFFE0E0E0)).padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -571,31 +589,79 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Validaciones verificadas: descanso mínimo, máximo semanal y sin turnos duplicados.", color = CafeTextSecondary, fontSize = 12.sp)
                     }
+                    Spacer(modifier = Modifier.height(24.dp))
+                } else {
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = if (isCompact) Arrangement.SpaceBetween else Arrangement.Start
-                ) {
-                    Button(
-                        onClick = { /* Lógica aprobar */ },
-                        colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = if (isCompact) Modifier.weight(1f) else Modifier
-                    ) {
-                        Text("Aprobar") // Shortened for mobile
+                // 5. BOTONES Y ACCIONES DINÁMICAS
+                if (isRolAdmin) {
+                    // VISTA ADMINISTRADOR
+                    // El admin solo aprueba/rechaza si no ha sido resuelta definitivamente
+                    if (solicitud.estadoResumen != "APROBADA" && solicitud.estadoResumen != "RECHAZADA") {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = if (isCompact) Arrangement.SpaceBetween else Arrangement.Start
+                        ) {
+                            Button(
+                                onClick = { /* Lógica aprobar */ },
+                                colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                                shape = RoundedCornerShape(4.dp),
+                                modifier = if (isCompact) Modifier.weight(1f) else Modifier
+                            ) {
+                                Text(if (isCompact) "Aprobar" else "Aprobar e intercambiar")
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            OutlinedButton(
+                                onClick = { /* Lógica rechazar */ },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeTextPrimary),
+                                border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+                                shape = RoundedCornerShape(4.dp),
+                                modifier = if (isCompact) Modifier.weight(1f) else Modifier
+                            ) {
+                                Text("Rechazar")
+                            }
+                        }
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    OutlinedButton(
-                        onClick = { /* Lógica rechazar */ },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeTextPrimary),
-                        border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = if (isCompact) Modifier.weight(1f) else Modifier
-                    ) {
-                        Text("Rechazar")
+                } else {
+                    // VISTA EMPLEADO
+                    if (solicitud.esRemitente) {
+                        // El remitente puede "Cancelar" mientras el administrador no la haya cerrado
+                        if (solicitud.estadoResumen == "SOLICITADA" || solicitud.estadoResumen == "ACEPTADA POR EL COMPAÑERO") {
+                            Text(
+                                text = "Cancelar solicitud",
+                                color = CafeTextPrimary,
+                                fontSize = 14.sp,
+                                modifier = Modifier.clickable { /* Lógica cancelar */ }
+                            )
+                        }
+                    } else {
+                        // CRÍTICO: El receptor SOLO puede aceptar/rechazar si está "SOLICITADA"
+                        if (solicitud.estadoResumen == "SOLICITADA") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = if (isCompact) Arrangement.SpaceBetween else Arrangement.Start
+                            ) {
+                                Button(
+                                    onClick = { /* Lógica aceptar */ },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                                    shape = RoundedCornerShape(4.dp),
+                                    modifier = if (isCompact) Modifier.weight(1f) else Modifier
+                                ) {
+                                    Text("Aceptar", fontWeight = FontWeight.Medium)
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                OutlinedButton(
+                                    onClick = { /* Lógica rechazar */ },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeTextPrimary),
+                                    border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+                                    shape = RoundedCornerShape(4.dp),
+                                    modifier = if (isCompact) Modifier.weight(1f) else Modifier
+                                ) {
+                                    Text("Rechazar")
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -877,3 +943,4 @@ fun NovedadCard(novedad: Novedad){
         }
     }
 }
+

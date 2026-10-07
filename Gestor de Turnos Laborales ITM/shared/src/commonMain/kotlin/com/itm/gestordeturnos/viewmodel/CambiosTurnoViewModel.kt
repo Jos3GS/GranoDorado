@@ -10,7 +10,7 @@ data class SolicitudCambio(
     val id: String,
     val numeroSolicitud: String,
     val sucursal: String,
-    val estadoResumen: String, // Ej: "ACEPTADA POR EL COMPAÑERO", "SOLICITADA"
+    val estadoResumen: String,
     val nombreEntrega: String,
     val tipoTurnoEntrega: String,
     val detalleTurnoEntrega: String,
@@ -18,7 +18,8 @@ data class SolicitudCambio(
     val tipoTurnoRecibe: String,
     val detalleTurnoRecibe: String,
     val motivo: String,
-    val validacionesOk: Boolean
+    val validacionesOk: Boolean,
+    val esRemitente: Boolean = false,
 )
 
 data class CambiosTurnoState(
@@ -39,7 +40,7 @@ class CambiosTurnoViewModel : ViewModel() {
                 numeroSolicitud = "#S1",
                 sucursal = "CENTRO",
                 estadoResumen = "ACEPTADA POR EL COMPAÑERO",
-                nombreEntrega = "Ana Pérez",
+                nombreEntrega = "José Manuel",
                 tipoTurnoEntrega = "Cierre",
                 detalleTurnoEntrega = "2026-09-17 · 14:00 a 22:00",
                 nombreRecibe = "Sofía Ramos",
@@ -56,7 +57,7 @@ class CambiosTurnoViewModel : ViewModel() {
                 nombreEntrega = "Marta León",
                 tipoTurnoEntrega = "Apertura",
                 detalleTurnoEntrega = "2026-09-19 · 06:00 a 14:00",
-                nombreRecibe = "Ana Pérez",
+                nombreRecibe = "José Manuel",
                 tipoTurnoRecibe = "Cierre",
                 detalleTurnoRecibe = "2026-09-20 · 14:00 a 22:00",
                 motivo = "Asunto familiar.",

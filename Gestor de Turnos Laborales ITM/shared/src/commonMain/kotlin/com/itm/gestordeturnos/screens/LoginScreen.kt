@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -39,6 +40,8 @@ import com.itm.gestordeturnos.viewmodel.LoginViewModel
 @Composable
 fun LoginScreen(viewModel: LoginViewModel, onLoginSuccess: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
+
+
 
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().background(CafeBackgroundLight)
@@ -152,7 +155,10 @@ fun FormularioLogin(state: LoginState, viewModel: LoginViewModel, mostrarLogoArr
                     "¿Olvidaste tu clave?",
                     color = CafeTextSecondary)
             }
-            GoogleLoginButton(onClick = {})
+            GoogleLoginButton(onClick = {
+                viewModel.loginConGoogle()
+                onLoginSuccess()
+            })
         }
     }
 }
