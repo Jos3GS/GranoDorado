@@ -40,8 +40,6 @@ fun MiHorarioScreen(viewModel: MiHorarioViewModel) {
 
         // 1. ENCABEZADO
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            Text("ÉPICA 3 · HU-09", color = CafeTextSecondary, fontSize = 10.sp, letterSpacing = 1.sp)
-            Spacer(modifier = Modifier.height(4.dp))
 
             Text("Mi horario", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = CafeTextPrimary)
             Spacer(modifier = Modifier.height(8.dp))

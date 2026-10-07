@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.itm.gestordeturnos.CafeDarkBrown
 import com.itm.gestordeturnos.CafeTextPrimary
 import com.itm.gestordeturnos.CafeTextSecondary
+import com.itm.gestordeturnos.components.ModalSolicitarCambio
 import com.itm.gestordeturnos.components.SolicitudCambioCard
 import com.itm.gestordeturnos.viewmodel.CambiosTurnoViewModel
 
@@ -56,7 +57,8 @@ fun CambiosTurnoScreen(viewModel: CambiosTurnoViewModel, isRolAdmin: Boolean) {
             // El botón de crear solo lo ve el empleado
             if (!isRolAdmin) {
                 Button(
-                    onClick = { /* Lógica solicitar nuevo cambio */ },
+                    // AQUÍ LLAMAMOS AL VIEWMODEL:
+                    onClick = { viewModel.toggleModalSolicitud(true) },
                     colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
                     shape = RoundedCornerShape(4.dp)
                 ) {
@@ -74,5 +76,16 @@ fun CambiosTurnoScreen(viewModel: CambiosTurnoViewModel, isRolAdmin: Boolean) {
                 SolicitudCambioCard(solicitud = solicitud, isRolAdmin = isRolAdmin)
             }
         }
+        // MOSTRAR EL MODAL
+        if (state.mostrarModalSolicitud) {
+            ModalSolicitarCambio(
+                turnosPropios = state.turnosPropios,
+                turnosCompaneros = state.turnosCompaneros,
+                turnoSeleccionado = state.turnoPropioSeleccionado,
+                onTurnoPropioSeleccionado = { viewModel.seleccionarTurnoPropio(it) },
+                onDismiss = { viewModel.toggleModalSolicitud(false) }
+            )
+        }
+
     }
 }
