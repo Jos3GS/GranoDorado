@@ -26,6 +26,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,24 +48,35 @@ import com.itm.gestordeturnos.CafeBackgroundLight
 import com.itm.gestordeturnos.CafeDarkBrown
 import com.itm.gestordeturnos.components.DrawerMenuItem
 import com.itm.gestordeturnos.components.UserProfileInfo
+import com.itm.gestordeturnos.viewmodel.AsistenciaViewModel
 import com.itm.gestordeturnos.viewmodel.CambiosTurnoViewModel
 import com.itm.gestordeturnos.viewmodel.EmpleadosViewModel
 import com.itm.gestordeturnos.viewmodel.MainViewModel
 import com.itm.gestordeturnos.viewmodel.MallaSemanalViewModel
+import com.itm.gestordeturnos.viewmodel.MarcarAsistenciaViewModel
 import com.itm.gestordeturnos.viewmodel.MiHorarioViewModel
 import com.itm.gestordeturnos.viewmodel.NovedadesViewModel
+import com.itm.gestordeturnos.viewmodel.ReportarNovedadViewModel
 import com.itm.gestordeturnos.viewmodel.TurnosViewModel
 import com.itm.gestordeturnos.viewmodel.UsuarioActual
 import kotlinx.coroutines.launch
 
 @Composable
 fun MainScreen(viewModel: MainViewModel, onLogoutSuccess: () -> Unit) {
+
+    LaunchedEffect(Unit){
+        viewModel.cargarDatos()
+    }
+
     val state by viewModel.uiState.collectAsState()
+
+    // 1. CALCULAMOS LA RUTA INICIAL DINÁMICAMENTE
+    val rutaInicial = state.opcionesMenu.firstOrNull()?.id ?: "panel"
 
     val internalNavController = rememberNavController()
 
     val navBackStackEntry by internalNavController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route ?: "panel"
+    val currentRoute = navBackStackEntry?.destination?.route ?: rutaInicial // 2. USAMOS LA RUTA INICIAL
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -105,7 +117,8 @@ fun MainScreen(viewModel: MainViewModel, onLogoutSuccess: () -> Unit) {
                         isSelected = opcion.id == currentRoute,
                         onClick = {
                             internalNavController.navigate(opcion.id) {
-                                popUpTo(internalNavController.graph.findStartDestination().route ?: "panel") {
+                                // 3. ACTUALIZAMOS EL POPUPTO PARA QUE USE LA RUTA INICIAL DINÁMICA
+                                popUpTo(internalNavController.graph.findStartDestination().route ?: rutaInicial) {
                                     saveState = true
                                 }
                                 launchSingleTop = true
@@ -155,7 +168,10 @@ fun MainScreen(viewModel: MainViewModel, onLogoutSuccess: () -> Unit) {
                             .fillMaxSize()
                             .then(if (currentRoute == "empleados") Modifier else Modifier.padding(16.dp))
                     ) {
-                        DashboardNavHost(internalNavController, state.usuario)
+                        // 4. SOLO DIBUJAMOS EL NAVHOST SI YA HAY OPCIONES CARGADAS
+                        if (state.opcionesMenu.isNotEmpty()) {
+                            DashboardNavHost(internalNavController, state.usuario, rutaInicial)
+                        }
                     }
                 }
             }
@@ -168,18 +184,23 @@ fun MainScreen(viewModel: MainViewModel, onLogoutSuccess: () -> Unit) {
                         .fillMaxHeight()
                         .then(if (currentRoute == "empleados") Modifier else Modifier.padding(32.dp))
                 ) {
-                    DashboardNavHost(internalNavController, state.usuario)
+                    // 4. SOLO DIBUJAMOS EL NAVHOST SI YA HAY OPCIONES CARGADAS
+                    if (state.opcionesMenu.isNotEmpty()) {
+                        DashboardNavHost(internalNavController, state.usuario, rutaInicial)
+                    }
                 }
             }
         }
     }
 }
 
+// 5. ACTUALIZAMOS LA FIRMA DE LA FUNCIÓN PARA RECIBIR LA RUTA INICIAL
 @Composable
-fun DashboardNavHost(navController: NavHostController, usuario: UsuarioActual?) {
+fun DashboardNavHost(navController: NavHostController, usuario: UsuarioActual?, rutaInicial: String) {
+
     NavHost(
         navController = navController,
-        startDestination = "panel"
+        startDestination = rutaInicial // 6. ASIGNAMOS EL DESTINO DINÁMICO
     ) {
         composable("panel") {
             usuario?.let { PanelScreen(usuario = it) }
@@ -197,10 +218,10 @@ fun DashboardNavHost(navController: NavHostController, usuario: UsuarioActual?) 
         // Pantallas en construcción
         composable("turnos") { TurnosScreen(viewModel = viewModel { TurnosViewModel() }) }
         composable("novedades") { NovedadesScreen(viewModel = viewModel { NovedadesViewModel() }) }
-        composable("cambios") { CambiosTurnoScreen(viewModel = viewModel { CambiosTurnoViewModel() }) }
-        composable("cambios_empleado") { CambiosTurnoScreen(viewModel = viewModel { CambiosTurnoViewModel() }) }
-        composable("asistencia") { Text("Pantalla de Control de Asistencia", fontSize = 24.sp) }
-        composable("reportar_novedad") { Text("Pantalla de Reportar Novedad", fontSize = 24.sp) }
-        composable("marcar_asistencia") { Text("Pantalla de Marcar Asistencia", fontSize = 24.sp) }
+        composable("cambios") { CambiosTurnoScreen(viewModel = viewModel { CambiosTurnoViewModel() }, isRolAdmin = true) }
+        composable("cambios_empleado") { CambiosTurnoScreen(viewModel = viewModel { CambiosTurnoViewModel() }, isRolAdmin = false) }
+        composable("asistencia") { AsistenciaScreen(viewModel = viewModel { AsistenciaViewModel() }) }
+        composable("reportar_novedad") { ReportarNovedadScreen(viewModel = viewModel{ ReportarNovedadViewModel() }) }
+        composable("marcar_asistencia") { MarcarAsistenciaScreen(viewModel = viewModel { MarcarAsistenciaViewModel() }) }
     }
 }

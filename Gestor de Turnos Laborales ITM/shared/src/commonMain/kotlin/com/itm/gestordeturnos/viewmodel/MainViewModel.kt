@@ -34,25 +34,17 @@ class MainViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(MainState())
     val uiState: StateFlow<MainState> = _uiState.asStateFlow()
 
-    init {
-        cargarUsuarioPrueba(RolUsuario.ADMINISTRADOR_GENERAL)
-    }
-
-    private fun cargarUsuarioPrueba(rol: RolUsuario) {
-        val usuario = when (rol){
-            RolUsuario.ADMINISTRADOR_GENERAL -> UsuarioActual("Diego Marin", "DM", "ADMINISTRADOR GENERAL", rol)
-            RolUsuario.ADMINISTRADOR_SUCURSAL -> UsuarioActual("Carla Ríos", "CR", "ADMINISTRADOR DE SUCURSAL", rol)
-            RolUsuario.EMPLEADO -> UsuarioActual("Ana Pérez", "AP", "BARISTA", rol)
-        }
-
-        val menu = obtenerMenuPorRol(rol)
-
-        _uiState.update {
-            it.copy(
-                usuario = usuario,
-                opcionesMenu = menu,
-                opcionSeleccionada = menu.firstOrNull()?.id ?: ""
-            )
+    fun cargarDatos(){
+        val usuarioLogueado = SessionManager.usuarioActivo
+        if(usuarioLogueado != null) {
+            val opciones = obtenerMenuPorRol(usuarioLogueado.rol)
+            _uiState.update {
+                it.copy (
+                    usuario = usuarioLogueado,
+                    opcionesMenu = opciones,
+                    opcionSeleccionada = opciones.firstOrNull()?.id ?: ""
+                )
+            }
         }
     }
 
