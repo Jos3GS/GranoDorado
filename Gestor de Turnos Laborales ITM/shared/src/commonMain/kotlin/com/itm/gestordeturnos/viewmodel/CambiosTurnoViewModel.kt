@@ -22,8 +22,25 @@ data class SolicitudCambio(
     val esRemitente: Boolean = false,
 )
 
+data class TurnoSeleccionable(
+    val id: String,
+    val descripcion: String,
+    val horario: String
+)
+
+data class TurnoCompaneroSeleccionable(
+    val id: String,
+    val nombre: String,
+    val descripcion: String,
+    val horario: String
+)
+
 data class CambiosTurnoState(
-    val solicitudes: List<SolicitudCambio> = emptyList()
+    val solicitudes: List<SolicitudCambio> = emptyList(),
+    val mostrarModalSolicitud: Boolean = false,
+    val turnoPropioSeleccionado: TurnoSeleccionable? = null,
+    val turnosPropios: List <TurnoSeleccionable> = emptyList(),
+    val turnosCompaneros : List<TurnoCompaneroSeleccionable> = emptyList(),
 )
 class CambiosTurnoViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(CambiosTurnoState())
@@ -64,6 +81,33 @@ class CambiosTurnoViewModel : ViewModel() {
                 validacionesOk = true
             )
         )
-        _uiState.update { it.copy(solicitudes = demo) }
+        val turnosPropiosDemo = listOf(
+            TurnoSeleccionable("1", "Lunes 14 · Apertura", "06:00-14:00"),
+            TurnoSeleccionable("2", "Martes 15 · Apertura", "06:00-14:00"),
+            TurnoSeleccionable("3", "Jueves 17 · Cierre", "14:00-22:00"),
+            TurnoSeleccionable("4", "Viernes 18 · Apertura", "06:00-14:00"),
+            TurnoSeleccionable("5", "Sábado 19 · Apertura", "06:00-14:00")
+        )
+
+        val turnosCompanerosDemo = listOf(
+            TurnoCompaneroSeleccionable("c1", "Sofía Ramos", "Miércoles 16 · Intermedio", "10:00-18:00"),
+            TurnoCompaneroSeleccionable("c2", "Marta León", "Miércoles 16 · Cierre", "14:00-22:00"),
+            TurnoCompaneroSeleccionable("c3", "Marta León", "Domingo 20 · Cierre", "14:00-22:00")
+        )
+
+        _uiState.update { it.copy(solicitudes = demo, turnosPropios = turnosPropiosDemo, turnosCompaneros = turnosCompanerosDemo) }
+    }
+
+    fun toggleModalSolicitud(mostrar: Boolean) {
+        _uiState.update {
+            it.copy(
+                mostrarModalSolicitud = mostrar,
+                turnoPropioSeleccionado = if (!mostrar) null else it.turnoPropioSeleccionado
+            )
+        }
+    }
+
+    fun seleccionarTurnoPropio(turno: TurnoSeleccionable) {
+        _uiState.update { it.copy(turnoPropioSeleccionado = turno) }
     }
 }

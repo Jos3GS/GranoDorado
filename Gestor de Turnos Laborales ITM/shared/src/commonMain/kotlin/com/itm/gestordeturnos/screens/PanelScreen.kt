@@ -2,6 +2,7 @@ package com.itm.gestordeturnos.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -40,7 +41,7 @@ import com.itm.gestordeturnos.viewmodel.RolUsuario
 import com.itm.gestordeturnos.viewmodel.UsuarioActual
 
 @Composable
-fun PanelScreen(usuario: UsuarioActual){
+fun PanelScreen(usuario: UsuarioActual, onNavigate: (String) -> Unit){
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -48,8 +49,7 @@ fun PanelScreen(usuario: UsuarioActual){
             .padding(bottom = 32.dp)
     ){
         val isCompact = maxWidth < 800.dp
-        
-        // Ajustamos el width para dispositivos móviles (50% menos el padding/spacing)
+
         val statCardWidth = if (isCompact) (maxWidth / 2) - 8.dp else 200.dp
 
         Column(
@@ -98,15 +98,17 @@ fun PanelScreen(usuario: UsuarioActual){
                 Column(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ){
-                    ActionBanner(modifier = Modifier.fillMaxWidth(), isCompact = isCompact)
-                    DailyTask(modifier = Modifier.fillMaxWidth())
+                    // 1. PASAMOS LA NAVEGACIÓN A LA MALLA
+                    ActionBanner(modifier = Modifier.fillMaxWidth(), isCompact = isCompact, onActionClick = { onNavigate("malla") })
+                    DailyTask(modifier = Modifier.fillMaxWidth(), onNavigate = onNavigate)
                 }
             }else{
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ){
-                    ActionBanner(modifier = Modifier.weight(0.6f), isCompact = isCompact)
-                    DailyTask(modifier = Modifier.weight(0.4f))
+                    // 1. PASAMOS LA NAVEGACIÓN A LA MALLA
+                    ActionBanner(modifier = Modifier.weight(0.6f), isCompact = isCompact, onActionClick = { onNavigate("malla") })
+                    DailyTask(modifier = Modifier.weight(0.4f), onNavigate = onNavigate)
                 }
             }
         }
@@ -114,7 +116,7 @@ fun PanelScreen(usuario: UsuarioActual){
 }
 
 @Composable
-fun DailyTask(modifier: Modifier) {
+fun DailyTask(modifier: Modifier, onNavigate: (String) -> Unit) {
     Card(
         modifier = modifier.height(220.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -131,17 +133,20 @@ fun DailyTask(modifier: Modifier) {
                 letterSpacing = 1.sp,
             )
             Spacer(modifier = Modifier.height(16.dp))
-            TaskItem("3 novedades esperan revisión")
-            TaskItem("1 solicitudes de cambio por decidir")
-            TaskItem("Publicar la semana antes del domingo")
+            TaskItem("3 novedades esperan revisión", onClick = { onNavigate("novedades") })
+            TaskItem("1 solicitudes de cambio por decidir", onClick = { onNavigate("cambios") })
+            TaskItem("Publicar la semana antes del domingo", onClick = { onNavigate("malla") })
         }
     }
 }
 
 @Composable
-fun TaskItem(texto: String) {
+fun TaskItem(texto: String, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ){
@@ -164,7 +169,7 @@ fun TaskItem(texto: String) {
 }
 
 @Composable
-fun ActionBanner(modifier: Modifier, isCompact: Boolean = false) {
+fun ActionBanner(modifier: Modifier, isCompact: Boolean = false, onActionClick: () -> Unit) {
     Box(
         modifier = modifier
             .height(240.dp)
@@ -199,7 +204,7 @@ fun ActionBanner(modifier: Modifier, isCompact: Boolean = false) {
 
             PrimarySolidButton(
                 text = "Abrir malla semanal ->",
-                onClick = {},
+                onClick = onActionClick,
                 modifier = if (isCompact) Modifier.fillMaxWidth() else Modifier.width(250.dp)
             )
         }

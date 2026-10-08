@@ -200,10 +200,23 @@ fun DashboardNavHost(navController: NavHostController, usuario: UsuarioActual?, 
 
     NavHost(
         navController = navController,
-        startDestination = rutaInicial // 6. ASIGNAMOS EL DESTINO DINÁMICO
+        startDestination = rutaInicial
     ) {
         composable("panel") {
-            usuario?.let { PanelScreen(usuario = it) }
+            usuario?.let {
+                PanelScreen(
+                    usuario = it,
+                    onNavigate = { rutaDestino ->
+                        navController.navigate(rutaDestino) {
+                            popUpTo(navController.graph.findStartDestination().route ?: rutaInicial) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
         }
         composable("empleados") {
             EmpleadosScreen(viewModel = viewModel { EmpleadosViewModel() })

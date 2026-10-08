@@ -1,5 +1,6 @@
 package com.itm.gestordeturnos.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,16 +13,20 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -31,6 +36,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -49,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.itm.gestordeturnos.CafeAccentYellow
 import com.itm.gestordeturnos.CafeBackgroundLight
 import com.itm.gestordeturnos.CafeBorderColor
@@ -61,6 +68,8 @@ import com.itm.gestordeturnos.viewmodel.Novedad
 import com.itm.gestordeturnos.viewmodel.SolicitudCambio
 import com.itm.gestordeturnos.viewmodel.TurnoAsignado
 import com.itm.gestordeturnos.viewmodel.TurnoCelda
+import com.itm.gestordeturnos.viewmodel.TurnoCompaneroSeleccionable
+import com.itm.gestordeturnos.viewmodel.TurnoSeleccionable
 
 @Composable
 fun DrawerMenuItem(
@@ -938,6 +947,108 @@ fun NovedadCard(novedad: Novedad){
 
                 if (!isCompact) {
                     NovedadEstadoBadge(estado = novedad.estado)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ModalSolicitarCambio(
+    turnosPropios: List<TurnoSeleccionable>,
+    turnosCompaneros: List<TurnoCompaneroSeleccionable>,
+    turnoSeleccionado: TurnoSeleccionable?,
+    onTurnoPropioSeleccionado: (TurnoSeleccionable) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f), // Ocupa el 85% del alto de la pantalla
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(4.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp)
+            ) {
+                // ENCABEZADO
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column {
+                        Text("Solicitar cambio de turno", color = CafeTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = CafeTextSecondary)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // CONTENIDO SCROLLEABLE
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    // SECCIÓN 1: TURNO QUE ENTREGAS
+                    Text("1 · TURNO QUE ENTREGAS", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    turnosPropios.forEach { turno ->
+                        val isSelected = turno == turnoSeleccionado
+                        val borderColor = if (isSelected) CafeDarkBrown else Color(0xFFE0E0E0)
+                        val borderWidth = if (isSelected) 2.dp else 1.dp
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                                .border(borderWidth, borderColor, RoundedCornerShape(2.dp))
+                                .clickable { onTurnoPropioSeleccionado(turno) }
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(turno.descripcion, color = CafeTextPrimary, fontSize = 14.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                            Text(turno.horario, color = CafeTextSecondary, fontSize = 12.sp)
+                        }
+                    }
+
+                    // SECCIÓN 2: TURNO QUE RECIBES (Solo se muestra si hay uno seleccionado arriba)
+                    AnimatedVisibility(visible = turnoSeleccionado != null) {
+                        Column(modifier = Modifier.padding(top = 24.dp)) {
+                            Text("2 · TURNO DEL COMPAÑERO QUE RECIBES", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Solo se listan Baristas de Centro sin conflicto de agenda.", color = CafeTextSecondary, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            turnosCompaneros.forEach { companero ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                        .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(2.dp))
+                                        .clickable { /* Futura lógica de selección final */ }
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(companero.nombre, color = CafeTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(companero.descripcion, color = CafeTextSecondary, fontSize = 12.sp)
+                                    }
+                                    Text(companero.horario, color = CafeTextSecondary, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
