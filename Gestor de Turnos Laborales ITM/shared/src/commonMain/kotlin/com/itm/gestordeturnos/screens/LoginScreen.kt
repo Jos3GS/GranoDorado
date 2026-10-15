@@ -35,6 +35,7 @@ import com.itm.gestordeturnos.CafeTextPrimary
 import com.itm.gestordeturnos.CafeTextSecondary
 import com.itm.gestordeturnos.components.GoogleLoginButton
 import com.itm.gestordeturnos.components.LabeledInputField
+import com.itm.gestordeturnos.components.ModalFeedbackRecuperacion
 import com.itm.gestordeturnos.components.PrimarySolidButton
 import com.itm.gestordeturnos.viewmodel.LoginState
 import com.itm.gestordeturnos.viewmodel.LoginViewModel
@@ -78,6 +79,7 @@ fun LoginScreen(viewModel: LoginViewModel, onLoginSuccess: () -> Unit) {
                         onPasswordChanged = viewModel::onPasswordChanged,
                         onLoginClick = viewModel::iniciarSesion,
                         onGoogleLoginClick = viewModel::loginConGoogle,
+                        onRecuperarClaveClick = { viewModel.recuperarContrasena() },
                         mostrarLogoArriba = false
                     )
                 }
@@ -96,10 +98,19 @@ fun LoginScreen(viewModel: LoginViewModel, onLoginSuccess: () -> Unit) {
                     onPasswordChanged = viewModel::onPasswordChanged,
                     onLoginClick = viewModel::iniciarSesion,
                     onGoogleLoginClick = viewModel::loginConGoogle,
+                    onRecuperarClaveClick = { viewModel.recuperarContrasena() },
                     mostrarLogoArriba = true
                 )
             }
         }
+    }
+
+    // Ventana emergente (Modal) de feedback de recuperación de contraseña
+    state.feedbackRecuperacion?.let { feedback ->
+        ModalFeedbackRecuperacion(
+            feedback = feedback,
+            onDismiss = viewModel::cerrarFeedbackRecuperacion
+        )
     }
 }
 
@@ -110,6 +121,7 @@ fun FormularioLogin(
     onPasswordChanged: (String) -> Unit,
     onLoginClick: () -> Unit,
     onGoogleLoginClick: () -> Unit,
+    onRecuperarClaveClick: () -> Unit,
     mostrarLogoArriba: Boolean
 ) {
     Column(
@@ -178,7 +190,7 @@ fun FormularioLogin(
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(
-                onClick = {}
+                onClick = onRecuperarClaveClick
             ) {
                 Text(
                     "¿Olvidaste tu clave?",
