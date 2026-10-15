@@ -25,10 +25,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.itm.gestordeturnos.CafeAccentYellow
+import com.itm.gestordeturnos.CafeBorderLight
 import com.itm.gestordeturnos.CafeDarkBrown
+import com.itm.gestordeturnos.CafeSurfaceWarm
 import com.itm.gestordeturnos.CafeTextPrimary
 import com.itm.gestordeturnos.CafeTextSecondary
+import com.itm.gestordeturnos.components.EncabezadoPantalla
 import com.itm.gestordeturnos.components.TurnoCard
 import com.itm.gestordeturnos.viewmodel.MiHorarioViewModel
 
@@ -39,12 +41,10 @@ fun MiHorarioScreen(viewModel: MiHorarioViewModel) {
     Column(modifier = Modifier.fillMaxSize()) {
 
         // 1. ENCABEZADO
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-
-            Text("Mi horario", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = CafeTextPrimary)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(state.rangoSemana, fontSize = 16.sp, color = CafeTextSecondary)
-        }
+        EncabezadoPantalla(
+            titulo = "Mi horario",
+            subtitulo = state.rangoSemana
+        )
 
         // 2. BARRA DE PUBLICACIÓN Y TOTAL DE HORAS
         Row(
@@ -77,8 +77,8 @@ fun MiHorarioScreen(viewModel: MiHorarioViewModel) {
         LazyColumn(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Renderizamos los días de la semana
-            items(state.turnos) { turno ->
+            // Renderizamos los días de la semana con key estable
+            items(state.turnos, key = { it.id }) { turno ->
                 TurnoCard(turno = turno)
             }
 
@@ -99,8 +99,8 @@ fun MiHorarioScreen(viewModel: MiHorarioViewModel) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFFFAF9F6)) // Crema claro
-                        .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(2.dp))
+                        .background(CafeSurfaceWarm)
+                        .border(1.dp, CafeBorderLight, RoundedCornerShape(2.dp))
                         .padding(24.dp)
                 ) {
                     Column {

@@ -1,24 +1,14 @@
 package com.itm.gestordeturnos.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.itm.gestordeturnos.data.repository.EmpleadoRepository
+import com.itm.gestordeturnos.domain.model.Empleado
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-
-data class Empleado(
-    val id: String,
-    val nombre: String,
-    val apellido: String = "",
-    val documento: String = "",
-    val correo: String = "",
-    val telefono: String = "",
-    val cargo: String, // Rol: "ADMINISTRADOR GENERAL", "ADMINISTRADOR DE SUCURSAL", "BARISTA", "COCINERO", "CAJERO"
-    val sucursal: String, // "CENTRO", "NORTE", "SUR"
-    val fechaIngreso: String = "15/01/2024",
-    val estado: String = "ACTIVO", // "ACTIVO", "INACTIVO"
-    val iniciales: String = ""
-)
+import kotlinx.coroutines.launch
 
 data class EmpleadosState(
     val empleadosOriginales: List<Empleado> = emptyList(),
@@ -38,129 +28,23 @@ class EmpleadosViewModel : ViewModel() {
     val uiState: StateFlow<EmpleadosState> = _uiState.asStateFlow()
 
     init {
-        cargarEmpleadosDemo()
+        observarEmpleados()
+    }
+
+    private fun observarEmpleados() {
+        viewModelScope.launch {
+            EmpleadoRepository.empleados.collect { lista ->
+                _uiState.update { state ->
+                    aplicarFiltros(state.copy(empleadosOriginales = lista))
+                }
+            }
+        }
     }
 
     private fun calcularIniciales(nombre: String, apellido: String): String {
         val n = nombre.trim().firstOrNull()?.uppercaseChar()?.toString() ?: ""
         val a = apellido.trim().firstOrNull()?.uppercaseChar()?.toString() ?: ""
         return if (n.isNotEmpty() || a.isNotEmpty()) "$n$a" else "??"
-    }
-
-    private fun cargarEmpleadosDemo() {
-        val listaDemo = listOf(
-            Empleado(
-                id = "1",
-                nombre = "Diego",
-                apellido = "Marín",
-                documento = "1000112233",
-                correo = "admin.general@granodorado.com",
-                telefono = "3001112233",
-                cargo = "ADMINISTRADOR GENERAL",
-                sucursal = "CENTRO",
-                fechaIngreso = "15/01/2024",
-                estado = "ACTIVO",
-                iniciales = "DM"
-            ),
-            Empleado(
-                id = "2",
-                nombre = "Carla",
-                apellido = "Ríos",
-                documento = "1011223344",
-                correo = "carla.rios@granodorado.com",
-                telefono = "3002223344",
-                cargo = "ADMINISTRADOR DE SUCURSAL",
-                sucursal = "CENTRO",
-                fechaIngreso = "01/02/2024",
-                estado = "ACTIVO",
-                iniciales = "CR"
-            ),
-            Empleado(
-                id = "3",
-                nombre = "Ana",
-                apellido = "Pérez",
-                documento = "1022334455",
-                correo = "ana.perez@granodorado.com",
-                telefono = "3003334455",
-                cargo = "BARISTA",
-                sucursal = "CENTRO",
-                fechaIngreso = "15/02/2024",
-                estado = "ACTIVO",
-                iniciales = "AP"
-            ),
-            Empleado(
-                id = "4",
-                nombre = "Sofía",
-                apellido = "Ramos",
-                documento = "1033445566",
-                correo = "sofia.ramos@granodorado.com",
-                telefono = "3004445566",
-                cargo = "BARISTA",
-                sucursal = "CENTRO",
-                fechaIngreso = "01/03/2024",
-                estado = "ACTIVO",
-                iniciales = "SR"
-            ),
-            Empleado(
-                id = "5",
-                nombre = "Marta",
-                apellido = "León",
-                documento = "1044556677",
-                correo = "marta.leon@granodorado.com",
-                telefono = "3005556677",
-                cargo = "BARISTA",
-                sucursal = "CENTRO",
-                fechaIngreso = "10/03/2024",
-                estado = "ACTIVO",
-                iniciales = "ML"
-            ),
-            Empleado(
-                id = "6",
-                nombre = "Diego",
-                apellido = "Salas",
-                documento = "1055667788",
-                correo = "diego.salas@granodorado.com",
-                telefono = "3006667788",
-                cargo = "COCINERO",
-                sucursal = "CENTRO",
-                fechaIngreso = "20/03/2024",
-                estado = "ACTIVO",
-                iniciales = "DS"
-            ),
-            Empleado(
-                id = "7",
-                nombre = "Julián",
-                apellido = "Vera",
-                documento = "1066778899",
-                correo = "julian.vera@granodorado.com",
-                telefono = "3007778899",
-                cargo = "CAJERO",
-                sucursal = "CENTRO",
-                fechaIngreso = "01/04/2024",
-                estado = "ACTIVO",
-                iniciales = "JV"
-            ),
-            Empleado(
-                id = "8",
-                nombre = "Luis",
-                apellido = "Gómez",
-                documento = "1077889900",
-                correo = "luis.gomez@granodorado.com",
-                telefono = "3008889900",
-                cargo = "COCINERO",
-                sucursal = "NORTE",
-                fechaIngreso = "15/04/2024",
-                estado = "INACTIVO",
-                iniciales = "LG"
-            )
-        )
-
-        _uiState.update {
-            it.copy(
-                empleadosOriginales = listaDemo,
-                empleadosFiltrados = listaDemo
-            )
-        }
     }
 
     fun onBuscarTextoCambiado(nuevoTexto: String) {
@@ -301,22 +185,14 @@ class EmpleadosViewModel : ViewModel() {
             iniciales = calcularIniciales(empleadoActualizado.nombre, empleadoActualizado.apellido)
         )
 
-        val nuevaLista = if (estadoActual.esNuevoEmpleado) {
-            estadoActual.empleadosOriginales + empleadoFinal
-        } else {
-            estadoActual.empleadosOriginales.map {
-                if (it.id == empleadoFinal.id) empleadoFinal else it
-            }
-        }
+        EmpleadoRepository.guardarEmpleado(empleadoFinal, estadoActual.esNuevoEmpleado)
 
         _uiState.update { state ->
-            val newState = state.copy(
-                empleadosOriginales = nuevaLista,
+            state.copy(
                 mostrarDrawerFormulario = false,
                 empleadoEnEdicion = null,
                 mensajeError = null
             )
-            aplicarFiltros(newState)
         }
     }
 }

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -53,23 +55,35 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.itm.gestordeturnos.CafeAccentYellow
 import com.itm.gestordeturnos.CafeBackgroundLight
 import com.itm.gestordeturnos.CafeBorderColor
+import com.itm.gestordeturnos.CafeBorderLight
 import com.itm.gestordeturnos.CafeDarkBrown
+import com.itm.gestordeturnos.CafeStatusErrorBg
+import com.itm.gestordeturnos.CafeStatusErrorText
+import com.itm.gestordeturnos.CafeStatusInfoBg
+import com.itm.gestordeturnos.CafeStatusInfoText
+import com.itm.gestordeturnos.CafeStatusSuccessBg
+import com.itm.gestordeturnos.CafeStatusSuccessText
+import com.itm.gestordeturnos.CafeStatusWarningBg
+import com.itm.gestordeturnos.CafeSurfaceWarm
 import com.itm.gestordeturnos.CafeTextPrimary
 import com.itm.gestordeturnos.CafeTextSecondary
-import com.itm.gestordeturnos.viewmodel.Empleado
-import com.itm.gestordeturnos.viewmodel.FilaMalla
-import com.itm.gestordeturnos.viewmodel.Novedad
-import com.itm.gestordeturnos.viewmodel.SolicitudCambio
-import com.itm.gestordeturnos.viewmodel.TurnoAsignado
-import com.itm.gestordeturnos.viewmodel.TurnoCelda
-import com.itm.gestordeturnos.viewmodel.TurnoCompaneroSeleccionable
-import com.itm.gestordeturnos.viewmodel.TurnoSeleccionable
+import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.FilaMalla
+import com.itm.gestordeturnos.domain.model.Novedad
+import com.itm.gestordeturnos.domain.model.RangoDescanso
+import com.itm.gestordeturnos.domain.model.SolicitudCambio
+import com.itm.gestordeturnos.domain.model.TurnoAsignado
+import com.itm.gestordeturnos.domain.model.TurnoCelda
+import com.itm.gestordeturnos.domain.model.TurnoCompaneroSeleccionable
+import com.itm.gestordeturnos.domain.model.TurnoSeleccionable
 
 @Composable
 fun DrawerMenuItem(
@@ -150,23 +164,21 @@ fun UserProfileInfo(
 
 @Composable
 fun TurnoCard(turno: TurnoAsignado) {
-    // Color del borde (Amarillo si es descanso, gris si no)
-    val colorBorde = if (turno.esDescanso) CafeAccentYellow else Color(0xFFE0E0E0)
+    val colorBorde = if (turno.esDescanso) CafeAccentYellow else CafeBorderColor
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, colorBorde),
-        shape = RoundedCornerShape(2.dp) // Bordes casi cuadrados
+        shape = RoundedCornerShape(2.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(IntrinsicSize.Min) // Crítico: iguala el alto de la línea separadora
+                .height(IntrinsicSize.Min)
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-
             // 1. Columna Izquierda: LUN 14
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -193,7 +205,7 @@ fun TurnoCard(turno: TurnoAsignado) {
                 modifier = Modifier
                     .width(1.dp)
                     .fillMaxHeight()
-                    .background(Color(0xFFE0E0E0))
+                    .background(CafeBorderColor)
             )
             Spacer(modifier = Modifier.width(16.dp))
 
@@ -203,12 +215,12 @@ fun TurnoCard(turno: TurnoAsignado) {
                     turno.esDescanso -> {
                         Box(
                             modifier = Modifier
-                                .background(Color(0xFFD3E3FD), RoundedCornerShape(2.dp))
+                                .background(CafeStatusInfoBg, RoundedCornerShape(2.dp))
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "DESCANSO",
-                                color = Color(0xFF0B57D0),
+                                color = CafeStatusInfoText,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.sp
@@ -232,12 +244,11 @@ fun TurnoCard(turno: TurnoAsignado) {
                                 fontWeight = FontWeight.Bold
                             )
 
-                            // Etiqueta de "MODIFICADO"
                             if (turno.etiquetaModificado != null) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Box(
                                     modifier = Modifier
-                                        .background(Color(0xFFF3E7C9), RoundedCornerShape(2.dp))
+                                        .background(CafeStatusWarningBg, RoundedCornerShape(2.dp))
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
@@ -456,11 +467,11 @@ fun BuscadorEmpleados(
 }
 
 @Composable
-fun EmpeladoCard(empleado: Empleado){
+fun EmpleadoCard(empleado: Empleado){
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp,CafeBorderColor),
+        border = BorderStroke(1.dp, CafeBorderColor),
         shape = MaterialTheme.shapes.extraSmall
     ){
         Row(
@@ -500,8 +511,8 @@ fun EmpeladoCard(empleado: Empleado){
             }
 
             val isActivo = empleado.estado == "ACTIVO"
-            val colorFondoEstado = if (isActivo) Color(0xFFE6F4EA) else Color(0xFFFCE8E6)
-            val colorTextoEstado = if (isActivo) Color(0xFF1E8E3E) else Color(0xFFD93025)
+            val colorFondoEstado = if (isActivo) CafeStatusSuccessBg else CafeStatusErrorBg
+            val colorTextoEstado = if (isActivo) CafeStatusSuccessText else CafeStatusErrorText
 
             Box(
                 modifier = Modifier
@@ -520,6 +531,10 @@ fun EmpeladoCard(empleado: Empleado){
     }
 }
 
+// Compatibilidad retroactiva con typo
+@Composable
+fun EmpeladoCard(empleado: Empleado) = EmpleadoCard(empleado)
+
 @Composable
 fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
     BoxWithConstraints {
@@ -528,7 +543,7 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
         Card(
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+            border = BorderStroke(1.dp, CafeBorderColor),
             shape = RoundedCornerShape(4.dp)
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
@@ -550,8 +565,8 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
                     }
 
                     val isAceptada = solicitud.estadoResumen == "ACEPTADA POR EL COMPAÑERO"
-                    val bgEstado = if (isAceptada) Color(0xFFD3E3FD) else Color(0xFFF3E7C9) // Azul o Amarillo suave
-                    val textEstado = if (isAceptada) Color(0xFF0B57D0) else CafeDarkBrown
+                    val bgEstado = if (isAceptada) CafeStatusInfoBg else CafeStatusWarningBg
+                    val textEstado = if (isAceptada) CafeStatusInfoText else CafeDarkBrown
 
                     Box(modifier = Modifier.background(bgEstado, RoundedCornerShape(2.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
                         Text(solicitud.estadoResumen, color = textEstado, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
@@ -579,7 +594,7 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                HorizontalDivider(color = Color(0xFFE0E0E0))
+                HorizontalDivider(color = CafeBorderColor)
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // 3. MOTIVO
@@ -591,7 +606,7 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
                 if (isRolAdmin && solicitud.validacionesOk) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth().background(Color(0xFFF8F9FA)).border(1.dp, Color(0xFFE0E0E0)).padding(12.dp),
+                        modifier = Modifier.fillMaxWidth().background(Color(0xFFF8F9FA)).border(1.dp, CafeBorderColor).padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Default.Check, contentDescription = "OK", tint = CafeTextSecondary, modifier = Modifier.size(16.dp))
@@ -605,15 +620,13 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
 
                 // 5. BOTONES Y ACCIONES DINÁMICAS
                 if (isRolAdmin) {
-                    // VISTA ADMINISTRADOR
-                    // El admin solo aprueba/rechaza si no ha sido resuelta definitivamente
                     if (solicitud.estadoResumen != "APROBADA" && solicitud.estadoResumen != "RECHAZADA") {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = if (isCompact) Arrangement.SpaceBetween else Arrangement.Start
                         ) {
                             Button(
-                                onClick = { /* Lógica aprobar */ },
+                                onClick = { },
                                 colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
                                 shape = RoundedCornerShape(4.dp),
                                 modifier = if (isCompact) Modifier.weight(1f) else Modifier
@@ -622,9 +635,9 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             OutlinedButton(
-                                onClick = { /* Lógica rechazar */ },
+                                onClick = { },
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeTextPrimary),
-                                border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+                                border = BorderStroke(1.dp, CafeBorderColor),
                                 shape = RoundedCornerShape(4.dp),
                                 modifier = if (isCompact) Modifier.weight(1f) else Modifier
                             ) {
@@ -633,26 +646,23 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
                         }
                     }
                 } else {
-                    // VISTA EMPLEADO
                     if (solicitud.esRemitente) {
-                        // El remitente puede "Cancelar" mientras el administrador no la haya cerrado
                         if (solicitud.estadoResumen == "SOLICITADA" || solicitud.estadoResumen == "ACEPTADA POR EL COMPAÑERO") {
                             Text(
                                 text = "Cancelar solicitud",
                                 color = CafeTextPrimary,
                                 fontSize = 14.sp,
-                                modifier = Modifier.clickable { /* Lógica cancelar */ }
+                                modifier = Modifier.clickable { }
                             )
                         }
                     } else {
-                        // CRÍTICO: El receptor SOLO puede aceptar/rechazar si está "SOLICITADA"
                         if (solicitud.estadoResumen == "SOLICITADA") {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = if (isCompact) Arrangement.SpaceBetween else Arrangement.Start
                             ) {
                                 Button(
-                                    onClick = { /* Lógica aceptar */ },
+                                    onClick = { },
                                     colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
                                     shape = RoundedCornerShape(4.dp),
                                     modifier = if (isCompact) Modifier.weight(1f) else Modifier
@@ -661,9 +671,9 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 OutlinedButton(
-                                    onClick = { /* Lógica rechazar */ },
+                                    onClick = { },
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeTextPrimary),
-                                    border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+                                    border = BorderStroke(1.dp, CafeBorderColor),
                                     shape = RoundedCornerShape(4.dp),
                                     modifier = if (isCompact) Modifier.weight(1f) else Modifier
                                 ) {
@@ -681,7 +691,7 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
 @Composable
 private fun TurnoDetalleBox(modifier: Modifier, label: String, nombre: String, tipo: String, detalle: String) {
     Column(
-        modifier = modifier.background(Color(0xFFFAF9F6)).border(1.dp, Color(0xFFEAEAEA)).padding(16.dp)
+        modifier = modifier.background(CafeSurfaceWarm).border(1.dp, CafeBorderLight).padding(16.dp)
     ) {
         Text(label, color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Spacer(modifier = Modifier.height(8.dp))
@@ -720,8 +730,8 @@ fun NovedadEstadoBadge(
     modifier: Modifier = Modifier
 ) {
     val isRevisada = estado == "REVISADA"
-    val bgEstado = if (isRevisada) Color(0xFFDFEADB) else Color(0xFFEFE2C5)
-    val textEstado = if (isRevisada) Color(0xFF4C7B4C) else CafeDarkBrown
+    val bgEstado = if (isRevisada) CafeStatusSuccessBg else CafeStatusWarningBg
+    val textEstado = if (isRevisada) CafeStatusSuccessText else CafeDarkBrown
 
     Box(
         modifier = modifier
@@ -738,6 +748,99 @@ fun NovedadEstadoBadge(
     }
 }
 
+/**
+ * Dropdown selector unificado y genérico para filtros, selecciones y formularios.
+ */
+@Composable
+fun <T> AppDropdown(
+    valorActual: T,
+    opciones: List<T>,
+    onSeleccion: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    formatoTexto: (T) -> String = { it.toString() },
+    formatoItemMenu: ((T) -> String)? = null,
+    altura: Dp = 48.dp,
+    shape: RoundedCornerShape = RoundedCornerShape(2.dp),
+    colorBorde: Color = CafeBorderColor,
+    colorFondo: Color = Color.White,
+    textoSize: TextUnit = 13.sp,
+    isCompact: Boolean = false
+) {
+    var expandido by remember { mutableStateOf(false) }
+
+    Column(modifier = modifier) {
+        if (!label.isNullOrBlank()) {
+            Text(
+                text = label.uppercase(),
+                fontSize = if (isCompact) 10.sp else 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = CafeTextSecondary,
+                letterSpacing = if (isCompact) 0.5.sp else 1.sp
+            )
+            Spacer(modifier = Modifier.height(if (isCompact) 4.dp else 6.dp))
+        }
+
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(altura)
+                    .background(colorFondo, shape)
+                    .border(1.dp, colorBorde, shape)
+                    .clickable { expandido = true }
+                    .padding(horizontal = if (isCompact) 8.dp else 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = formatoTexto(valorActual),
+                    fontSize = textoSize,
+                    fontWeight = FontWeight.Medium,
+                    color = CafeTextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = label ?: "Seleccionar opción",
+                    tint = CafeTextSecondary,
+                    modifier = if (isCompact) Modifier.size(16.dp) else Modifier.size(24.dp)
+                )
+            }
+
+            DropdownMenu(
+                expanded = expandido,
+                onDismissRequest = { expandido = false },
+                modifier = Modifier.background(Color.White)
+            ) {
+                opciones.forEach { opcion ->
+                    val isSelected = opcion == valorActual
+                    val displayText = formatoItemMenu?.invoke(opcion) ?: formatoTexto(opcion)
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = displayText,
+                                fontSize = if (isCompact) 12.sp else 13.sp,
+                                color = CafeTextPrimary,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        onClick = {
+                            onSeleccion(opcion)
+                            expandido = false
+                        },
+                        modifier = Modifier.background(
+                            if (isSelected) CafeBackgroundLight else Color.Transparent
+                        )
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun FiltroDropdown(
     opcionSeleccionada: String,
@@ -745,53 +848,16 @@ fun FiltroDropdown(
     onOpcionSeleccionada: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var menuExpandido by remember { mutableStateOf(false) }
-
-    Box(modifier = modifier) {
-        Row(
-            modifier = Modifier
-                .clickable { menuExpandido = true }
-                .border(1.dp, CafeTextPrimary, RoundedCornerShape(4.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                opcionSeleccionada,
-                color = CafeTextPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                Icons.Default.ArrowDropDown,
-                contentDescription = "Filtrar",
-                tint = CafeTextPrimary
-            )
-        }
-
-        DropdownMenu(
-            expanded = menuExpandido,
-            onDismissRequest = { menuExpandido = false },
-            modifier = Modifier.background(Color.White)
-        ) {
-            opciones.forEach { opcion ->
-                val isSelected = opcionSeleccionada == opcion
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = opcion,
-                            color = if (isSelected) Color.White else CafeTextPrimary
-                        )
-                    },
-                    onClick = {
-                        onOpcionSeleccionada(opcion)
-                        menuExpandido = false
-                    },
-                    modifier = Modifier.background(if (isSelected) Color(0xFF757575) else Color.Transparent)
-                )
-            }
-        }
-    }
+    AppDropdown(
+        valorActual = opcionSeleccionada,
+        opciones = opciones,
+        onSeleccion = onOpcionSeleccionada,
+        modifier = modifier,
+        altura = 40.dp,
+        colorBorde = CafeTextPrimary,
+        shape = RoundedCornerShape(4.dp),
+        textoSize = 14.sp
+    )
 }
 
 @Composable
@@ -799,6 +865,7 @@ fun EncabezadoPantalla(
     titulo: String,
     subtitulo: String? = null,
     isCompact: Boolean = false,
+    horizontalAlignment: Alignment.Horizontal = Alignment.Start,
     modifier: Modifier = Modifier,
     accion: (@Composable () -> Unit)? = null
 ) {
@@ -806,20 +873,23 @@ fun EncabezadoPantalla(
         Column(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp)
+                .padding(bottom = 16.dp),
+            horizontalAlignment = horizontalAlignment
         ) {
             Text(
-                titulo,
+                text = titulo,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = CafeTextPrimary
+                color = CafeTextPrimary,
+                textAlign = if (horizontalAlignment == Alignment.CenterHorizontally) TextAlign.Center else TextAlign.Start
             )
             if (subtitulo != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    subtitulo,
+                    text = subtitulo,
                     fontSize = 14.sp,
-                    color = CafeTextSecondary
+                    color = CafeTextSecondary,
+                    textAlign = if (horizontalAlignment == Alignment.CenterHorizontally) TextAlign.Center else TextAlign.Start
                 )
             }
             if (accion != null) {
@@ -828,31 +898,61 @@ fun EncabezadoPantalla(
             }
         }
     } else {
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
+        if (horizontalAlignment == Alignment.CenterHorizontally) {
+            Column(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    titulo,
+                    text = titulo,
                     fontSize = 36.sp,
                     fontWeight = FontWeight.Bold,
-                    color = CafeTextPrimary
+                    color = CafeTextPrimary,
+                    textAlign = TextAlign.Center
                 )
                 if (subtitulo != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        subtitulo,
-                        fontSize = 14.sp,
-                        color = CafeTextSecondary
+                        text = subtitulo,
+                        fontSize = 16.sp,
+                        color = CafeTextSecondary,
+                        textAlign = TextAlign.Center
                     )
                 }
+                if (accion != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    accion()
+                }
             }
-            if (accion != null) {
-                accion()
+        } else {
+            Row(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = titulo,
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CafeTextPrimary
+                    )
+                    if (subtitulo != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = subtitulo,
+                            fontSize = 14.sp,
+                            color = CafeTextSecondary
+                        )
+                    }
+                }
+                if (accion != null) {
+                    accion()
+                }
             }
         }
     }
@@ -872,7 +972,7 @@ fun NovedadCard(novedad: Novedad){
         Card(
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+            border = BorderStroke(1.dp, CafeBorderColor),
             shape = RoundedCornerShape(2.dp)
         ){
             Row(
@@ -965,7 +1065,7 @@ fun ModalSolicitarCambio(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.85f), // Ocupa el 85% del alto de la pantalla
+                .fillMaxHeight(0.85f),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = RoundedCornerShape(4.dp)
         ) {
@@ -1002,7 +1102,7 @@ fun ModalSolicitarCambio(
 
                     turnosPropios.forEach { turno ->
                         val isSelected = turno == turnoSeleccionado
-                        val borderColor = if (isSelected) CafeDarkBrown else Color(0xFFE0E0E0)
+                        val borderColor = if (isSelected) CafeDarkBrown else CafeBorderColor
                         val borderWidth = if (isSelected) 2.dp else 1.dp
 
                         Row(
@@ -1020,7 +1120,7 @@ fun ModalSolicitarCambio(
                         }
                     }
 
-                    // SECCIÓN 2: TURNO QUE RECIBES (Solo se muestra si hay uno seleccionado arriba)
+                    // SECCIÓN 2: TURNO QUE RECIBES
                     AnimatedVisibility(visible = turnoSeleccionado != null) {
                         Column(modifier = Modifier.padding(top = 24.dp)) {
                             Text("2 · TURNO DEL COMPAÑERO QUE RECIBES", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
@@ -1033,8 +1133,8 @@ fun ModalSolicitarCambio(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(bottom = 8.dp)
-                                        .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(2.dp))
-                                        .clickable { /* Futura lógica de selección final */ }
+                                        .border(1.dp, CafeBorderColor, RoundedCornerShape(2.dp))
+                                        .clickable { }
                                         .padding(16.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
@@ -1055,3 +1155,195 @@ fun ModalSolicitarCambio(
     }
 }
 
+@Composable
+fun ModalCrearTurno(
+    nombre: String,
+    horaInicio: String,
+    horaFin: String,
+    descansos: List<RangoDescanso>,
+    onNombreChange: (String) -> Unit,
+    onHoraInicioChange: (String) -> Unit,
+    onHoraFinChange: (String) -> Unit,
+    onAgregarDescanso: () -> Unit,
+    onQuitarDescanso: (String) -> Unit,
+    onDescansoInicioChange: (String, String) -> Unit,
+    onDescansoFinChange: (String, String) -> Unit,
+    onGuardar: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f),
+            colors = CardDefaults.cardColors(containerColor = CafeSurfaceWarm),
+            shape = RoundedCornerShape(4.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp)
+            ) {
+                // ENCABEZADO
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column {
+                        Text("NUEVO TURNO", color = CafeTextSecondary, fontSize = 10.sp, letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Crear turno", color = CafeTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = CafeTextSecondary)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // CONTENIDO SCROLLEABLE
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                ) {
+
+                // NOMBRE DEL TURNO
+                Text("NOMBRE DEL TURNO", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = onNombreChange,
+                    placeholder = { Text("p. ej. Apertura", color = CafeTextSecondary, fontSize = 14.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = textFieldColorsGestor()
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // HORA DE INICIO Y FIN
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("HORA DE INICIO", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TimeFieldBox(valor = horaInicio, onClick = { })
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("HORA DE FIN", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TimeFieldBox(valor = horaFin, onClick = { })
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // SECCIÓN DESCANSOS (Dinámica)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("DESCANSOS", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text(
+                        text = "+ AÑADIR",
+                        color = CafeAccentYellow,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.clickable { onAgregarDescanso() }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (descansos.isEmpty()) {
+                    Text("Sin descansos configurados.", color = CafeTextSecondary, fontSize = 12.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                } else {
+                    descansos.forEach { descanso ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                TimeFieldBox(valor = descanso.horaInicio, onClick = { })
+                            }
+                            Text("-", color = CafeTextSecondary)
+                            Box(modifier = Modifier.weight(1f)) {
+                                TimeFieldBox(valor = descanso.horaFin, onClick = { })
+                            }
+                            IconButton(onClick = { onQuitarDescanso(descanso.id) }, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Quitar descanso", tint = CafeTextSecondary, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // BOTONES DE ACCIÓN
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = onGuardar,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text("Guardar", fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.height(48.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        border = BorderStroke(1.dp, CafeBorderColor),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeTextPrimary)
+                    ) {
+                        Text("Cancelar")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Componente auxiliar para los campos de hora visuales
+@Composable
+fun TimeFieldBox(valor: String, onClick: () -> Unit) {
+    val displayValue = valor.ifEmpty { "--:-- -----" }
+    val textColor = if (valor.isEmpty()) CafeTextSecondary else CafeTextPrimary
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .background(Color.Transparent)
+            .border(1.dp, CafeBorderColor, RoundedCornerShape(4.dp))
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(displayValue, color = textColor, fontSize = 14.sp)
+        Icon(Icons.Outlined.Schedule, contentDescription = "Seleccionar hora", tint = CafeTextSecondary, modifier = Modifier.size(18.dp))
+    }
+}
+
+// Colores unificados para el OutlinedTextField
+@Composable
+fun textFieldColorsGestor() = OutlinedTextFieldDefaults.colors(
+    unfocusedContainerColor = Color.Transparent,
+    focusedContainerColor = Color.White,
+    unfocusedBorderColor = CafeBorderColor,
+    focusedBorderColor = CafeDarkBrown,
+    unfocusedTextColor = CafeTextPrimary,
+    focusedTextColor = CafeTextPrimary
+)

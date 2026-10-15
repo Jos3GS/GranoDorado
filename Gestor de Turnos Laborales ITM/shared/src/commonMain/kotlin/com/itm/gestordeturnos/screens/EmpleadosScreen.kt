@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,16 +26,12 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,7 +39,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -64,19 +58,31 @@ import androidx.compose.ui.unit.sp
 import com.itm.gestordeturnos.CafeAccentYellow
 import com.itm.gestordeturnos.CafeBackgroundLight
 import com.itm.gestordeturnos.CafeBorderColor
+import com.itm.gestordeturnos.CafeBorderLight
 import com.itm.gestordeturnos.CafeDarkBrown
+import com.itm.gestordeturnos.CafeStatusErrorBg
+import com.itm.gestordeturnos.CafeStatusErrorText
+import com.itm.gestordeturnos.CafeStatusSuccessBg
+import com.itm.gestordeturnos.CafeStatusSuccessText
 import com.itm.gestordeturnos.CafeTextPrimary
 import com.itm.gestordeturnos.CafeTextSecondary
-import com.itm.gestordeturnos.viewmodel.Empleado
+import com.itm.gestordeturnos.components.AppDropdown
+import com.itm.gestordeturnos.components.EncabezadoPantalla
+import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.viewmodel.EmpleadosViewModel
+
+// Constantes estáticas para evitar realocaciones innecesarias durante la recomposición
+private val OPCIONES_ROLES_FILTRO = listOf("Todos", "ADMINISTRADOR GENERAL", "ADMINISTRADOR DE SUCURSAL", "BARISTA", "COCINERO", "CAJERO")
+private val OPCIONES_SUCURSALES_FILTRO = listOf("Todas", "CENTRO", "NORTE", "SUR")
+private val OPCIONES_ESTADOS_FILTRO = listOf("Todos", "ACTIVO", "INACTIVO")
+
+private val ROLES_FORMULARIO = listOf("ADMINISTRADOR GENERAL", "ADMINISTRADOR DE SUCURSAL", "BARISTA", "COCINERO", "CAJERO")
+private val SUCURSALES_FORMULARIO = listOf("CENTRO", "NORTE", "SUR")
+private val ESTADOS_FORMULARIO = listOf("ACTIVO", "INACTIVO")
 
 @Composable
 fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
     val state by viewModel.uiState.collectAsState()
-
-    val opcionesRoles = listOf("Todos", "ADMINISTRADOR GENERAL", "ADMINISTRADOR DE SUCURSAL", "BARISTA", "COCINERO", "CAJERO")
-    val opcionesSucursales = listOf("Todas", "CENTRO", "NORTE", "SUR")
-    val opcionesEstados = listOf("Todos", "ACTIVO", "INACTIVO")
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(CafeBackgroundLight)) {
         val isCompact = maxWidth < 950.dp
@@ -88,65 +94,28 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                     .fillMaxSize()
                     .padding(if (isCompact) 16.dp else 32.dp)
             ) {
-                // Encabezado con título, descripción y botón "+ Nuevo empleado"
-                if (isCompact) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "Empleados",
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CafeTextPrimary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "La fuente única de verdad sobre quién trabaja, en qué sucursal y con qué rol.",
-                            fontSize = 14.sp,
-                            color = CafeTextSecondary
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
+                // Encabezado unificado con EncabezadoPantalla
+                EncabezadoPantalla(
+                    titulo = "Empleados",
+                    subtitulo = "La fuente única de verdad sobre quién trabaja, en qué sucursal y con qué rol.",
+                    isCompact = isCompact,
+                    accion = {
                         Button(
                             onClick = { viewModel.abrirCrearEmpleado() },
                             colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
                             shape = RoundedCornerShape(2.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = if (isCompact) Modifier.fillMaxWidth() else Modifier.height(44.dp)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
+                            if (isCompact) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
                             Text("+ Nuevo empleado", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
                     }
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Empleados",
-                                fontSize = 36.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = CafeTextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "La fuente única de verdad sobre quién trabaja, en qué sucursal y con qué rol.",
-                                fontSize = 14.sp,
-                                color = CafeTextSecondary
-                            )
-                        }
-                        Button(
-                            onClick = { viewModel.abrirCrearEmpleado() },
-                            colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
-                            shape = RoundedCornerShape(2.dp),
-                            modifier = Modifier.height(44.dp)
-                        ) {
-                            Text("+ Nuevo empleado", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        }
-                    }
-                }
+                )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Barra de filtros: Buscador + Dropdowns con título ENCIMA
                 if (isCompact) {
@@ -171,21 +140,21 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                             FiltroSelectorCompacto(
                                 label = "Rol",
                                 valorActual = state.filtroRol,
-                                opciones = opcionesRoles,
+                                opciones = OPCIONES_ROLES_FILTRO,
                                 onSeleccion = { viewModel.onFiltroRolCambiado(it) },
                                 modifier = Modifier.weight(1f)
                             )
                             FiltroSelectorCompacto(
                                 label = "Sucursal",
                                 valorActual = state.filtroSucursal,
-                                opciones = opcionesSucursales,
+                                opciones = OPCIONES_SUCURSALES_FILTRO,
                                 onSeleccion = { viewModel.onFiltroSucursalCambiado(it) },
                                 modifier = Modifier.weight(1f)
                             )
                             FiltroSelectorCompacto(
                                 label = "Estado",
                                 valorActual = state.filtroEstado,
-                                opciones = opcionesEstados,
+                                opciones = OPCIONES_ESTADOS_FILTRO,
                                 onSeleccion = { viewModel.onFiltroEstadoCambiado(it) },
                                 modifier = Modifier.weight(1f)
                             )
@@ -215,7 +184,7 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                         FiltroSelector(
                             label = "Rol",
                             valorActual = state.filtroRol,
-                            opciones = opcionesRoles,
+                            opciones = OPCIONES_ROLES_FILTRO,
                             onSeleccion = { viewModel.onFiltroRolCambiado(it) },
                             modifier = Modifier.width(170.dp)
                         )
@@ -223,7 +192,7 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                         FiltroSelector(
                             label = "Sucursal",
                             valorActual = state.filtroSucursal,
-                            opciones = opcionesSucursales,
+                            opciones = OPCIONES_SUCURSALES_FILTRO,
                             onSeleccion = { viewModel.onFiltroSucursalCambiado(it) },
                             modifier = Modifier.width(150.dp)
                         )
@@ -231,7 +200,7 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                         FiltroSelector(
                             label = "Estado",
                             valorActual = state.filtroEstado,
-                            opciones = opcionesEstados,
+                            opciones = OPCIONES_ESTADOS_FILTRO,
                             onSeleccion = { viewModel.onFiltroEstadoCambiado(it) },
                             modifier = Modifier.width(140.dp)
                         )
@@ -242,7 +211,6 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
 
                 // Tabla / Lista de Empleados
                 if (isCompact) {
-                    // Vista móvil: Tarjetas estilizadas con acción de Editar
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().padding(bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -255,7 +223,6 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                         }
                     }
                 } else {
-                    // Vista de Escritorio: Tabla idéntica a la maqueta con scroll horizontal seguro
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -276,7 +243,7 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                             Text("ROL", color = CafeTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(2.2f))
                             Text("SUCURSAL", color = CafeTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1.1f))
                             Text("ESTADO", color = CafeTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1.1f))
-                            Text("", modifier = Modifier.width(80.dp)) // Espacio para EDITAR
+                            Text("", modifier = Modifier.width(80.dp))
                         }
 
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -294,7 +261,6 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
 
             // Panel Lateral / Drawer del Formulario (Crear / Editar Empleado)
             if (state.mostrarDrawerFormulario && state.empleadoEnEdicion != null) {
-                // Backdrop oscuro semitransparente que cubre absolutamente toda la pantalla
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -302,14 +268,13 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                         .clickable { viewModel.cerrarFormulario() }
                 )
 
-                // Panel lateral deslizado hacia el extremo derecho pegado al borde de la ventana
                 Box(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .fillMaxHeight()
                         .width(if (isCompact) anchoMaximo else 450.dp)
-                        .background(Color(0xFFFAF7F2)) // Fondo crema según diseño Figma
-                        .clickable(enabled = false) {} // Bloquea clics hacia el backdrop
+                        .background(Color(0xFFFAF7F2))
+                        .clickable(enabled = false) {}
                 ) {
                     FormularioEmpleadoDrawer(
                         empleado = state.empleadoEnEdicion!!,
@@ -423,7 +388,7 @@ private fun EmpleadoFilaTabla(
             modifier = Modifier.weight(1.3f)
         )
 
-        // Badge de Rol (Colores acordes a la maqueta)
+        // Badge de Rol
         Box(modifier = Modifier.weight(2.2f)) {
             BadgeRol(rol = empleado.cargo)
         }
@@ -451,8 +416,8 @@ private fun EmpleadoFilaTabla(
             verticalAlignment = Alignment.CenterVertically
         ) {
             val isActivo = empleado.estado.equals("ACTIVO", ignoreCase = true)
-            val puntoColor = if (isActivo) Color(0xFF4C8C56) else Color(0xFFD9534F)
-            val textoColor = if (isActivo) Color(0xFF38663E) else Color(0xFFB52B27)
+            val puntoColor = if (isActivo) CafeStatusSuccessText else CafeStatusErrorText
+            val textoColor = if (isActivo) CafeStatusSuccessText else CafeStatusErrorText
 
             Box(
                 modifier = Modifier
@@ -469,7 +434,7 @@ private fun EmpleadoFilaTabla(
             )
         }
 
-        // Botón EDITAR (Texto subrayado clásico)
+        // Botón EDITAR
         Box(
             modifier = Modifier.width(80.dp),
             contentAlignment = Alignment.CenterEnd
@@ -497,7 +462,7 @@ private fun EmpleadoCardMovil(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFEAE3D8)),
+        border = BorderStroke(1.dp, CafeBorderLight),
         shape = RoundedCornerShape(4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -577,7 +542,7 @@ private fun EmpleadoCardMovil(
                         text = "• ${empleado.estado}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isActivo) Color(0xFF38663E) else Color(0xFFB52B27)
+                        color = if (isActivo) CafeStatusSuccessText else CafeStatusErrorText
                     )
                 }
             }
@@ -621,63 +586,17 @@ private fun FiltroSelector(
     onSeleccion: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var expandido by remember { mutableStateOf(false) }
-
-    Column(modifier = modifier) {
-        Text(
-            text = label.uppercase(),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = CafeTextSecondary,
-            letterSpacing = 1.sp
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .background(Color.White, RoundedCornerShape(2.dp))
-                    .border(1.dp, CafeBorderColor, RoundedCornerShape(2.dp))
-                    .clickable { expandido = true }
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = valorActual,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = CafeTextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Icon(Icons.Default.ArrowDropDown, contentDescription = label, tint = CafeTextSecondary)
-            }
-
-            DropdownMenu(
-                expanded = expandido,
-                onDismissRequest = { expandido = false },
-                modifier = Modifier.background(Color.White)
-            ) {
-                opciones.forEach { opcion ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = if (opcion == "Todos" || opcion == "Todas") "$opcion ($label)" else opcion,
-                                fontSize = 13.sp,
-                                color = CafeTextPrimary
-                            )
-                        },
-                        onClick = {
-                            onSeleccion(opcion)
-                            expandido = false
-                        }
-                    )
-                }
-            }
+    AppDropdown(
+        label = label,
+        valorActual = valorActual,
+        opciones = opciones,
+        onSeleccion = onSeleccion,
+        modifier = modifier,
+        altura = 48.dp,
+        formatoItemMenu = { opcion ->
+            if (opcion == "Todos" || opcion == "Todas") "$opcion ($label)" else opcion
         }
-    }
+    )
 }
 
 @Composable
@@ -688,64 +607,18 @@ private fun FiltroSelectorCompacto(
     onSeleccion: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var expandido by remember { mutableStateOf(false) }
-
-    Column(modifier = modifier) {
-        Text(
-            text = label.uppercase(),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            color = CafeTextSecondary,
-            letterSpacing = 0.5.sp
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .background(Color.White, RoundedCornerShape(2.dp))
-                    .border(1.dp, CafeBorderColor, RoundedCornerShape(2.dp))
-                    .clickable { expandido = true }
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = valorActual,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = CafeTextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = CafeTextSecondary, modifier = Modifier.size(16.dp))
-            }
-
-            DropdownMenu(
-                expanded = expandido,
-                onDismissRequest = { expandido = false },
-                modifier = Modifier.background(Color.White)
-            ) {
-                opciones.forEach { opcion ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = if (opcion == "Todos" || opcion == "Todas") "$opcion ($label)" else opcion,
-                                fontSize = 12.sp,
-                                color = CafeTextPrimary
-                            )
-                        },
-                        onClick = {
-                            onSeleccion(opcion)
-                            expandido = false
-                        }
-                    )
-                }
-            }
+    AppDropdown(
+        label = label,
+        valorActual = valorActual,
+        opciones = opciones,
+        onSeleccion = onSeleccion,
+        modifier = modifier,
+        altura = 44.dp,
+        isCompact = true,
+        formatoItemMenu = { opcion ->
+            if (opcion == "Todos" || opcion == "Todas") "$opcion ($label)" else opcion
         }
-    }
+    )
 }
 
 @Composable
@@ -766,17 +639,12 @@ private fun FormularioEmpleadoDrawer(
     var fechaIngreso by remember(empleado) { mutableStateOf(empleado.fechaIngreso) }
     var estadoAcceso by remember(empleado) { mutableStateOf(empleado.estado) }
 
-    val rolesDisponibles = listOf("ADMINISTRADOR GENERAL", "ADMINISTRADOR DE SUCURSAL", "BARISTA", "COCINERO", "CAJERO")
-    val sucursalesDisponibles = listOf("CENTRO", "NORTE", "SUR")
-    val estadosDisponibles = listOf("ACTIVO", "INACTIVO")
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 32.dp, vertical = 28.dp)
     ) {
-        // Encabezado del Formulario: EDITAR EMPLEADO / NUEVO EMPLEADO + X
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -805,18 +673,17 @@ private fun FormularioEmpleadoDrawer(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Alerta de error si existe
         if (mensajeError != null) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFFDE8E8), RoundedCornerShape(2.dp))
+                    .background(CafeStatusErrorBg, RoundedCornerShape(2.dp))
                     .border(1.dp, Color(0xFFF8B4B4), RoundedCornerShape(2.dp))
                     .padding(12.dp)
             ) {
                 Text(
                     text = mensajeError,
-                    color = Color(0xFF9B1C1C),
+                    color = CafeStatusErrorText,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -824,7 +691,6 @@ private fun FormularioEmpleadoDrawer(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Campos NOMBRE y APELLIDO
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(modifier = Modifier.weight(1f)) {
                 EtiquetaCampo("NOMBRE")
@@ -838,7 +704,6 @@ private fun FormularioEmpleadoDrawer(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // NÚMERO DE DOCUMENTO (No editable según HU-04 si ya existe)
         EtiquetaCampo("NÚMERO DE DOCUMENTO")
         CampoTextoFormulario(
             valor = documento,
@@ -857,7 +722,6 @@ private fun FormularioEmpleadoDrawer(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // CORREO ELECTRÓNICO
         EtiquetaCampo("CORREO ELECTRÓNICO")
         CampoTextoFormulario(
             valor = correo,
@@ -867,7 +731,6 @@ private fun FormularioEmpleadoDrawer(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // TELÉFONO (OPCIONAL)
         EtiquetaCampo("TELÉFONO (OPCIONAL)")
         CampoTextoFormulario(
             valor = telefono,
@@ -877,13 +740,12 @@ private fun FormularioEmpleadoDrawer(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // ROL Y SUCURSAL
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(modifier = Modifier.weight(1f)) {
                 EtiquetaCampo("ROL")
                 DropdownFormulario(
                     valorActual = rolSeleccionado,
-                    opciones = rolesDisponibles,
+                    opciones = ROLES_FORMULARIO,
                     onSeleccion = { rolSeleccionado = it }
                 )
             }
@@ -891,7 +753,7 @@ private fun FormularioEmpleadoDrawer(
                 EtiquetaCampo("SUCURSAL")
                 DropdownFormulario(
                     valorActual = sucursalSeleccionada,
-                    opciones = sucursalesDisponibles,
+                    opciones = SUCURSALES_FORMULARIO,
                     onSeleccion = { sucursalSeleccionada = it }
                 )
             }
@@ -899,7 +761,6 @@ private fun FormularioEmpleadoDrawer(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // FECHA DE INGRESO Y ESTADO DE ACCESO
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(modifier = Modifier.weight(1f)) {
                 EtiquetaCampo("FECHA DE INGRESO")
@@ -926,7 +787,7 @@ private fun FormularioEmpleadoDrawer(
                 EtiquetaCampo("ESTADO DE ACCESO")
                 DropdownFormulario(
                     valorActual = estadoAcceso,
-                    opciones = estadosDisponibles,
+                    opciones = ESTADOS_FORMULARIO,
                     onSeleccion = { estadoAcceso = it }
                 )
             }
@@ -934,7 +795,6 @@ private fun FormularioEmpleadoDrawer(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // BOTONES DE ACCIÓN: Guardar y Cancelar
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -1028,44 +888,11 @@ private fun DropdownFormulario(
     opciones: List<String>,
     onSeleccion: (String) -> Unit
 ) {
-    var expandido by remember { mutableStateOf(false) }
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .background(Color.White, RoundedCornerShape(2.dp))
-                .border(1.dp, Color(0xFFD9D0C5), RoundedCornerShape(2.dp))
-                .clickable { expandido = true }
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = valorActual,
-                fontSize = 13.sp,
-                color = CafeTextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = CafeTextSecondary)
-        }
-
-        DropdownMenu(
-            expanded = expandido,
-            onDismissRequest = { expandido = false },
-            modifier = Modifier.background(Color.White)
-        ) {
-            opciones.forEach { opcion ->
-                DropdownMenuItem(
-                    text = { Text(opcion, fontSize = 12.sp, color = CafeTextPrimary) },
-                    onClick = {
-                        onSeleccion(opcion)
-                        expandido = false
-                    }
-                )
-            }
-        }
-    }
+    AppDropdown(
+        valorActual = valorActual,
+        opciones = opciones,
+        onSeleccion = onSeleccion,
+        altura = 56.dp,
+        colorBorde = CafeBorderLight
+    )
 }

@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,14 +43,19 @@ import com.itm.gestordeturnos.viewmodel.LoginViewModel
 fun LoginScreen(viewModel: LoginViewModel, onLoginSuccess: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
 
-
+    LaunchedEffect(state.isSuccess) {
+        if (state.isSuccess) {
+            onLoginSuccess()
+            viewModel.resetSuccess()
+        }
+    }
 
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().background(CafeBackgroundLight)
     ) {
         val isWideScreen = maxWidth > 800.dp
 
-        if(isWideScreen) {
+        if (isWideScreen) {
             Row(modifier = Modifier.fillMaxSize()) {
                 Box(
                     modifier = Modifier
@@ -56,48 +63,70 @@ fun LoginScreen(viewModel: LoginViewModel, onLoginSuccess: () -> Unit) {
                         .fillMaxHeight()
                         .background(CafeDarkBrown)
                         .padding(48.dp)
-                ){
+                ) {
                     PanelBrandingOscuro()
                 }
                 Box(
                     modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
+                        .weight(1f)
+                        .fillMaxHeight(),
                     contentAlignment = Alignment.Center
-                ){
-                    FormularioLogin(state, viewModel, mostrarLogoArriba = false,onLoginSuccess)
+                ) {
+                    FormularioLogin(
+                        state = state,
+                        onEmailChanged = viewModel::onEmailChanged,
+                        onPasswordChanged = viewModel::onPasswordChanged,
+                        onLoginClick = viewModel::iniciarSesion,
+                        onGoogleLoginClick = viewModel::loginConGoogle,
+                        mostrarLogoArriba = false
+                    )
                 }
             }
-        }else{
+        } else {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(24.dp),
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 32.dp),
                 contentAlignment = Alignment.Center
-            ){
-                FormularioLogin(state, viewModel, mostrarLogoArriba = true,onLoginSuccess)
+            ) {
+                FormularioLogin(
+                    state = state,
+                    onEmailChanged = viewModel::onEmailChanged,
+                    onPasswordChanged = viewModel::onPasswordChanged,
+                    onLoginClick = viewModel::iniciarSesion,
+                    onGoogleLoginClick = viewModel::loginConGoogle,
+                    mostrarLogoArriba = true
+                )
             }
         }
     }
 }
 
 @Composable
-fun FormularioLogin(state: LoginState, viewModel: LoginViewModel, mostrarLogoArriba: Boolean, onLoginSuccess: () -> Unit) {
+fun FormularioLogin(
+    state: LoginState,
+    onEmailChanged: (String) -> Unit,
+    onPasswordChanged: (String) -> Unit,
+    onLoginClick: () -> Unit,
+    onGoogleLoginClick: () -> Unit,
+    mostrarLogoArriba: Boolean
+) {
     Column(
         modifier = Modifier.widthIn(max = 400.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
-    ){
-        if(mostrarLogoArriba){
+    ) {
+        if (mostrarLogoArriba) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 32.dp),
                 verticalAlignment = Alignment.CenterVertically
-            ){
+            ) {
                 Box(
                     modifier = Modifier.size(32.dp).background(CafeAccentYellow),
                     contentAlignment = Alignment.Center
-                ){
+                ) {
                     Text("()", fontWeight = FontWeight.Bold, color = CafeDarkBrown)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
@@ -107,40 +136,40 @@ fun FormularioLogin(state: LoginState, viewModel: LoginViewModel, mostrarLogoArr
 
         Column(
             modifier = Modifier.padding(bottom = 8.dp)
-        ){
+        ) {
             Text(
                 "INICIAR SESIÓN",
                 color = CafeTextSecondary,
                 fontSize = 12.sp,
-                letterSpacing = 1.sp)
+                letterSpacing = 1.sp
+            )
             Text(
                 "Bienvenido de vuelta",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = CafeTextPrimary)
+                color = CafeTextPrimary
+            )
         }
 
         LabeledInputField(
             label = "Correo Electrónico",
             value = state.email,
-            onValueChange = {viewModel.onEmailChanged(it)},
+            onValueChange = onEmailChanged,
             placeholder = "tu.correo@granodorado.com"
         )
 
         LabeledInputField(
             label = "Contraseña",
             value = state.password,
-            onValueChange = {viewModel.onPasswordChanged(it)},
+            onValueChange = onPasswordChanged,
             placeholder = "********",
             isPassword = true
         )
 
         PrimarySolidButton(
-            text = "Iniciar sesión",
-            onClick = {
-                viewModel.iniciarSesion()
-                onLoginSuccess()
-            }
+            text = if (state.isLoading) "Iniciando sesión..." else "Iniciar sesión",
+            onClick = onLoginClick,
+            enabled = !state.isLoading
         )
 
         Row(
@@ -150,15 +179,16 @@ fun FormularioLogin(state: LoginState, viewModel: LoginViewModel, mostrarLogoArr
         ) {
             TextButton(
                 onClick = {}
-            ){
+            ) {
                 Text(
                     "¿Olvidaste tu clave?",
-                    color = CafeTextSecondary)
+                    color = CafeTextSecondary
+                )
             }
-            GoogleLoginButton(onClick = {
-                viewModel.loginConGoogle()
-                onLoginSuccess()
-            })
+            GoogleLoginButton(
+                onClick = onGoogleLoginClick,
+                enabled = !state.isLoading
+            )
         }
     }
 }
@@ -171,12 +201,12 @@ fun PanelBrandingOscuro() {
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically
-        ){
+        ) {
             Box(
                 modifier = Modifier.size(40.dp)
                     .background(CafeAccentYellow),
                 contentAlignment = Alignment.Center
-            ){
+            ) {
                 Text(
                     text = "()",
                     fontWeight = FontWeight.Bold,
@@ -184,7 +214,7 @@ fun PanelBrandingOscuro() {
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Column{
+            Column {
                 Text(
                     text = "Grano Dorado",
                     color = Color.White,
@@ -200,7 +230,7 @@ fun PanelBrandingOscuro() {
             }
         }
 
-        Column{
+        Column {
             Text(
                 text = "El horario deja de perderse porque deja de ser un mensaje.",
                 color = Color.White,
@@ -220,9 +250,9 @@ fun PanelBrandingOscuro() {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(48.dp)
-        ){
+        ) {
             StatItem("45", "EMPLEADOS")
-            StatItem("3","SUCURSALES")
+            StatItem("3", "SUCURSALES")
             StatItem("06-22", "FRANJA")
         }
     }
@@ -230,7 +260,7 @@ fun PanelBrandingOscuro() {
 
 @Composable
 fun StatItem(number: String, label: String) {
-    Column{
+    Column {
         Text(
             text = number,
             color = Color.White,

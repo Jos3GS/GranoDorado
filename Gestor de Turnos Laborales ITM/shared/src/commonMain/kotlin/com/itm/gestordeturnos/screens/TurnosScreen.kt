@@ -39,15 +39,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itm.gestordeturnos.CafeAccentYellow
+import com.itm.gestordeturnos.CafeBorderColor
 import com.itm.gestordeturnos.CafeDarkBrown
+import com.itm.gestordeturnos.CafeStatusErrorBg
+import com.itm.gestordeturnos.CafeStatusErrorText
+import com.itm.gestordeturnos.CafeStatusSuccessBg
+import com.itm.gestordeturnos.CafeStatusSuccessText
 import com.itm.gestordeturnos.CafeTextPrimary
 import com.itm.gestordeturnos.CafeTextSecondary
-import com.itm.gestordeturnos.viewmodel.TurnoTemplate
+import com.itm.gestordeturnos.ColorApertura
+import com.itm.gestordeturnos.ColorCierre
+import com.itm.gestordeturnos.ColorIntermedio
+import com.itm.gestordeturnos.components.EncabezadoPantalla
+import com.itm.gestordeturnos.components.ModalCrearTurno
+import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import com.itm.gestordeturnos.viewmodel.TurnosViewModel
 
-val ColorApertura = Color(0xFFC48E38)
-val ColorIntermedio = Color(0xFF6B7E4B)
-val ColorCierre = Color(0xFF4C7B8B)
+private val HORAS_COBERTURA = listOf("06", "10", "14", "18", "22")
 
 @Composable
 fun TurnosScreen(viewModel: TurnosViewModel) {
@@ -56,40 +64,23 @@ fun TurnosScreen(viewModel: TurnosViewModel) {
     Column(
         modifier = Modifier.fillMaxSize()
     ){
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom
-        ){
-            Column(
-                modifier = Modifier.weight(1f)
-            ){
-                Text(
-                    "Catálogo de turnos",
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CafeTextPrimary
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    "Franjas reutilizables que convierten la programación en una selección, no una redacción. Operación 06:00 - 22:00.",
-                    fontSize = 14.sp,
-                    color = CafeTextSecondary
-                )
+        EncabezadoPantalla(
+            titulo = "Catálogo de turnos",
+            subtitulo = "Franjas reutilizables que convierten la programación en una selección, no una redacción. Operación 06:00 - 22:00.",
+            accion = {
+                Button(
+                    onClick = { viewModel.toggleModalCrearTurno(true) },
+                    colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.padding(start = 16.dp)
+                ) {
+                    Text(
+                        "+ Crear turno",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
-
-            Button(
-                onClick = {},
-                colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
-                shape = RoundedCornerShape(4.dp),
-                modifier = Modifier.padding(start = 16.dp)
-            ){
-                Text(
-                    "+ Crear turno",
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
+        )
 
         BoxWithConstraints {
             val isDesktop = maxWidth > 800.dp
@@ -131,6 +122,25 @@ fun TurnosScreen(viewModel: TurnosViewModel) {
             }
         }
     }
+
+    // LÓGICA DEL MODAL
+    if (state.mostrarModalCrearTurno) {
+        ModalCrearTurno(
+            nombre = state.nombreTurnoNuevo,
+            horaInicio = state.horaInicioNuevo,
+            horaFin = state.horaFinNuevo,
+            descansos = state.descansosNuevo,
+            onNombreChange = { viewModel.onNombreTurnoCambio(it) },
+            onHoraInicioChange = { viewModel.onHoraInicioCambio(it) },
+            onHoraFinChange = { viewModel.onHoraFinCambio(it) },
+            onAgregarDescanso = { viewModel.agregarDescanso() },
+            onQuitarDescanso = { viewModel.quitarDescanso(it) },
+            onDescansoInicioChange = { id, hora -> viewModel.onDescansoInicioCambio(id, hora) },
+            onDescansoFinChange = { id, hora -> viewModel.onDescansoFinCambio(id, hora) },
+            onGuardar = { viewModel.guardarTurno() },
+            onDismiss = { viewModel.toggleModalCrearTurno(false) }
+        )
+    }
 }
 
 @Composable
@@ -139,7 +149,7 @@ fun CoberturaCard() {
         colors = CardDefaults.cardColors(
             containerColor = Color.White,
         ),
-        border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+        border = BorderStroke(1.dp, CafeBorderColor),
         shape = RoundedCornerShape(4.dp),
         modifier = Modifier.fillMaxWidth()
     ){
@@ -191,7 +201,7 @@ fun CoberturaCard() {
             }
 
             Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                listOf("06", "10", "14", "18", "22").forEach { hora ->
+                HORAS_COBERTURA.forEach { hora ->
                     Text(hora, fontSize = 10.sp, color = CafeTextSecondary)
                 }
             }
@@ -245,7 +255,7 @@ fun TablaTurnos(turnos: List<TurnoTemplate>, modifier: Modifier) {
         colors = CardDefaults.cardColors(
             containerColor = Color.White,
         ),
-        border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+        border = BorderStroke(1.dp, CafeBorderColor),
         shape = RoundedCornerShape(4.dp),
         modifier = modifier
     ){
@@ -262,11 +272,11 @@ fun TablaTurnos(turnos: List<TurnoTemplate>, modifier: Modifier) {
                 CabeceraTabla("ESTADO", modifier = Modifier.weight(1.2f))
                 CabeceraTabla("ASIGNACIONES", modifier = Modifier.weight(1.5f))
             }
-            HorizontalDivider(color = Color(0xFFE0E0E0))
+            HorizontalDivider(color = CafeBorderColor)
 
             turnos.forEach { turno ->
                 FilaTurno(turno)
-                HorizontalDivider(color = Color(0xFFE0E0E0))
+                HorizontalDivider(color = CafeBorderColor)
             }
         }
     }
@@ -309,9 +319,9 @@ fun FilaTurno(turno: TurnoTemplate) {
             modifier = Modifier.weight(1.2f)
         ){
             val isActivo = turno.estado == "ACTIVO"
-            val bgColor = if (isActivo) Color(0xFFE6F0E6) else Color(0xFFFBEBEB)
-            val textColor = if (isActivo) Color(0xFF4C7B4C) else Color(0xFFB04D4D)
-            val dotColor = if (isActivo) Color(0xFF4C7B4C) else Color(0xFFD32F2F)
+            val bgColor = if (isActivo) CafeStatusSuccessBg else CafeStatusErrorBg
+            val textColor = if (isActivo) CafeStatusSuccessText else CafeStatusErrorText
+            val dotColor = if (isActivo) CafeStatusSuccessText else CafeStatusErrorText
 
             Row(
                 modifier = Modifier.background(color = bgColor, shape = RoundedCornerShape(2.dp)).padding(horizontal = 8.dp, vertical = 4.dp),

@@ -2,13 +2,13 @@ package com.itm.gestordeturnos.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.delay
+import com.itm.gestordeturnos.domain.model.RolUsuario
+import com.itm.gestordeturnos.domain.model.UsuarioActual
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
 
 data class LoginState(
     val email: String = "",
@@ -29,11 +29,14 @@ class LoginViewModel: ViewModel() {
         _uiState.update { it.copy(password = nuevoPassword) }
     }
 
+    fun resetSuccess() {
+        _uiState.update { it.copy(isSuccess = false) }
+    }
+
     // 1. Botón normal -> Entra como Administrador
     fun iniciarSesion() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-
 
             val admin = UsuarioActual(
                 nombre = "Diego Marín",
@@ -52,7 +55,6 @@ class LoginViewModel: ViewModel() {
     fun loginConGoogle() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-
 
             val empleado = UsuarioActual(
                 nombre = "José Manuel",

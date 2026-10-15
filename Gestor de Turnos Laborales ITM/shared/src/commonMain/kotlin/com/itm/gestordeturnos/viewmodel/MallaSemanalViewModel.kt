@@ -1,28 +1,20 @@
 package com.itm.gestordeturnos.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.itm.gestordeturnos.data.repository.TurnoRepository
+import com.itm.gestordeturnos.domain.model.FilaMalla
+import com.itm.gestordeturnos.domain.model.TurnoCelda
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-
-data class TurnoCelda(
-    val tipo: String,
-    val horario: String,
-    val esDescanso: Boolean = false
-)
-
-data class FilaMalla(
-    val idEmpleado: String,
-    val nombre: String,
-    val cargo: String,
-    val turnos: List<TurnoCelda>,
-    val totalHoras: String
-)
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 data class MallaSemanalState(
     val rangoSemana: String = "Semana del 14 al 20 de septiembre de 2026",
     val sucursal: String = "CENTRO",
-    val estadoMalla: String ="BORRADOR",
+    val estadoMalla: String = "BORRADOR",
     val diasSemana: List<String> = listOf("LUN 14", "MAR 15", "MIÉ 16", "JUE 17", "VIE 18", "SÁB 19", "DOM 20"),
     val filas: List<FilaMalla> = emptyList()
 )
@@ -32,46 +24,14 @@ class MallaSemanalViewModel : ViewModel() {
     val uiState: StateFlow<MallaSemanalState> = _uiState.asStateFlow()
 
     init{
-        cargarMallaBorrador()
+        observarFilasMalla()
     }
 
-    private fun cargarMallaBorrador() {
-        val apertura = TurnoCelda("Apertura", "06 - 14")
-        val medio = TurnoCelda("Medio", "10 - 18")
-        val cierre = TurnoCelda("Cierre", "14 - 22")
-        val descanso = TurnoCelda("Descanso", "-", esDescanso = true)
-
-        val empleadosDemo = listOf(
-            FilaMalla(
-                idEmpleado = "1",
-                nombre = "Ana Pérez",
-                cargo = "BARISTA",
-                turnos = listOf(apertura, apertura, descanso, cierre, apertura, medio, descanso),
-                totalHoras = "37.5 h"
-            ),
-            FilaMalla(
-                idEmpleado = "2",
-                nombre = "Carlos Ruiz",
-                cargo = "CAJERO",
-                turnos = listOf(cierre, descanso, cierre, apertura, cierre, cierre, descanso),
-                totalHoras = "37.5 h"
-            ),
-            FilaMalla(
-                idEmpleado = "3",
-                nombre = "María Gómez",
-                cargo = "COCINERO",
-                turnos = listOf(descanso, apertura, apertura, medio, descanso, apertura, apertura),
-                totalHoras = "37.5 h"
-            ),
-            FilaMalla(
-                idEmpleado = "4",
-                nombre = "Jorge Luis",
-                cargo = "BARISTA",
-                turnos = listOf(medio, cierre, cierre, descanso, medio, descanso, cierre),
-                totalHoras = "37.5 h"
-            )
-        )
-
-        _uiState.value = _uiState.value.copy(filas = empleadosDemo)
+    private fun observarFilasMalla() {
+        viewModelScope.launch {
+            TurnoRepository.filasMalla.collect { filas ->
+                _uiState.update { it.copy(filas = filas) }
+            }
+        }
     }
 }

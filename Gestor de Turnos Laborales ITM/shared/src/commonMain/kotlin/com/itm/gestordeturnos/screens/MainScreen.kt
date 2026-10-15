@@ -58,7 +58,7 @@ import com.itm.gestordeturnos.viewmodel.MiHorarioViewModel
 import com.itm.gestordeturnos.viewmodel.NovedadesViewModel
 import com.itm.gestordeturnos.viewmodel.ReportarNovedadViewModel
 import com.itm.gestordeturnos.viewmodel.TurnosViewModel
-import com.itm.gestordeturnos.viewmodel.UsuarioActual
+import com.itm.gestordeturnos.domain.model.UsuarioActual
 import kotlinx.coroutines.launch
 
 @Composable

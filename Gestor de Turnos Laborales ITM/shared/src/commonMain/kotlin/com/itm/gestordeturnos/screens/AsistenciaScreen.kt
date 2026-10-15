@@ -2,7 +2,6 @@ package com.itm.gestordeturnos.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -22,12 +21,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.itm.gestordeturnos.CafeAccentYellow
-import com.itm.gestordeturnos.CafeDarkBrown
-import com.itm.gestordeturnos.CafeTextPrimary
-import com.itm.gestordeturnos.CafeTextSecondary
+import com.itm.gestordeturnos.*
+import com.itm.gestordeturnos.components.EncabezadoPantalla
+import com.itm.gestordeturnos.components.SucursalChip
+import com.itm.gestordeturnos.domain.model.RegistroAsistencia
 import com.itm.gestordeturnos.viewmodel.AsistenciaViewModel
-import com.itm.gestordeturnos.viewmodel.RegistroAsistencia
 
 @Composable
 fun AsistenciaScreen(viewModel: AsistenciaViewModel) {
@@ -42,21 +40,16 @@ fun AsistenciaScreen(viewModel: AsistenciaViewModel) {
     ) {
 
         // 1. ENCABEZADO
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            Text("Control de asistencia", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = CafeTextPrimary)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                "Estado de las marcaciones del día y notificaciones de incumplimientos.",
-                fontSize = 14.sp,
-                color = CafeTextSecondary
-            )
-        }
+        EncabezadoPantalla(
+            titulo = "Control de asistencia",
+            subtitulo = "Estado de las marcaciones del día y notificaciones de incumplimientos."
+        )
 
         // 2. PANEL DE INCUMPLIMIENTOS (Borde izquierdo rojo oscuro)
         Card(
             modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFCFBF8)), // Fondo crema clarito
-            border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+            colors = CardDefaults.cardColors(containerColor = CafeSurfaceWarm),
+            border = BorderStroke(1.dp, CafeBorderLight),
             shape = RoundedCornerShape(2.dp)
         ) {
             Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
@@ -83,7 +76,7 @@ fun AsistenciaScreen(viewModel: AsistenciaViewModel) {
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(vertical = 4.dp)
                         ) {
-                            Box(modifier = Modifier.size(6.dp).background(Color(0xFFC48E38), CircleShape))
+                            Box(modifier = Modifier.size(6.dp).background(CafeAccentYellow, CircleShape))
                             Spacer(modifier = Modifier.width(8.dp))
 
                             // Texto compuesto: Empleado (Bold) + Tipo (Normal) + Hora
@@ -105,7 +98,7 @@ fun AsistenciaScreen(viewModel: AsistenciaViewModel) {
             }
         }
 
-        // 3. TABLA DE ASISTENCIA (Solucionado el aplastamiento)
+        // 3. TABLA DE ASISTENCIA
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val isDesktop = maxWidth > 800.dp
 
@@ -137,7 +130,7 @@ fun AsistenciaScreen(viewModel: AsistenciaViewModel) {
 private fun TablaAsistencia(registros: List<RegistroAsistencia>, modifier: Modifier = Modifier) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+        border = BorderStroke(1.dp, CafeBorderLight),
         shape = RoundedCornerShape(2.dp),
         modifier = modifier
     ) {
@@ -153,12 +146,12 @@ private fun TablaAsistencia(registros: List<RegistroAsistencia>, modifier: Modif
                 CabeceraTablaAsis("SALIDA", modifier = Modifier.weight(1.5f))
                 CabeceraTablaAsis("ESTADO", modifier = Modifier.weight(1.5f))
             }
-            HorizontalDivider(color = Color(0xFFE0E0E0))
+            HorizontalDivider(color = CafeBorderLight)
 
             // Filas
             registros.forEach { registro ->
                 FilaAsistencia(registro)
-                HorizontalDivider(color = Color(0xFFE0E0E0))
+                HorizontalDivider(color = CafeBorderLight)
             }
         }
     }
@@ -187,11 +180,7 @@ private fun FilaAsistencia(registro: RegistroAsistencia) {
 
         // Columna Sucursal
         Box(modifier = Modifier.weight(1.5f)) {
-            Box(
-                modifier = Modifier.border(1.dp, CafeAccentYellow, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 4.dp)
-            ) {
-                Text(registro.sucursal, color = CafeTextSecondary, fontSize = 10.sp, letterSpacing = 1.sp)
-            }
+            SucursalChip(sucursal = registro.sucursal)
         }
 
         // Columna Entrada
@@ -200,17 +189,17 @@ private fun FilaAsistencia(registro: RegistroAsistencia) {
         // Columna Salida
         Text(registro.horaSalida, modifier = Modifier.weight(1.5f), color = CafeTextPrimary, fontSize = 14.sp)
 
-        // Columna Estado (Los 3 colores del Figma)
+        // Columna Estado (Tokens semánticos de Theme)
         Box(modifier = Modifier.weight(1.5f)) {
             val bgEstado = when (registro.estado) {
-                "PRESENTE" -> Color(0xFFDFEADB) // Verde pálido
-                "TARDE" -> Color(0xFFF3E7C9)    // Amarillo pálido
-                else -> Color(0xFFFBEBEB)       // Rojo pálido (Ausente)
+                "PRESENTE" -> CafeStatusSuccessBg
+                "TARDE" -> CafeStatusWarningBg
+                else -> CafeStatusErrorBg
             }
             val textEstado = when (registro.estado) {
-                "PRESENTE" -> Color(0xFF4C7B4C)
-                "TARDE" -> CafeDarkBrown
-                else -> Color(0xFFB04D4D)
+                "PRESENTE" -> CafeStatusSuccessText
+                "TARDE" -> CafeStatusWarningText
+                else -> CafeStatusErrorText
             }
 
             Box(modifier = Modifier.background(bgEstado, RoundedCornerShape(2.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {

@@ -1,23 +1,12 @@
 package com.itm.gestordeturnos.viewmodel
 
 import androidx.lifecycle.ViewModel
+import com.itm.gestordeturnos.domain.model.RolUsuario
+import com.itm.gestordeturnos.domain.model.UsuarioActual
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-
-enum class RolUsuario{
-    ADMINISTRADOR_GENERAL,
-    ADMINISTRADOR_SUCURSAL,
-    EMPLEADO
-}
-
-data class UsuarioActual(
-    val nombre: String,
-    val iniciales: String,
-    val cargo: String,
-    val rol: RolUsuario
-)
 
 data class OpcionMenu(
     val titulo: String,

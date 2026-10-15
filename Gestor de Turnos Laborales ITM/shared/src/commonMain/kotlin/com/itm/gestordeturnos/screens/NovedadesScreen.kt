@@ -16,20 +16,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itm.gestordeturnos.CafeDarkBrown
+import com.itm.gestordeturnos.CafeStatusWarningBg
 import com.itm.gestordeturnos.components.EncabezadoPantalla
 import com.itm.gestordeturnos.components.FiltroDropdown
 import com.itm.gestordeturnos.components.NovedadCard
 import com.itm.gestordeturnos.viewmodel.NovedadesViewModel
 
+private val OPCIONES_FILTRO_NOVEDADES = listOf("Todas", "Reportada", "Revisada")
+
 @Composable
 fun NovedadesScreen(viewModel: NovedadesViewModel) {
     val state by viewModel.uiState.collectAsState()
-    val opcionesFiltro = listOf("Todas", "Reportada", "Revisada")
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isCompact = maxWidth < 800.dp
@@ -42,7 +43,7 @@ fun NovedadesScreen(viewModel: NovedadesViewModel) {
                 accion = {
                     FiltroDropdown(
                         opcionSeleccionada = state.filtroActual,
-                        opciones = opcionesFiltro,
+                        opciones = OPCIONES_FILTRO_NOVEDADES,
                         onOpcionSeleccionada = { viewModel.cambiarFiltro(it) }
                     )
                 }
@@ -50,7 +51,7 @@ fun NovedadesScreen(viewModel: NovedadesViewModel) {
 
             Box(
                 modifier = Modifier
-                    .background(Color(0xFFF3E7C9), RoundedCornerShape(2.dp))
+                    .background(CafeStatusWarningBg, RoundedCornerShape(2.dp))
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
@@ -65,7 +66,7 @@ fun NovedadesScreen(viewModel: NovedadesViewModel) {
             Spacer(modifier = Modifier.height(16.dp))
 
             LazyColumn(modifier = Modifier.fillMaxSize().padding(bottom = 32.dp)) {
-                items(state.novedadesFiltradas) { novedad ->
+                items(state.novedadesFiltradas, key = { it.id }) { novedad ->
                     NovedadCard(novedad = novedad)
                 }
             }

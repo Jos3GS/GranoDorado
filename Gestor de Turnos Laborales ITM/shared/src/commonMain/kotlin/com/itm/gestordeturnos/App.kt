@@ -13,14 +13,12 @@ import com.itm.gestordeturnos.screens.LoginScreen
 import com.itm.gestordeturnos.screens.MainScreen
 import com.itm.gestordeturnos.viewmodel.LoginViewModel
 import com.itm.gestordeturnos.viewmodel.MainViewModel
-import com.itm.gestordeturnos.viewmodel.MiHorarioViewModel
 
 @Composable
 @Preview
 fun App() {
     val loginViewModel = remember { LoginViewModel() }
     val mainViewModel = remember { MainViewModel() }
-    val miHorarioViewModel = remember { MiHorarioViewModel() }
 
     val navController = rememberNavController()
 

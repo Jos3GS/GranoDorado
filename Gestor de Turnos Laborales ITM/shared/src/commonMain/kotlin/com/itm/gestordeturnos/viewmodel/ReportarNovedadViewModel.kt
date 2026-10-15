@@ -1,18 +1,19 @@
 package com.itm.gestordeturnos.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.itm.gestordeturnos.data.repository.NovedadRepository
+import com.itm.gestordeturnos.domain.model.Novedad
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 data class ReportarNovedadState(
     val turnoReferencia: String = "Cierre · 14:00-22:00",
     val fechaReferencia: String = "2026-09-17",
-
-    // Nueva variable para controlar el calendario
     val mostrarDatePicker: Boolean = false,
-
     val tipoNovedad: String = "Selecciona...",
     val descripcion: String = "",
     val menuExpandido: Boolean = false,
@@ -31,15 +32,22 @@ class ReportarNovedadViewModel : ViewModel() {
     val uiState: StateFlow<ReportarNovedadState> = _uiState.asStateFlow()
 
     init {
-        cargarHistorial()
+        observarHistorial()
+    }
+
+    private fun observarHistorial() {
+        viewModelScope.launch {
+            NovedadRepository.novedades.collect { lista ->
+                _uiState.update { it.copy(historial = lista) }
+            }
+        }
     }
 
     fun onTipoNovedadSeleccionado(tipo: String) {
-        // Si no es incapacidad o permiso, forzamos la fecha al turno original
         val fechaRestaurada = if (tipo == "Incapacidad médica" || tipo == "Permiso especial") {
             _uiState.value.fechaReferencia
         } else {
-            "2026-09-17" // Fecha por defecto del turno
+            "2026-09-17"
         }
 
         _uiState.update {
@@ -59,7 +67,6 @@ class ReportarNovedadViewModel : ViewModel() {
         _uiState.update { it.copy(menuExpandido = expandido) }
     }
 
-    // --- NUEVAS FUNCIONES PARA EL CALENDARIO ---
     fun toggleDatePicker(mostrar: Boolean) {
         _uiState.update { it.copy(mostrarDatePicker = mostrar) }
     }
@@ -67,16 +74,31 @@ class ReportarNovedadViewModel : ViewModel() {
     fun onFechaReferenciaCambiada(nuevaFecha: String) {
         _uiState.update { it.copy(fechaReferencia = nuevaFecha, mostrarDatePicker = false) }
     }
-    // -------------------------------------------
 
     fun enviarFormulario() {
-        _uiState.update { it.copy(tipoNovedad = "Selecciona...", descripcion = "", fechaReferencia = "2026-09-17") }
-    }
+        val actual = _uiState.value
+        if (actual.tipoNovedad == "Selecciona..." || actual.descripcion.isBlank()) {
+            return
+        }
 
-    private fun cargarHistorial() {
-        val demo = listOf(
-            Novedad("1", "Salida antes de la hora", "", "CENTRO", "Cierre, 14:00 a 22:00 · 2026-09-08", "90 minutos menos que el turno programado", "REPORTADA", "ROJO")
+        val nueva = Novedad(
+            id = (actual.historial.size + 1).toString(),
+            tipo = actual.tipoNovedad,
+            empleado = SessionManager.usuarioActivo?.nombre ?: "Empleado",
+            sucursal = "CENTRO",
+            detalleTurno = "${actual.turnoReferencia} · ${actual.fechaReferencia}",
+            diferencia = actual.descripcion,
+            estado = "REPORTADA",
+            colorVorde = "VERDE"
         )
-        _uiState.update { it.copy(historial = demo) }
+        NovedadRepository.reportarNovedad(nueva)
+
+        _uiState.update {
+            it.copy(
+                tipoNovedad = "Selecciona...",
+                descripcion = "",
+                fechaReferencia = "2026-09-17"
+            )
+        }
     }
 }

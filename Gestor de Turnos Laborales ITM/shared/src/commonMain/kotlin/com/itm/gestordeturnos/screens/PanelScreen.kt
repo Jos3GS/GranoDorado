@@ -25,23 +25,38 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.itm.gestordeturnos.CafeAccentYellow
 import com.itm.gestordeturnos.CafeBorderColor
 import com.itm.gestordeturnos.CafeDarkBrown
 import com.itm.gestordeturnos.CafeTextPrimary
 import com.itm.gestordeturnos.CafeTextSecondary
 import com.itm.gestordeturnos.components.PrimarySolidButton
-import com.itm.gestordeturnos.viewmodel.RolUsuario
-import com.itm.gestordeturnos.viewmodel.UsuarioActual
+import com.itm.gestordeturnos.domain.model.RolUsuario
+import com.itm.gestordeturnos.domain.model.UsuarioActual
+import com.itm.gestordeturnos.viewmodel.PanelViewModel
 
 @Composable
-fun PanelScreen(usuario: UsuarioActual, onNavigate: (String) -> Unit){
+fun PanelScreen(
+    usuario: UsuarioActual,
+    viewModel: PanelViewModel = viewModel { PanelViewModel() },
+    onNavigate: (String) -> Unit
+){
+    LaunchedEffect(usuario) {
+        viewModel.cargarDatos(usuario)
+    }
+
+    val state by viewModel.uiState.collectAsState()
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -49,16 +64,16 @@ fun PanelScreen(usuario: UsuarioActual, onNavigate: (String) -> Unit){
             .padding(bottom = 32.dp)
     ){
         val isCompact = maxWidth < 800.dp
-
         val statCardWidth = if (isCompact) (maxWidth / 2) - 8.dp else 200.dp
 
         Column(
             modifier = Modifier.fillMaxWidth()
         ){
             GreetingHeader(
+                saludo = state.saludo,
                 nombre = usuario.nombre,
                 rol = usuario.cargo,
-                scope = if (usuario.rol == RolUsuario.ADMINISTRADOR_GENERAL)"VISTA DE LAS 3 SUCURSALES" else "CENTRO",
+                scope = if (usuario.rol == RolUsuario.ADMINISTRADOR_GENERAL) "VISTA DE LAS 3 SUCURSALES" else "CENTRO",
                 isCompact = isCompact
             )
             Spacer(modifier = Modifier.height(32.dp))
@@ -69,24 +84,24 @@ fun PanelScreen(usuario: UsuarioActual, onNavigate: (String) -> Unit){
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ){
                 StatCard(
-                    numero = if(usuario.rol == RolUsuario.ADMINISTRADOR_GENERAL) "11" else "7",
+                    numero = state.empleadosActivos.toString(),
                     etiqueta = "EMPLEADOS ACTIVOS",
                     modifier = Modifier.width(statCardWidth)
                 )
                 if(usuario.rol == RolUsuario.ADMINISTRADOR_GENERAL){
                     StatCard(
-                        numero = "3",
+                        numero = state.turnosCatalogo.toString(),
                         etiqueta = "TURNOS EN CATÁLOGO",
                         modifier = Modifier.width(statCardWidth)
                     )
                 }
                 StatCard(
-                    numero = if (usuario.rol == RolUsuario.ADMINISTRADOR_GENERAL) "3" else "2",
+                    numero = state.novedadesPendientes.toString(),
                     etiqueta = "NOVEDADES PENDIENTES",
                     modifier = Modifier.width(statCardWidth)
                 )
                 StatCard(
-                    numero = "1",
+                    numero = state.cambiosPorAprobar.toString(),
                     etiqueta = "CAMBIOS POR APROBAR",
                     modifier = Modifier.width(statCardWidth)
                 )
@@ -98,17 +113,35 @@ fun PanelScreen(usuario: UsuarioActual, onNavigate: (String) -> Unit){
                 Column(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ){
-                    // 1. PASAMOS LA NAVEGACIÓN A LA MALLA
-                    ActionBanner(modifier = Modifier.fillMaxWidth(), isCompact = isCompact, onActionClick = { onNavigate("malla") })
-                    DailyTask(modifier = Modifier.fillMaxWidth(), onNavigate = onNavigate)
+                    ActionBanner(
+                        semanaTexto = state.semanaEnCurso,
+                        estadoMallaTexto = state.estadoMalla,
+                        modifier = Modifier.fillMaxWidth(),
+                        isCompact = isCompact,
+                        onActionClick = { onNavigate("malla") }
+                    )
+                    DailyTask(
+                        tareas = state.rondaDelDia,
+                        modifier = Modifier.fillMaxWidth(),
+                        onNavigate = onNavigate
+                    )
                 }
             }else{
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ){
-                    // 1. PASAMOS LA NAVEGACIÓN A LA MALLA
-                    ActionBanner(modifier = Modifier.weight(0.6f), isCompact = isCompact, onActionClick = { onNavigate("malla") })
-                    DailyTask(modifier = Modifier.weight(0.4f), onNavigate = onNavigate)
+                    ActionBanner(
+                        semanaTexto = state.semanaEnCurso,
+                        estadoMallaTexto = state.estadoMalla,
+                        modifier = Modifier.weight(0.6f),
+                        isCompact = isCompact,
+                        onActionClick = { onNavigate("malla") }
+                    )
+                    DailyTask(
+                        tareas = state.rondaDelDia,
+                        modifier = Modifier.weight(0.4f),
+                        onNavigate = onNavigate
+                    )
                 }
             }
         }
@@ -116,12 +149,16 @@ fun PanelScreen(usuario: UsuarioActual, onNavigate: (String) -> Unit){
 }
 
 @Composable
-fun DailyTask(modifier: Modifier, onNavigate: (String) -> Unit) {
+fun DailyTask(
+    tareas: List<String>,
+    modifier: Modifier,
+    onNavigate: (String) -> Unit
+) {
     Card(
         modifier = modifier.height(220.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = MaterialTheme.shapes.extraSmall,
-        border = BorderStroke(1.dp,CafeBorderColor)
+        border = BorderStroke(1.dp, CafeBorderColor)
     ){
         Column(
             modifier = Modifier.padding(24.dp).fillMaxSize()
@@ -133,9 +170,11 @@ fun DailyTask(modifier: Modifier, onNavigate: (String) -> Unit) {
                 letterSpacing = 1.sp,
             )
             Spacer(modifier = Modifier.height(16.dp))
-            TaskItem("3 novedades esperan revisión", onClick = { onNavigate("novedades") })
-            TaskItem("1 solicitudes de cambio por decidir", onClick = { onNavigate("cambios") })
-            TaskItem("Publicar la semana antes del domingo", onClick = { onNavigate("malla") })
+            if (tareas.isNotEmpty()) {
+                TaskItem(tareas.getOrElse(0) { "" }, onClick = { onNavigate("novedades") })
+                TaskItem(tareas.getOrElse(1) { "" }, onClick = { onNavigate("cambios") })
+                TaskItem(tareas.getOrElse(2) { "" }, onClick = { onNavigate("malla") })
+            }
         }
     }
 }
@@ -169,7 +208,13 @@ fun TaskItem(texto: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun ActionBanner(modifier: Modifier, isCompact: Boolean = false, onActionClick: () -> Unit) {
+fun ActionBanner(
+    semanaTexto: String,
+    estadoMallaTexto: String,
+    modifier: Modifier,
+    isCompact: Boolean = false,
+    onActionClick: () -> Unit
+) {
     Box(
         modifier = modifier
             .height(240.dp)
@@ -182,14 +227,14 @@ fun ActionBanner(modifier: Modifier, isCompact: Boolean = false, onActionClick: 
         ){
             Column {
                 Text(
-                    "SEMANA EN CURSO 14 - 20 SEP 2026",
+                    semanaTexto,
                     color = CafeTextSecondary,
                     fontSize = 10.sp,
                     letterSpacing = 1.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "La malla esta en borrador",
+                    estadoMallaTexto,
                     fontSize = if (isCompact) 20.sp else 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = CafeTextPrimary
@@ -241,10 +286,10 @@ fun StatCard(numero: String, etiqueta: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun GreetingHeader(nombre: String, rol: String, scope: String, isCompact: Boolean = false) {
+fun GreetingHeader(saludo: String, nombre: String, rol: String, scope: String, isCompact: Boolean = false) {
     Column{
         Text(
-            "BUENAS NOCHES",
+            saludo.uppercase(),
             color = CafeTextSecondary,
             fontSize = 12.sp,
             letterSpacing = 1.sp
@@ -260,7 +305,7 @@ fun GreetingHeader(nombre: String, rol: String, scope: String, isCompact: Boolea
             verticalAlignment = Alignment.CenterVertically
         ){
             Box(
-                modifier = Modifier.background(CafeDarkBrown).padding(horizontal =  12.dp, vertical = 4.dp)
+                modifier = Modifier.background(CafeDarkBrown).padding(horizontal = 12.dp, vertical = 4.dp)
             ){
                 Text(
                     rol.uppercase(),

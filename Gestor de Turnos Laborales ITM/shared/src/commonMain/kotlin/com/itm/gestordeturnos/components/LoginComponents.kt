@@ -86,9 +86,11 @@ fun PrimarySolidButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ){
     Button(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.fillMaxWidth().height(48.dp),
         colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
         shape = MaterialTheme.shapes.extraSmall
@@ -104,15 +106,17 @@ fun PrimarySolidButton(
 @Composable
 fun GoogleLoginButton(
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ){
     TextButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier,
     ){
         Text(
             "G Continuar con Google",
-            color = CafeTextPrimary
+            color = if (enabled) CafeTextPrimary else CafeTextSecondary.copy(alpha = 0.5f)
         )
     }
 }
