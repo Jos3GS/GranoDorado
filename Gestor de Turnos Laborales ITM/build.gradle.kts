@@ -9,3 +9,11 @@ plugins {
     alias(libs.plugins.kotlinSerialization) apply false
     alias(libs.plugins.googleServices) apply false
 }
+
+// Configuración de Yarn para Kotlin/JS: evita fallos de compilación por bloqueo de yarn.lock
+rootProject.plugins.withType<org.jetbrains.kotlin.gradle.targets.js.yarn.YarnPlugin> {
+    rootProject.the<org.jetbrains.kotlin.gradle.targets.js.yarn.YarnRootExtension>().apply {
+        yarnLockMismatchReport = org.jetbrains.kotlin.gradle.targets.js.yarn.YarnLockMismatchReport.WARNING
+        yarnLockAutoReplace = true
+    }
+}
