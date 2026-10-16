@@ -2,16 +2,13 @@ package com.itm.gestordeturnos.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,7 +21,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -135,35 +131,15 @@ fun GoogleLoginButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ){
-    OutlinedButton(
+    TextButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(48.dp),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = Color.White,
-            contentColor = CafeTextPrimary
-        ),
-        border = BorderStroke(1.dp, CafeBorderColor),
-        shape = MaterialTheme.shapes.extraSmall
+        modifier = modifier,
     ){
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = "G",
-                fontWeight = FontWeight.Black,
-                fontSize = 18.sp,
-                color = Color(0xFF4285F4)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = "Continuar con Google",
-                fontWeight = FontWeight.Medium,
-                fontSize = 14.sp,
-                color = if (enabled) CafeTextPrimary else CafeTextSecondary.copy(alpha = 0.5f)
-            )
-        }
+        Text(
+            "G Continuar con Google",
+            color = if (enabled) CafeTextPrimary else CafeTextSecondary.copy(alpha = 0.5f)
+        )
     }
 }
 

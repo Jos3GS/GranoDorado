@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -129,13 +128,13 @@ fun FormularioLogin(
 ) {
     Column(
         modifier = Modifier.widthIn(max = 400.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         if (mostrarLogoArriba) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = 32.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -150,7 +149,7 @@ fun FormularioLogin(
         }
 
         Column(
-            modifier = Modifier.padding(bottom = 4.dp)
+            modifier = Modifier.padding(bottom = 8.dp)
         ) {
             Text(
                 "INICIAR SESIÓN",
@@ -160,7 +159,7 @@ fun FormularioLogin(
             )
             Text(
                 "Bienvenido de vuelta",
-                fontSize = 20.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = CafeTextPrimary
             )
@@ -181,21 +180,6 @@ fun FormularioLogin(
             isPassword = true
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            TextButton(
-                onClick = onRecuperarClaveClick
-            ) {
-                Text(
-                    "¿Olvidaste tu clave?",
-                    color = CafeTextSecondary,
-                    fontSize = 12.sp
-                )
-            }
-        }
-
         if (state.mensajeError != null) {
             Box(
                 modifier = Modifier
@@ -215,25 +199,23 @@ fun FormularioLogin(
         )
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE5E5E5))
-            Text(
-                text = "O",
-                color = CafeTextSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 12.dp)
+            TextButton(
+                onClick = onRecuperarClaveClick
+            ) {
+                Text(
+                    "¿Olvidaste tu clave?",
+                    color = CafeTextSecondary
+                )
+            }
+            GoogleLoginButton(
+                onClick = onGoogleLoginClick,
+                enabled = !state.isLoading
             )
-            HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE5E5E5))
         }
-
-        GoogleLoginButton(
-            onClick = onGoogleLoginClick,
-            enabled = !state.isLoading,
-            modifier = Modifier.fillMaxWidth()
-        )
     }
 }
 
