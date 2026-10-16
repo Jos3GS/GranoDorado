@@ -17,6 +17,7 @@ import com.itm.gestordeturnos.viewmodel.MainViewModel
 @Composable
 @Preview
 fun App() {
+    remember { initPlatformFirebase() }
     val loginViewModel = remember { LoginViewModel() }
     val mainViewModel = remember { MainViewModel() }
 

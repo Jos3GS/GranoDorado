@@ -21,13 +21,22 @@ interface AuthService {
     fun obtenerUsuarioActivo(): UsuarioActual?
 }
 
-class FirebaseAuthService(
-    private val auth: FirebaseAuth = Firebase.auth
-) : AuthService {
+class FirebaseAuthService : AuthService {
+
+    private val auth: FirebaseAuth?
+        get() = try {
+            Firebase.auth
+        } catch (_: Exception) {
+            null
+        }
 
     override suspend fun iniciarSesion(correo: String, clave: String): AuthResult {
+        val authInstance = auth ?: return AuthResult.Error(
+            "Firebase no está inicializado. Por favor verifica tu configuración en firebase-config.js."
+        )
+
         return try {
-            val userCredential = auth.signInWithEmailAndPassword(correo.trim(), clave)
+            val userCredential = authInstance.signInWithEmailAndPassword(correo.trim(), clave)
             val firebaseUser = userCredential.user
 
             // Resolver datos de usuario y rol (buscando empleado registrado o asignando rol)
@@ -55,16 +64,16 @@ class FirebaseAuthService(
     }
 
     override suspend fun loginConGoogle(): AuthResult {
+        val authInstance = auth
         return try {
-            // En KMP, el flujo de Google inicia sesión a través del SDK correspondiente
-            val currentUser = auth.currentUser
+            val currentUser = authInstance?.currentUser
             if (currentUser != null && currentUser.email != null) {
                 val usuario = resolverUsuario(currentUser.email!!, currentUser.displayName)
                 AuthResult.Success(usuario)
             } else {
                 // Fallback de usuario Google para desarrollo si no hay token nativo
                 val usuarioGoogle = UsuarioActual(
-                    nombre = "Jos\u00e9 Manuel",
+                    nombre = "José Manuel",
                     iniciales = "JM",
                     cargo = "EMPLEADO",
                     rol = RolUsuario.EMPLEADO
@@ -77,8 +86,11 @@ class FirebaseAuthService(
     }
 
     override suspend fun recuperarContrasena(correo: String): Result<Unit> {
+        val authInstance = auth ?: return Result.failure(
+            IllegalStateException("Firebase no está inicializado.")
+        )
         return try {
-            auth.sendPasswordResetEmail(correo.trim())
+            authInstance.sendPasswordResetEmail(correo.trim())
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -87,14 +99,14 @@ class FirebaseAuthService(
 
     override suspend fun cerrarSesion() {
         try {
-            auth.signOut()
+            auth?.signOut()
         } catch (_: Exception) {
             // Ignorado en cierre de sesión
         }
     }
 
     override fun obtenerUsuarioActivo(): UsuarioActual? {
-        val user = auth.currentUser ?: return null
+        val user = auth?.currentUser ?: return null
         val email = user.email ?: return null
         return resolverUsuarioSync(email, user.displayName)
     }

@@ -5,3 +5,6 @@ class WasmPlatform: Platform {
 }
 
 actual fun getPlatform(): Platform = WasmPlatform()
+
+actual fun initPlatformFirebase() {
+}
