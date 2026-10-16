@@ -18,3 +18,10 @@ kotlin {
         }
     }
 }
+
+// Alias de conveniencia para compatibilidad con configuraciones de ejecución del IDE
+tasks.register("wasmJsBrowserDevelopmentRun") {
+    dependsOn("jsBrowserDevelopmentRun")
+    group = "kotlin browser"
+    description = "Ejecuta jsBrowserDevelopmentRun para compatibilidad con Firebase SDK"
+}
