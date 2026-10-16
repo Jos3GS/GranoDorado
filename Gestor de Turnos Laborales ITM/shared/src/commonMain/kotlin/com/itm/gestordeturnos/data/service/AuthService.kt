@@ -5,6 +5,7 @@ import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.UsuarioActual
 import com.itm.gestordeturnos.enviarRecuperacionPlataforma
 import com.itm.gestordeturnos.iniciarSesionGooglePlataforma
+import com.itm.gestordeturnos.registrarCuentaEmpleadoPlataforma
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuth
 import dev.gitlive.firebase.auth.auth
@@ -19,6 +20,7 @@ interface AuthService {
     suspend fun iniciarSesion(correo: String, clave: String): AuthResult
     suspend fun loginConGoogle(): AuthResult
     suspend fun recuperarContrasena(correo: String): Result<Unit>
+    suspend fun registrarCuentaEmpleado(correo: String): Result<Unit>
     suspend fun cerrarSesion()
     fun obtenerUsuarioActivo(): UsuarioActual?
 }
@@ -106,6 +108,10 @@ class FirebaseAuthService : AuthService {
                 Result.failure(e)
             }
         }
+    }
+
+    override suspend fun registrarCuentaEmpleado(correo: String): Result<Unit> {
+        return registrarCuentaEmpleadoPlataforma(correo.trim())
     }
 
     override suspend fun cerrarSesion() {

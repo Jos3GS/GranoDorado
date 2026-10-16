@@ -114,3 +114,53 @@ actual suspend fun enviarRecuperacionPlataforma(correo: String): Result<Unit> = 
         }
     """)
 }
+
+actual suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = {
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = error?.message as? String ?: "Error al registrar empleado en autenticación"
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebase.initializeApp === 'function' && window.firebaseConfig) {
+                var appName = 'EmpleadoRegApp_' + Date.now();
+                var secondaryApp = firebase.initializeApp(window.firebaseConfig, appName);
+                var tempPassword = 'Tmp#' + Math.random().toString(36).substring(2, 12) + 'Z9!';
+
+                secondaryApp.auth().createUserWithEmailAndPassword(correo, tempPassword)
+                    .then(function() {
+                        return secondaryApp.auth().sendPasswordResetEmail(correo);
+                    })
+                    .then(function() {
+                        return secondaryApp.delete();
+                    })
+                    .then(function() {
+                        onSuccess(null);
+                    })
+                    .catch(function(err) {
+                        try { secondaryApp.delete(); } catch(e) {}
+                        if (err && (err.code === 'auth/email-already-in-use' || (err.message && err.message.indexOf('email-already-in-use') !== -1))) {
+                            // Si el correo ya existía en Firebase Auth, enviamos el correo de restablecimiento directamente
+                            if (firebase.auth) {
+                                firebase.auth().sendPasswordResetEmail(correo)
+                                    .then(function() { onSuccess(null); })
+                                    .catch(onError);
+                            } else {
+                                onSuccess(null);
+                            }
+                        } else {
+                            onError(err);
+                        }
+                    });
+            } else {
+                onSuccess(null);
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}

@@ -3,6 +3,8 @@ package com.itm.gestordeturnos.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itm.gestordeturnos.data.repository.EmpleadoRepository
+import com.itm.gestordeturnos.data.service.AuthService
+import com.itm.gestordeturnos.data.service.FirebaseAuthService
 import com.itm.gestordeturnos.domain.model.Cargo
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.EstadoEmpleado
@@ -12,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 data class EmpleadosState(
     val empleadosOriginales: List<Empleado> = emptyList(),
@@ -23,10 +26,14 @@ data class EmpleadosState(
     val empleadoEnEdicion: Empleado? = null,
     val esNuevoEmpleado: Boolean = false,
     val mostrarDrawerFormulario: Boolean = false,
-    val mensajeError: String? = null
+    val mensajeError: String? = null,
+    val isGuardando: Boolean = false,
+    val mensajeExito: String? = null
 )
 
-class EmpleadosViewModel : ViewModel() {
+class EmpleadosViewModel(
+    private val authService: AuthService = FirebaseAuthService()
+) : ViewModel() {
     private val _uiState = MutableStateFlow(EmpleadosState())
     val uiState: StateFlow<EmpleadosState> = _uiState.asStateFlow()
 
@@ -74,6 +81,10 @@ class EmpleadosViewModel : ViewModel() {
         }
     }
 
+    fun limpiarMensajeExito() {
+        _uiState.update { it.copy(mensajeExito = null) }
+    }
+
     private fun aplicarFiltros(state: EmpleadosState): EmpleadosState {
         val filtrados = state.empleadosOriginales.filter { emp ->
             val coincideTexto = state.textoBusqueda.isBlank() ||
@@ -99,8 +110,9 @@ class EmpleadosViewModel : ViewModel() {
     }
 
     fun abrirCrearEmpleado() {
+        val idGenerado = "emp_${Random.nextInt(10000, 99999)}"
         val nuevo = Empleado(
-            id = (uiState.value.empleadosOriginales.size + 1).toString(),
+            id = idGenerado,
             nombre = "",
             apellido = "",
             documento = 0L,
@@ -200,14 +212,38 @@ class EmpleadosViewModel : ViewModel() {
             iniciales = calcularIniciales(empleadoActualizado.nombre, empleadoActualizado.apellido)
         )
 
-        EmpleadoRepository.guardarEmpleado(empleadoFinal, estadoActual.esNuevoEmpleado)
+        val esNuevo = estadoActual.esNuevoEmpleado
 
-        _uiState.update { state ->
-            state.copy(
-                mostrarDrawerFormulario = false,
-                empleadoEnEdicion = null,
-                mensajeError = null
-            )
+        viewModelScope.launch {
+            _uiState.update { it.copy(isGuardando = true, mensajeError = null) }
+
+            // Si es un nuevo empleado, creamos la cuenta en Firebase Auth y enviamos el correo de activación
+            if (esNuevo) {
+                val authResult = authService.registrarCuentaEmpleado(empleadoFinal.correo)
+                if (authResult.isFailure) {
+                    val ex = authResult.exceptionOrNull()?.message ?: ""
+                    if (ex.contains("email-already-in-use", ignoreCase = true)) {
+                        // Enviar correo de restablecimiento si ya existía
+                        authService.recuperarContrasena(empleadoFinal.correo)
+                    }
+                }
+            }
+
+            EmpleadoRepository.guardarEmpleado(empleadoFinal, esNuevo)
+
+            _uiState.update { state ->
+                state.copy(
+                    isGuardando = false,
+                    mostrarDrawerFormulario = false,
+                    empleadoEnEdicion = null,
+                    mensajeError = null,
+                    mensajeExito = if (esNuevo) {
+                        "Empleado registrado con éxito. Se ha enviado un enlace a ${empleadoFinal.correo} para establecer su contraseña."
+                    } else {
+                        "Empleado actualizado con éxito."
+                    }
+                )
+            }
         }
     }
 }

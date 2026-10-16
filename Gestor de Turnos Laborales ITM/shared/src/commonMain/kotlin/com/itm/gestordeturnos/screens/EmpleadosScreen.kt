@@ -119,6 +119,39 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // Mensaje de éxito si existe
+                if (state.mensajeExito != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(CafeStatusSuccessBg, RoundedCornerShape(2.dp))
+                            .border(1.dp, Color(0xFFC3E6CB), RoundedCornerShape(2.dp))
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = state.mensajeExito!!,
+                                color = CafeStatusSuccessText,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "✕",
+                                color = CafeStatusSuccessText,
+                                fontSize = 14.sp,
+                                modifier = Modifier
+                                    .clickable { viewModel.limpiarMensajeExito() }
+                                    .padding(4.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 // Fila de Filtros y Búsqueda
                 BarraFiltros(
                     textoBusqueda = state.textoBusqueda,
@@ -171,6 +204,7 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                     FormularioEmpleadoDrawer(
                         empleado = state.empleadoEnEdicion!!,
                         esNuevo = state.esNuevoEmpleado,
+                        isGuardando = state.isGuardando,
                         mensajeError = state.mensajeError,
                         onGuardar = viewModel::guardarEmpleado,
                         onCancelar = viewModel::cerrarFormulario
@@ -633,6 +667,7 @@ private fun BadgeRol(rol: String) {
 private fun FormularioEmpleadoDrawer(
     empleado: Empleado,
     esNuevo: Boolean,
+    isGuardando: Boolean = false,
     mensajeError: String?,
     onGuardar: (Empleado) -> Unit,
     onCancelar: () -> Unit
@@ -810,17 +845,24 @@ private fun FormularioEmpleadoDrawer(
                     )
                     onGuardar(modificado)
                 },
+                enabled = !isGuardando,
                 colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
                 shape = RoundedCornerShape(2.dp),
                 modifier = Modifier
                     .weight(1.3f)
                     .height(44.dp)
             ) {
-                Text("Guardar", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    text = if (isGuardando) "Guardando..." else "Guardar",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
             }
 
             OutlinedButton(
                 onClick = onCancelar,
+                enabled = !isGuardando,
                 border = BorderStroke(1.dp, Color(0xFFD9D0C5)),
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.Transparent),
                 shape = RoundedCornerShape(2.dp),

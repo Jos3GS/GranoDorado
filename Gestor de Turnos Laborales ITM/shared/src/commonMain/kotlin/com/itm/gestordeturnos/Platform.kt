@@ -17,3 +17,5 @@ expect fun initPlatformFirebase()
 expect suspend fun iniciarSesionGooglePlataforma(): GoogleUserData?
 
 expect suspend fun enviarRecuperacionPlataforma(correo: String): Result<Unit>
+
+expect suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Unit>

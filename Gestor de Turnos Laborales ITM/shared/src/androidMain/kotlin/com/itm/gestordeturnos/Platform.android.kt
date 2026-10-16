@@ -21,3 +21,8 @@ actual suspend fun iniciarSesionGooglePlataforma(): GoogleUserData? {
 actual suspend fun enviarRecuperacionPlataforma(correo: String): Result<Unit> {
     return Result.success(Unit)
 }
+
+actual suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Unit> {
+    // En Android / Entorno de desarrollo devuelve éxito o se conecta con Cloud Functions/Firebase
+    return Result.success(Unit)
+}
