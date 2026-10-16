@@ -27,7 +27,8 @@ data class TurnosState(
     val horaFinNuevo: String = "",
     val descansosNuevo: List<RangoDescanso> = emptyList(),
     val horasEfectivasCalculadas: String = "",
-    val mensajeErrorNuevo: String? = null
+    val mensajeErrorNuevo: String? = null,
+    val isSincronizando: Boolean = false
 )
 
 class TurnosViewModel : ViewModel() {
@@ -36,6 +37,7 @@ class TurnosViewModel : ViewModel() {
 
     init {
         observarTurnosCatalogo()
+        TurnoRepository.iniciarSincronizacionFirestore()
     }
 
     private fun observarTurnosCatalogo() {
@@ -43,6 +45,14 @@ class TurnosViewModel : ViewModel() {
             TurnoRepository.turnosCatalogo.collect { lista ->
                 _uiState.update { it.copy(turnos = lista) }
             }
+        }
+    }
+
+    fun sincronizarConFirestore() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSincronizando = true) }
+            TurnoRepository.forzarSincronizacionCatalogo()
+            _uiState.update { it.copy(isSincronizando = false) }
         }
     }
 
@@ -281,102 +291,89 @@ class TurnosViewModel : ViewModel() {
             val dIni = parsearHoraAMinutos(d.horaInicio)
             val dFn = parsearHoraAMinutos(d.horaFin)
             if (dIni == null || dFn == null) {
-                _uiState.update { it.copy(mensajeErrorNuevo = "Todos los descansos deben tener horas válidas.") }
+                _uiState.update { it.copy(mensajeErrorNuevo = "Formato inválido en los descansos.") }
                 return
             }
-
-            if (dIni < inicioMin || dFn > finMin) {
-                _uiState.update {
-                    it.copy(mensajeErrorNuevo = "Los descansos deben estar dentro del horario del turno (${actual.horaInicioNuevo} - ${actual.horaFinNuevo}).")
-                }
-                return
-            }
-
             if (dFn <= dIni) {
-                _uiState.update { it.copy(mensajeErrorNuevo = "La hora de fin del descanso (${d.horaFin}) debe ser posterior a su inicio (${d.horaInicio}).") }
+                _uiState.update { it.copy(mensajeErrorNuevo = "Cada descanso debe terminar después de su inicio (${d.horaInicio} - ${d.horaFin}).") }
                 return
             }
-
-            val duracionDesc = dFn - dIni
-            if (duracionDesc < 15) {
-                _uiState.update {
-                    it.copy(mensajeErrorNuevo = "Cada descanso debe durar al menos 15 minutos (el descanso ${d.horaInicio}-${d.horaFin} dura $duracionDesc min).")
-                }
+            if (dIni < inicioMin || dFn > finMin) {
+                _uiState.update { it.copy(mensajeErrorNuevo = "Los descansos deben estar dentro del horario laboral (${actual.horaInicioNuevo} - ${actual.horaFinNuevo}).") }
                 return
             }
-
             descansosParsed.add(DescansoParsed(d.id, dIni, dFn, d))
         }
 
         descansosParsed.sortBy { it.inicio }
 
-        // Reglas de descansos y bloques de trabajo:
-        // - Máximo tiempo continuo de trabajo: 2 horas y 45 minutos (165 min)
-        // - Mínimo tiempo continuo de trabajo: 30 minutos
+        // Validar no solapamiento entre descansos
+        for (i in 0 until descansosParsed.size - 1) {
+            if (descansosParsed[i].fin > descansosParsed[i + 1].inicio) {
+                _uiState.update { it.copy(mensajeErrorNuevo = "Hay descansos que se solapan entre sí.") }
+                return
+            }
+        }
+
+        // Validar reglas de trabajo continuo:
+        // Máximo tiempo entre inicio/descanso/fin es de 2h 45min (165 min)
+        // Mínimo tiempo continuo de trabajo es de 30 min (excepto si el turno completo es menor a 2h 45m sin descansos)
         if (descansosParsed.isEmpty()) {
             if (duracionTotalMin > 165) {
                 _uiState.update {
-                    it.copy(mensajeErrorNuevo = "El turno dura más de 2 h 45 min (${formatearMinutosADuracion(duracionTotalMin)}). Debe incluir descansos de al menos 15 minutos máximo cada 2 h 45 min.")
+                    it.copy(mensajeErrorNuevo = "Máximo tiempo de trabajo continuo es 2 h 45 min. Este turno de ${formatearMinutosADuracion(duracionTotalMin)} requiere descansos.")
                 }
                 return
             }
         } else {
-            // Validar bloque inicial (inicio del turno -> primer descanso)
-            val bloqueInicial = descansosParsed.first().inicio - inicioMin
-            if (bloqueInicial > 165) {
+            // Primer bloque: inicio de turno -> primer descanso
+            val primerBloque = descansosParsed.first().inicio - inicioMin
+            if (primerBloque > 165) {
                 _uiState.update {
-                    it.copy(mensajeErrorNuevo = "El tiempo de trabajo antes del primer descanso (${formatearMinutosADuracion(bloqueInicial)}) excede el máximo permitido de 2 horas y 45 minutos.")
+                    it.copy(mensajeErrorNuevo = "El primer bloque de trabajo (${formatearMinutosADuracion(primerBloque)}) excede el límite de 2 h 45 min.")
                 }
                 return
             }
-            if (bloqueInicial < 30) {
+            if (primerBloque < 30) {
                 _uiState.update {
-                    it.copy(mensajeErrorNuevo = "El tiempo de trabajo antes del primer descanso (${formatearMinutosADuracion(bloqueInicial)}) debe ser de al menos 30 minutos.")
+                    it.copy(mensajeErrorNuevo = "El primer bloque de trabajo (${formatearMinutosADuracion(primerBloque)}) debe ser de mínimo 30 minutos.")
                 }
                 return
             }
 
-            // Validar bloques intermedios entre descansos sucesivos
+            // Bloques intermedios
             for (i in 0 until descansosParsed.size - 1) {
-                val finActual = descansosParsed[i].fin
-                val inicioSiguiente = descansosParsed[i + 1].inicio
-                val bloqueIntermedio = inicioSiguiente - finActual
-
-                if (bloqueIntermedio < 0) {
-                    _uiState.update { it.copy(mensajeErrorNuevo = "Los descansos no pueden solaparse entre sí.") }
-                    return
-                }
+                val bloqueIntermedio = descansosParsed[i + 1].inicio - descansosParsed[i].fin
                 if (bloqueIntermedio > 165) {
                     _uiState.update {
-                        it.copy(mensajeErrorNuevo = "El tiempo de trabajo entre descansos (${formatearMinutosADuracion(bloqueIntermedio)}) excede el máximo de 2 horas y 45 minutos.")
+                        it.copy(mensajeErrorNuevo = "Un bloque intermedio de trabajo (${formatearMinutosADuracion(bloqueIntermedio)}) excede el límite de 2 h 45 min.")
                     }
                     return
                 }
                 if (bloqueIntermedio < 30) {
                     _uiState.update {
-                        it.copy(mensajeErrorNuevo = "El tiempo de trabajo entre descansos (${formatearMinutosADuracion(bloqueIntermedio)}) debe ser de al menos 30 minutos.")
+                        it.copy(mensajeErrorNuevo = "El tiempo de trabajo entre descansos (${formatearMinutosADuracion(bloqueIntermedio)}) debe ser de mínimo 30 minutos.")
                     }
                     return
                 }
             }
 
-            // Validar bloque final (último descanso -> fin del turno)
-            val bloqueFinal = finMin - descansosParsed.last().fin
-            if (bloqueFinal > 165) {
+            // Último bloque: último descanso -> fin de turno
+            val ultimoBloque = finMin - descansosParsed.last().fin
+            if (ultimoBloque > 165) {
                 _uiState.update {
-                    it.copy(mensajeErrorNuevo = "El tiempo de trabajo después del último descanso (${formatearMinutosADuracion(bloqueFinal)}) excede el máximo permitido de 2 horas y 45 minutos.")
+                    it.copy(mensajeErrorNuevo = "El bloque final de trabajo (${formatearMinutosADuracion(ultimoBloque)}) excede el límite de 2 h 45 min.")
                 }
                 return
             }
-            if (bloqueFinal < 30) {
+            if (ultimoBloque < 30) {
                 _uiState.update {
-                    it.copy(mensajeErrorNuevo = "El tiempo de trabajo después del último descanso (${formatearMinutosADuracion(bloqueFinal)}) debe ser de al menos 30 minutos.")
+                    it.copy(mensajeErrorNuevo = "El bloque final de trabajo (${formatearMinutosADuracion(ultimoBloque)}) debe ser de mínimo 30 minutos.")
                 }
                 return
             }
         }
 
-        // Cálculos de horas efectivas y formato
         val totalDescansoMin = descansosParsed.sumOf { it.fin - it.inicio }
         val minutosEfectivos = duracionTotalMin - totalDescansoMin
         val horasEfectivasStr = formatearMinutosADuracion(minutosEfectivos)
@@ -408,8 +405,16 @@ class TurnosViewModel : ViewModel() {
             listaDescansos = descansosParsed.map { it.original }
         )
 
-        TurnoRepository.guardarTurnoCatalogo(turnoGuardado, esNuevo = !esEdicion)
-        toggleModalCrearTurno(false)
+        viewModelScope.launch {
+            _uiState.update { it.copy(mensajeErrorNuevo = null) }
+            val resultado = TurnoRepository.guardarTurnoCatalogo(turnoGuardado, esNuevo = !esEdicion)
+            if (resultado.isFailure) {
+                val errorMsg = resultado.exceptionOrNull()?.message ?: "Error al guardar en Firestore"
+                _uiState.update { it.copy(mensajeErrorNuevo = "Error guardando en Firestore: $errorMsg. Verifica la conexión y las reglas de seguridad en Firebase Console.") }
+            } else {
+                toggleModalCrearTurno(false)
+            }
+        }
     }
 
     companion object {

@@ -71,15 +71,28 @@ object FirestoreService {
             val existentes = obtenerTurnosFirestore()
             if (existentes.isEmpty()) {
                 val iniciales = MockDataProviders.inicialTurnosCatalogo()
+                var algunGuardado = false
                 for (t in iniciales) {
-                    guardarTurnoFirestore(t)
+                    val res = guardarTurnoFirestore(t)
+                    if (res.isSuccess) {
+                        algunGuardado = true
+                    }
                 }
-                true
+                algunGuardado
             } else {
                 false
             }
         } catch (_: Exception) {
             false
         }
+    }
+
+    suspend fun forzarPobladoTurnosCatalogo(): Result<Unit> {
+        val iniciales = MockDataProviders.inicialTurnosCatalogo()
+        for (t in iniciales) {
+            val res = guardarTurnoFirestore(t)
+            if (res.isFailure) return res
+        }
+        return Result.success(Unit)
     }
 }

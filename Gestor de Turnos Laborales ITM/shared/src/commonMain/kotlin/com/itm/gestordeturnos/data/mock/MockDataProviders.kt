@@ -22,10 +22,54 @@ object MockDataProviders {
     )
 
     fun inicialTurnosCatalogo(): List<TurnoTemplate> = listOf(
-        TurnoTemplate("1", "Apertura", "06:00-\n14:00", "10:00-\n10:30", "7 h 30\nmin", "ACTIVO", 24),
-        TurnoTemplate("2", "Intermedio", "10:00-\n18:00", "13:30-\n14:00", "7 h 30\nmin", "ACTIVO", 16),
-        TurnoTemplate("3", "Cierre", "14:00-\n22:00", "18:00-\n18:30", "7 h 30\nmin", "ACTIVO", 12),
-        TurnoTemplate("4", "Refuerzo tarde", "16:00-\n22:00", "-", "6 h", "INACTIVO", 3)
+        TurnoTemplate(
+            id = "1",
+            nombre = "Apertura",
+            horario = "06:00-\n14:00",
+            descansos = "10:00-\n10:30",
+            horasEfectivas = "7 h 30\nmin",
+            estado = "ACTIVO",
+            asignaciones = 24,
+            horaInicio = "06:00",
+            horaFin = "14:00",
+            listaDescansos = listOf(RangoDescanso(id = "d_ap_1", horaInicio = "10:00", horaFin = "10:30"))
+        ),
+        TurnoTemplate(
+            id = "2",
+            nombre = "Intermedio",
+            horario = "10:00-\n18:00",
+            descansos = "13:30-\n14:00",
+            horasEfectivas = "7 h 30\nmin",
+            estado = "ACTIVO",
+            asignaciones = 16,
+            horaInicio = "10:00",
+            horaFin = "18:00",
+            listaDescansos = listOf(RangoDescanso(id = "d_int_1", horaInicio = "13:30", horaFin = "14:00"))
+        ),
+        TurnoTemplate(
+            id = "3",
+            nombre = "Cierre",
+            horario = "14:00-\n22:00",
+            descansos = "18:00-\n18:30",
+            horasEfectivas = "7 h 30\nmin",
+            estado = "ACTIVO",
+            asignaciones = 12,
+            horaInicio = "14:00",
+            horaFin = "22:00",
+            listaDescansos = listOf(RangoDescanso(id = "d_cie_1", horaInicio = "18:00", horaFin = "18:30"))
+        ),
+        TurnoTemplate(
+            id = "4",
+            nombre = "Refuerzo tarde",
+            horario = "16:00-\n22:00",
+            descansos = "-",
+            horasEfectivas = "6 h",
+            estado = "INACTIVO",
+            asignaciones = 3,
+            horaInicio = "16:00",
+            horaFin = "22:00",
+            listaDescansos = emptyList()
+        )
     )
 
     fun inicialHorarioSemana(): List<TurnoAsignado> = listOf(

@@ -252,8 +252,17 @@ actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = 
 
     js("""
         try {
-            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
-                var db = firebase.firestore();
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
                 var data = {
                     id: id,
                     nombre: nombre,
@@ -275,7 +284,7 @@ actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = 
                     .catch(onError);
             } else {
                 console.warn("firebase.firestore no está disponible en window");
-                onSuccess(null);
+                onError(new Error("Firebase Firestore no está disponible en window"));
             }
         } catch(e) {
             onError(e);
@@ -308,8 +317,17 @@ actual suspend fun obtenerEmpleadosFirestore(): List<Empleado> = suspendCancella
 
     js("""
         try {
-            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
-                var db = firebase.firestore();
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
                 db.collection("empleados").get()
                     .then(onSuccess)
                     .catch(onError);
@@ -343,8 +361,17 @@ actual fun observarEmpleadosFirestore(onUpdate: (List<Empleado>) -> Unit) {
 
     js("""
         try {
-            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
-                var db = firebase.firestore();
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
                 db.collection("empleados").onSnapshot(callback, function(err) {
                     console.error("Error en onSnapshot de Firestore:", err);
                 });
@@ -382,7 +409,8 @@ private fun parsearTurnoJs(d: dynamic): TurnoTemplate? {
                     val dId = (item.id as? String) ?: ""
                     val dIni = (item.horaInicio as? String) ?: ""
                     val dFin = (item.horaFin as? String) ?: ""
-                    descansosList.add(RangoDescanso(id = if (dId.isNotBlank()) dId else kotlin.uuid.Uuid.random().toString(), horaInicio = dIni, horaFin = dFin))
+                    val finalId = if (dId.isNotBlank()) dId else "d_${kotlin.random.Random.nextInt(1000, 9999)}"
+                    descansosList.add(RangoDescanso(id = finalId, horaInicio = dIni, horaFin = dFin))
                 }
             }
         }
@@ -399,7 +427,8 @@ private fun parsearTurnoJs(d: dynamic): TurnoTemplate? {
             horaFin = horaFin,
             listaDescansos = descansosList
         )
-    } catch (_: Throwable) {
+    } catch (e: Throwable) {
+        println("Error parseando turno de Firestore: " + e.message)
         null
     }
 }
@@ -407,58 +436,75 @@ private fun parsearTurnoJs(d: dynamic): TurnoTemplate? {
 actual suspend fun guardarTurnoFirestore(turno: TurnoTemplate): Result<Unit> = suspendCancellableCoroutine { continuation ->
     val onSuccess: (dynamic) -> Unit = {
         println("Turno guardado con éxito en Firestore: " + turno.id)
+        js("console.log('Turno persistido exitosamente en Firestore:', id);")
         continuation.resume(Result.success(Unit))
     }
     val onError: (dynamic) -> Unit = { error ->
-        val msg = (error?.message as? String) ?: "Error al guardar turno en Firestore"
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar turno en Firestore"
         println("Error guardando turno en Firestore: " + msg)
+        js("console.error('Firestore ERROR guardando en /turnos/' + id + ':', error);")
         continuation.resume(Result.failure(Exception(msg)))
     }
 
-    val id = turno.id
+    val id = if (turno.id.isNotBlank()) turno.id else "t_${kotlin.random.Random.nextInt(1000, 9999)}"
     val nombre = turno.nombre
     val horario = turno.horario
     val descansos = turno.descansos
     val horasEfectivas = turno.horasEfectivas
     val estado = turno.estado
-    val asignaciones = turno.asignaciones
+    val asignacionesNum = turno.asignaciones.toDouble()
     val horaInicio = turno.horaInicio
     val horaFin = turno.horaFin
 
     val descansosJs = js("[]")
     for (d in turno.listaDescansos) {
         val dObj = js("{}")
-        dObj.id = d.id
-        dObj.horaInicio = d.horaInicio
-        dObj.horaFin = d.horaFin
+        val dId = d.id
+        val dIni = d.horaInicio
+        val dFin = d.horaFin
+        js("dObj.id = dId || ''; dObj.horaInicio = dIni || ''; dObj.horaFin = dFin || '';")
         descansosJs.push(dObj)
     }
 
     js("""
         try {
-            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
-                var db = firebase.firestore();
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
                 var data = {
-                    id: id,
-                    nombre: nombre,
-                    horario: horario,
-                    descansos: descansos,
-                    horasEfectivas: horasEfectivas,
-                    estado: estado,
-                    asignaciones: asignaciones,
-                    horaInicio: horaInicio,
-                    horaFin: horaFin,
+                    id: String(id || ''),
+                    nombre: String(nombre || ''),
+                    horario: String(horario || ''),
+                    descansos: String(descansos || '-'),
+                    horasEfectivas: String(horasEfectivas || ''),
+                    estado: String(estado || 'ACTIVO'),
+                    asignaciones: Number(asignacionesNum || 0),
+                    horaInicio: String(horaInicio || ''),
+                    horaFin: String(horaFin || ''),
                     listaDescansos: descansosJs
                 };
                 console.log("Enviando turno a Firestore /turnos/" + id, data);
                 db.collection("turnos").doc(id).set(data)
                     .then(onSuccess)
-                    .catch(onError);
+                    .catch(function(err) {
+                        console.error("Firestore fallo al guardar en /turnos/" + id + ":", err);
+                        onError(err);
+                    });
             } else {
-                console.warn("firebase.firestore no está disponible en window");
-                onSuccess(null);
+                var errNoDb = new Error("Firebase Firestore no está disponible en window");
+                console.error(errNoDb);
+                onError(errNoDb);
             }
         } catch(e) {
+            console.error("Excepción en guardarTurnoFirestore:", e);
             onError(e);
         }
     """)
@@ -487,21 +533,36 @@ actual suspend fun obtenerTurnosFirestore(): List<TurnoTemplate> = suspendCancel
         continuation.resume(lista)
     }
     val onError: (dynamic) -> Unit = { error ->
-        println("Error obteniendo turnos de Firestore: " + error)
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error obteniendo turnos de Firestore"
+        println("Error obteniendo turnos de Firestore: " + msg)
+        js("console.error('Firestore fallo al obtener /turnos:', error);")
         continuation.resume(emptyList())
     }
 
     js("""
         try {
-            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
-                var db = firebase.firestore();
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
                 db.collection("turnos").get()
                     .then(onSuccess)
-                    .catch(onError);
+                    .catch(function(err) {
+                        console.error("Firestore fallo al obtener /turnos:", err);
+                        onError(err);
+                    });
             } else {
                 onSuccess({ docs: [] });
             }
         } catch(e) {
+            console.error("Excepción en obtenerTurnosFirestore:", e);
             onError(e);
         }
     """)
@@ -515,6 +576,10 @@ actual fun observarTurnosFirestore(onUpdate: (List<TurnoTemplate>) -> Unit) {
             for (doc in docs) {
                 val data = doc.data()
                 if (data != null) {
+                    val docId = doc.id as? String
+                    if ((data.id as? String).isNullOrBlank() && !docId.isNullOrBlank()) {
+                        data.id = docId
+                    }
                     val t = parsearTurnoJs(data)
                     if (t != null) {
                         lista.add(t)
@@ -528,8 +593,17 @@ actual fun observarTurnosFirestore(onUpdate: (List<TurnoTemplate>) -> Unit) {
 
     js("""
         try {
-            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
-                var db = firebase.firestore();
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
                 db.collection("turnos").onSnapshot(callback, function(err) {
                     console.error("Error en onSnapshot /turnos de Firestore:", err);
                 });

@@ -5,6 +5,7 @@ import com.itm.gestordeturnos.data.service.FirestoreService
 import com.itm.gestordeturnos.domain.model.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -94,12 +95,15 @@ object TurnoRepository {
     private val _turnosCompaneros = MutableStateFlow(MockDataProviders.inicialTurnosCompaneros())
     val turnosCompaneros: StateFlow<List<TurnoCompaneroSeleccionable>> = _turnosCompaneros.asStateFlow()
 
+    private var jobSincronizacion: Job? = null
+
     init {
         iniciarSincronizacionFirestore()
     }
 
     fun iniciarSincronizacionFirestore() {
-        repositoryScope.launch {
+        jobSincronizacion?.cancel()
+        jobSincronizacion = repositoryScope.launch {
             try {
                 // 1. Cargar inmediatamente desde Firestore si ya existen turnos
                 val remotos = FirestoreService.obtenerTurnos()
@@ -141,37 +145,59 @@ object TurnoRepository {
         }
     }
 
-    fun guardarTurnoCatalogo(turno: TurnoTemplate, esNuevo: Boolean) {
-        // Actualización optimista inmediata en memoria
-        _turnosCatalogo.update { lista ->
-            if (esNuevo) {
-                val sinDuplicado = lista.filterNot { it.id == turno.id }
-                sinDuplicado + turno
+    suspend fun forzarSincronizacionCatalogo(): Result<Unit> {
+        return try {
+            val remotos = FirestoreService.obtenerTurnos()
+            if (remotos.isNotEmpty()) {
+                _turnosCatalogo.value = remotos
+                Result.success(Unit)
             } else {
-                lista.map { if (it.id == turno.id) turno else it }
+                val res = FirestoreService.forzarPobladoTurnosCatalogo()
+                if (res.isSuccess) {
+                    val turnosCargados = FirestoreService.obtenerTurnos()
+                    if (turnosCargados.isNotEmpty()) {
+                        _turnosCatalogo.value = turnosCargados
+                    }
+                }
+                res
             }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
+    }
 
-        // Persistencia asíncrona en Cloud Firestore
-        repositoryScope.launch {
-            val resultado = FirestoreService.guardarTurno(turno)
-            if (resultado.isFailure) {
-                println("Fallo al guardar turno en Firestore: ${resultado.exceptionOrNull()?.message}")
-            } else {
-                println("Turno ${turno.id} persistido exitosamente en Firestore")
+    suspend fun guardarTurnoCatalogo(turno: TurnoTemplate, esNuevo: Boolean): Result<Unit> {
+        val resultado = FirestoreService.guardarTurno(turno)
+        if (resultado.isSuccess) {
+            _turnosCatalogo.update { lista ->
+                if (esNuevo) {
+                    val sinDuplicado = lista.filterNot { it.id == turno.id }
+                    sinDuplicado + turno
+                } else {
+                    lista.map { if (it.id == turno.id) turno else it }
+                }
             }
+            println("Turno ${turno.id} persistido exitosamente en Firestore")
+        } else {
+            val errMsg = resultado.exceptionOrNull()?.message ?: "Error desconocido"
+            println("Fallo al guardar turno en Firestore: $errMsg")
         }
+        return resultado
     }
 
     fun alternarEstadoTurno(idTurno: String) {
         val turnoActual = _turnosCatalogo.value.find { it.id == idTurno } ?: return
         val nuevoEstado = if (turnoActual.estado == "ACTIVO") "INACTIVO" else "ACTIVO"
         val turnoActualizado = turnoActual.copy(estado = nuevoEstado)
-        guardarTurnoCatalogo(turnoActualizado, esNuevo = false)
+        repositoryScope.launch {
+            guardarTurnoCatalogo(turnoActualizado, esNuevo = false)
+        }
     }
 
     fun agregarTurnoCatalogo(turno: TurnoTemplate) {
-        guardarTurnoCatalogo(turno, esNuevo = true)
+        repositoryScope.launch {
+            guardarTurnoCatalogo(turno, esNuevo = true)
+        }
     }
 
     fun getTurnoHoy(): TurnoAsignado? {
@@ -185,16 +211,16 @@ object NovedadRepository {
     val novedades: StateFlow<List<Novedad>> = _novedades.asStateFlow()
 
     fun reportarNovedad(novedad: Novedad) {
-        _novedades.update { listOf(novedad) + it }
+        _novedades.update { it + novedad }
     }
 }
 
 object CambiosTurnoRepository {
     private val _solicitudes = MutableStateFlow(MockDataProviders.inicialSolicitudesCambio())
-    val solicitudes: StateFlow<List<SolicitudCambio>> = _solicitudes.asStateFlow()
+    val solicitudes: StateFlow<List<SolicitudCambioTurno>> = _solicitudes.asStateFlow()
 
-    fun solicitarCambio(solicitud: SolicitudCambio) {
-        _solicitudes.update { listOf(solicitud) + it }
+    fun agregarSolicitud(solicitud: SolicitudCambioTurno) {
+        _solicitudes.update { it + solicitud }
     }
 }
 
@@ -204,4 +230,8 @@ object AsistenciaRepository {
 
     private val _registrosDiarios = MutableStateFlow(MockDataProviders.inicialRegistrosAsistencia())
     val registrosDiarios: StateFlow<List<RegistroAsistencia>> = _registrosDiarios.asStateFlow()
+
+    fun registrarIncumplimiento(notif: NotificacionIncumplimiento) {
+        _notificaciones.update { it + notif }
+    }
 }
