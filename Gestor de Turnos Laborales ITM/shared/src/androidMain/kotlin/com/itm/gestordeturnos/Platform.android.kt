@@ -26,3 +26,7 @@ actual suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Uni
     // En Android / Entorno de desarrollo devuelve éxito o se conecta con Cloud Functions/Firebase
     return Result.success(Unit)
 }
+
+actual fun cerrarSesionPlataforma() {
+    // No-op en Android desarrollo
+}

@@ -1,6 +1,8 @@
 package com.itm.gestordeturnos.data.service
 
+import com.itm.gestordeturnos.cerrarSesionPlataforma
 import com.itm.gestordeturnos.data.repository.EmpleadoRepository
+import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.UsuarioActual
 import com.itm.gestordeturnos.enviarRecuperacionPlataforma
@@ -9,7 +11,6 @@ import com.itm.gestordeturnos.registrarCuentaEmpleadoPlataforma
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuth
 import dev.gitlive.firebase.auth.auth
-import kotlinx.coroutines.flow.first
 
 sealed interface AuthResult {
     data class Success(val usuario: UsuarioActual) : AuthResult
@@ -42,11 +43,18 @@ class FirebaseAuthService : AuthService {
         return try {
             val userCredential = authInstance.signInWithEmailAndPassword(correo.trim(), clave)
             val firebaseUser = userCredential.user
-
-            // Resolver datos de usuario y rol (buscando empleado registrado o asignando rol)
             val email = firebaseUser?.email ?: correo.trim()
-            val usuarioActual = resolverUsuario(email, firebaseUser?.displayName)
-            AuthResult.Success(usuarioActual)
+
+            // Validar que el usuario esté registrado y activo en la base de datos
+            val resultadoResolucion = resolverUsuario(email)
+            if (resultadoResolucion.isFailure) {
+                cerrarSesion()
+                val detalleError = resultadoResolucion.exceptionOrNull()?.message 
+                    ?: "Este correo no se encuentra registrado en el sistema."
+                return AuthResult.Error(detalleError)
+            }
+
+            AuthResult.Success(resultadoResolucion.getOrThrow())
         } catch (e: Exception) {
             val mensaje = when {
                 e.message?.contains("user-not-found", ignoreCase = true) == true ||
@@ -71,8 +79,19 @@ class FirebaseAuthService : AuthService {
         return try {
             val googleUser = iniciarSesionGooglePlataforma()
             if (googleUser != null && googleUser.email.isNotBlank()) {
-                val usuario = resolverUsuario(googleUser.email, googleUser.displayName)
-                AuthResult.Success(usuario)
+                val email = googleUser.email.trim()
+
+                // CONDICIONAL DE SEGURIDAD ESTRICTA:
+                // Si la cuenta no está registrada en el sistema o está inactiva, se deniega el acceso y se cierra la sesión
+                val resultadoResolucion = resolverUsuario(email)
+                if (resultadoResolucion.isFailure) {
+                    cerrarSesion()
+                    val detalleError = resultadoResolucion.exceptionOrNull()?.message 
+                        ?: "La cuenta $email no se encuentra registrada en la plataforma. Contacta al administrador."
+                    return AuthResult.Error(detalleError)
+                }
+
+                AuthResult.Success(resultadoResolucion.getOrThrow())
             } else {
                 AuthResult.Error("Operación de inicio de sesión con Google cancelada.")
             }
@@ -120,68 +139,56 @@ class FirebaseAuthService : AuthService {
         } catch (_: Exception) {
             // Ignorado en cierre de sesión
         }
+        try {
+            cerrarSesionPlataforma()
+        } catch (_: Exception) {
+            // Ignorado
+        }
     }
 
     override fun obtenerUsuarioActivo(): UsuarioActual? {
         val user = auth?.currentUser ?: return null
         val email = user.email ?: return null
-        return resolverUsuarioSync(email, user.displayName)
+        return resolverUsuarioSync(email)
     }
 
-    private suspend fun resolverUsuario(correo: String, displayName: String?): UsuarioActual {
+    private suspend fun resolverUsuario(correo: String): Result<UsuarioActual> {
         val empleado = EmpleadoRepository.buscarPorCorreo(correo)
-        return if (empleado != null) {
-            val rol = when (empleado.cargo.name) {
-                "ADMINISTRADOR_GENERAL" -> RolUsuario.ADMINISTRADOR_GENERAL
-                "ADMINISTRADOR_SUCURSAL" -> RolUsuario.ADMINISTRADOR_SUCURSAL
-                else -> RolUsuario.EMPLEADO
-            }
-            UsuarioActual(
-                nombre = "${empleado.nombre} ${empleado.apellido}".trim(),
-                iniciales = empleado.iniciales.ifEmpty { "EM" },
-                cargo = empleado.cargo.displayName,
-                rol = rol
-            )
-        } else {
-            val nombre = displayName ?: correo.substringBefore("@").replace(".", " ")
-            val iniciales = nombre.split(" ")
-                .mapNotNull { it.firstOrNull()?.uppercaseChar() }
-                .take(2)
-                .joinToString("")
-                .ifEmpty { "US" }
+            ?: return Result.failure(Exception("La cuenta $correo no se encuentra registrada en el sistema. Contacta al administrador."))
 
-            UsuarioActual(
-                nombre = nombre,
-                iniciales = iniciales,
-                cargo = "EMPLEADO",
-                rol = RolUsuario.EMPLEADO
-            )
+        if (empleado.estado != EstadoUsuario.ACTIVO) {
+            return Result.failure(Exception("La cuenta de este colaborador se encuentra inactiva. Contacta al administrador."))
         }
+
+        val rol = when (empleado.cargo.name) {
+            "ADMINISTRADOR_GENERAL" -> RolUsuario.ADMINISTRADOR_GENERAL
+            "ADMINISTRADOR_SUCURSAL" -> RolUsuario.ADMINISTRADOR_SUCURSAL
+            else -> RolUsuario.EMPLEADO
+        }
+        val usuario = UsuarioActual(
+            nombre = "${empleado.nombre} ${empleado.apellido}".trim().ifEmpty { empleado.nombre },
+            iniciales = empleado.iniciales.ifEmpty { "EM" },
+            cargo = empleado.cargo.displayName,
+            rol = rol
+        )
+        return Result.success(usuario)
     }
 
-    private fun resolverUsuarioSync(correo: String, displayName: String?): UsuarioActual {
+    private fun resolverUsuarioSync(correo: String): UsuarioActual? {
         val listaEmpleados = EmpleadoRepository.empleados.value
-        val empleado = listaEmpleados.find { it.correo.equals(correo, ignoreCase = true) }
-        return if (empleado != null) {
-            val rol = when (empleado.cargo.name) {
-                "ADMINISTRADOR_GENERAL" -> RolUsuario.ADMINISTRADOR_GENERAL
-                "ADMINISTRADOR_SUCURSAL" -> RolUsuario.ADMINISTRADOR_SUCURSAL
-                else -> RolUsuario.EMPLEADO
-            }
-            UsuarioActual(
-                nombre = "${empleado.nombre} ${empleado.apellido}".trim(),
-                iniciales = empleado.iniciales.ifEmpty { "EM" },
-                cargo = empleado.cargo.displayName,
-                rol = rol
-            )
-        } else {
-            val nombre = displayName ?: correo.substringBefore("@").replace(".", " ")
-            UsuarioActual(
-                nombre = nombre,
-                iniciales = "US",
-                cargo = "EMPLEADO",
-                rol = RolUsuario.EMPLEADO
-            )
+        val empleado = listaEmpleados.find { it.correo.equals(correo, ignoreCase = true) } ?: return null
+        if (empleado.estado != EstadoUsuario.ACTIVO) return null
+
+        val rol = when (empleado.cargo.name) {
+            "ADMINISTRADOR_GENERAL" -> RolUsuario.ADMINISTRADOR_GENERAL
+            "ADMINISTRADOR_SUCURSAL" -> RolUsuario.ADMINISTRADOR_SUCURSAL
+            else -> RolUsuario.EMPLEADO
         }
+        return UsuarioActual(
+            nombre = "${empleado.nombre} ${empleado.apellido}".trim().ifEmpty { empleado.nombre },
+            iniciales = empleado.iniciales.ifEmpty { "EM" },
+            cargo = empleado.cargo.displayName,
+            rol = rol
+        )
     }
 }

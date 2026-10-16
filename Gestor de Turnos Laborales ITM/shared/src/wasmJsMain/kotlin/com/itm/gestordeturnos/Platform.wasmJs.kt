@@ -14,3 +14,6 @@ actual suspend fun iniciarSesionGooglePlataforma(): GoogleUserData? = null
 actual suspend fun enviarRecuperacionPlataforma(correo: String): Result<Unit> = Result.success(Unit)
 
 actual suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Unit> = Result.success(Unit)
+
+actual fun cerrarSesionPlataforma() {
+}

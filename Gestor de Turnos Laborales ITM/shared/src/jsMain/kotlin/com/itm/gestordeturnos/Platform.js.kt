@@ -164,3 +164,13 @@ actual suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Uni
         }
     """)
 }
+
+actual fun cerrarSesionPlataforma() {
+    js("""
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebase.auth === 'function') {
+                firebase.auth().signOut();
+            }
+        } catch(e) {}
+    """)
+}
