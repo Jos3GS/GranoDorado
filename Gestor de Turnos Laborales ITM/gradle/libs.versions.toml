@@ -48,6 +48,7 @@ wrappers-browser = { module = "org.jetbrains.kotlin-wrappers:kotlin-browser", ve
 # Firebase Kotlin SDK (GitLive) para Kotlin Multiplatform
 firebase-auth = { module = "dev.gitlive:firebase-auth", version.ref = "firebase-kotlin" }
 firebase-firestore = { module = "dev.gitlive:firebase-firestore", version.ref = "firebase-kotlin" }
+firebase-messaging = { module = "dev.gitlive:firebase-messaging", version.ref = "firebase-kotlin" }
 firebase-common = { module = "dev.gitlive:firebase-common", version.ref = "firebase-kotlin" }
 
 [plugins]
