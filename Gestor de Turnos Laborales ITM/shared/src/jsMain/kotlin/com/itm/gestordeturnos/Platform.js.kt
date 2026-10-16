@@ -237,7 +237,7 @@ actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = 
     val id = empleado.id
     val nombre = empleado.nombre
     val apellido = empleado.apellido
-    val documento = empleado.documento
+    val docDouble = empleado.documento.toDouble()
     val tipoDocumento = empleado.tipoDocumento
     val correo = empleado.correo
     val telefono = empleado.telefono
@@ -256,7 +256,7 @@ actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = 
                     id: id,
                     nombre: nombre,
                     apellido: apellido,
-                    documento: documento,
+                    documento: docDouble,
                     tipoDocumento: tipoDocumento,
                     correo: correo,
                     telefono: telefono,
@@ -312,7 +312,7 @@ actual suspend fun obtenerEmpleadosFirestore(): List<Empleado> = suspendCancella
                     .then(onSuccess)
                     .catch(onError);
             } else {
-                continuation.resume([]);
+                onSuccess({ docs: [] });
             }
         } catch(e) {
             onError(e);
