@@ -38,7 +38,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toLocalDateTime
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -663,6 +673,7 @@ private fun BadgeRol(rol: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FormularioEmpleadoDrawer(
     empleado: Empleado,
@@ -672,6 +683,7 @@ private fun FormularioEmpleadoDrawer(
     onGuardar: (Empleado) -> Unit,
     onCancelar: () -> Unit
 ) {
+    var mostrarDatePicker by remember { mutableStateOf(false) }
     var nombre by remember(empleado) { mutableStateOf(empleado.nombre) }
     var apellido by remember(empleado) { mutableStateOf(empleado.apellido) }
     var documento by remember(empleado) { mutableStateOf(if (empleado.documento > 0L) empleado.documento.toString() else "") }
@@ -798,6 +810,7 @@ private fun FormularioEmpleadoDrawer(
                         .height(44.dp)
                         .background(Color.White, RoundedCornerShape(2.dp))
                         .border(1.dp, Color(0xFFD9D0C5), RoundedCornerShape(2.dp))
+                        .clickable { mostrarDatePicker = true }
                         .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
@@ -807,7 +820,12 @@ private fun FormularioEmpleadoDrawer(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(fechaIngreso, fontSize = 13.sp, color = CafeTextPrimary)
-                        Icon(Icons.Default.DateRange, contentDescription = null, tint = CafeTextSecondary, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.DateRange,
+                            contentDescription = "Seleccionar fecha de ingreso",
+                            tint = CafeTextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
@@ -881,6 +899,61 @@ private fun FormularioEmpleadoDrawer(
             ) {
                 Text("Cancelar", color = CafeTextPrimary, fontWeight = FontWeight.Medium, fontSize = 14.sp)
             }
+        }
+    }
+
+    if (mostrarDatePicker) {
+        val initialMillis = remember(fechaIngreso) {
+            try {
+                val partes = fechaIngreso.split("/")
+                if (partes.size == 3) {
+                    val dia = partes[0].toInt()
+                    val mes = partes[1].toInt()
+                    val anio = partes[2].toInt()
+                    kotlinx.datetime.LocalDate(anio, mes, dia)
+                        .atStartOfDayIn(TimeZone.UTC)
+                        .toEpochMilliseconds()
+                } else null
+            } catch (_: Exception) {
+                null
+            }
+        }
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+
+        DatePickerDialog(
+            onDismissRequest = { mostrarDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val instant = Instant.fromEpochMilliseconds(millis)
+                            val localDate = instant.toLocalDateTime(TimeZone.UTC).date
+                            val dia = localDate.dayOfMonth.toString().padStart(2, '0')
+                            val mes = localDate.monthNumber.toString().padStart(2, '0')
+                            val anio = localDate.year
+                            fechaIngreso = "$dia/$mes/$anio"
+                        }
+                        mostrarDatePicker = false
+                    }
+                ) {
+                    Text("Aceptar", color = CafeDarkBrown, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDatePicker = false }) {
+                    Text("Cancelar", color = CafeTextSecondary)
+                }
+            }
+        ) {
+            DatePicker(
+                state = datePickerState,
+                colors = DatePickerDefaults.colors(
+                    selectedDayContainerColor = CafeDarkBrown,
+                    selectedDayContentColor = Color.White,
+                    todayDateBorderColor = CafeDarkBrown,
+                    todayContentColor = CafeDarkBrown
+                )
+            )
         }
     }
 }
