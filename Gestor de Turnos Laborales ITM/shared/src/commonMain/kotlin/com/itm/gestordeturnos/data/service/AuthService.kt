@@ -3,6 +3,7 @@ package com.itm.gestordeturnos.data.service
 import com.itm.gestordeturnos.data.repository.EmpleadoRepository
 import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.UsuarioActual
+import com.itm.gestordeturnos.enviarRecuperacionPlataforma
 import com.itm.gestordeturnos.iniciarSesionGooglePlataforma
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuth
@@ -90,14 +91,20 @@ class FirebaseAuthService : AuthService {
     }
 
     override suspend fun recuperarContrasena(correo: String): Result<Unit> {
-        val authInstance = auth ?: return Result.failure(
-            IllegalStateException("Firebase no está inicializado.")
-        )
+        val authInstance = auth
         return try {
-            authInstance.sendPasswordResetEmail(correo.trim())
-            Result.success(Unit)
+            if (authInstance != null) {
+                authInstance.sendPasswordResetEmail(correo.trim())
+                Result.success(Unit)
+            } else {
+                enviarRecuperacionPlataforma(correo.trim())
+            }
         } catch (e: Exception) {
-            Result.failure(e)
+            try {
+                enviarRecuperacionPlataforma(correo.trim())
+            } catch (_: Exception) {
+                Result.failure(e)
+            }
         }
     }
 

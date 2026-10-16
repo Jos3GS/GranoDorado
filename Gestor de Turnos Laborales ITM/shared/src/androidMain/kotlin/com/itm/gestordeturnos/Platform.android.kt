@@ -17,3 +17,7 @@ actual suspend fun iniciarSesionGooglePlataforma(): GoogleUserData? {
         displayName = "Usuario Google"
     )
 }
+
+actual suspend fun enviarRecuperacionPlataforma(correo: String): Result<Unit> {
+    return Result.success(Unit)
+}

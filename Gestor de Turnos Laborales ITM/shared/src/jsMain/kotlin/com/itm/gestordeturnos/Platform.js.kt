@@ -90,3 +90,27 @@ actual suspend fun iniciarSesionGooglePlataforma(): GoogleUserData? = suspendCan
         }
     """)
 }
+
+actual suspend fun enviarRecuperacionPlataforma(correo: String): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = {
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = error?.message as? String ?: "Error al enviar correo de restablecimiento"
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebase.auth === 'function') {
+                firebase.auth().sendPasswordResetEmail(correo)
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onSuccess(null);
+            }
+        } catch (e) {
+            onError(e);
+        }
+    """)
+}

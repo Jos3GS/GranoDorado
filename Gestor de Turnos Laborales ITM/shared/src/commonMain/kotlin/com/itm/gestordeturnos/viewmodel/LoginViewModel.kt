@@ -123,9 +123,18 @@ class LoginViewModel(
                     mensaje = "Hemos enviado las instrucciones para restablecer tu contraseña a $emailIngresado. Revisa tu bandeja de entrada y la carpeta de spam."
                 )
             } else {
+                val errorMsg = resultado.exceptionOrNull()?.message ?: ""
+                val detalle = when {
+                    errorMsg.contains("invalid-email", ignoreCase = true) ->
+                        "El formato del correo electrónico ingresado no es válido."
+                    errorMsg.contains("user-not-found", ignoreCase = true) ->
+                        "No se encontró ninguna cuenta asociada a '$emailIngresado'."
+                    else ->
+                        "No se encontró ninguna cuenta asociada a '$emailIngresado' o hubo un error al procesar la solicitud."
+                }
                 FeedbackRecuperacion.ErrorNoEncontrado(
                     titulo = "No se pudo enviar",
-                    mensaje = "No se encontró ninguna cuenta asociada a '$emailIngresado' o hubo un error al procesar la solicitud."
+                    mensaje = detalle
                 )
             }
 
