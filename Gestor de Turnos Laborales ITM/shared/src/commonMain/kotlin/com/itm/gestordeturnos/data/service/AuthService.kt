@@ -3,6 +3,7 @@ package com.itm.gestordeturnos.data.service
 import com.itm.gestordeturnos.data.repository.EmpleadoRepository
 import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.UsuarioActual
+import com.itm.gestordeturnos.iniciarSesionGooglePlataforma
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuth
 import dev.gitlive.firebase.auth.auth
@@ -64,24 +65,27 @@ class FirebaseAuthService : AuthService {
     }
 
     override suspend fun loginConGoogle(): AuthResult {
-        val authInstance = auth
         return try {
-            val currentUser = authInstance?.currentUser
-            if (currentUser != null && currentUser.email != null) {
-                val usuario = resolverUsuario(currentUser.email!!, currentUser.displayName)
+            val googleUser = iniciarSesionGooglePlataforma()
+            if (googleUser != null && googleUser.email.isNotBlank()) {
+                val usuario = resolverUsuario(googleUser.email, googleUser.displayName)
                 AuthResult.Success(usuario)
             } else {
-                // Fallback de usuario Google para desarrollo si no hay token nativo
-                val usuarioGoogle = UsuarioActual(
-                    nombre = "José Manuel",
-                    iniciales = "JM",
-                    cargo = "EMPLEADO",
-                    rol = RolUsuario.EMPLEADO
-                )
-                AuthResult.Success(usuarioGoogle)
+                AuthResult.Error("Operación de inicio de sesión con Google cancelada.")
             }
         } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "No se pudo completar el inicio de sesión con Google.")
+            val mensaje = when {
+                e.message?.contains("popup-closed-by-user", ignoreCase = true) == true ->
+                    "Ventana de inicio de sesión con Google cerrada."
+                e.message?.contains("operation-not-allowed", ignoreCase = true) == true ||
+                e.message?.contains("configuration-not-found", ignoreCase = true) == true ->
+                    "El proveedor de Google no está habilitado en Firebase Console (Authentication -> Sign-in method)."
+                e.message?.contains("unauthorized-domain", ignoreCase = true) == true ->
+                    "Este dominio no está autorizado en Firebase Console (Authentication -> Settings -> Authorized domains)."
+                else ->
+                    e.message ?: "No se pudo completar el inicio de sesión con Google."
+            }
+            AuthResult.Error(mensaje)
         }
     }
 

@@ -4,6 +4,14 @@ interface Platform {
     val name: String
 }
 
+data class GoogleUserData(
+    val email: String,
+    val displayName: String?,
+    val idToken: String? = null
+)
+
 expect fun getPlatform(): Platform
 
 expect fun initPlatformFirebase()
+
+expect suspend fun iniciarSesionGooglePlataforma(): GoogleUserData?

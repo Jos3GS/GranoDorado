@@ -8,3 +8,5 @@ actual fun getPlatform(): Platform = WasmPlatform()
 
 actual fun initPlatformFirebase() {
 }
+
+actual suspend fun iniciarSesionGooglePlataforma(): GoogleUserData? = null

@@ -3,7 +3,10 @@ package com.itm.gestordeturnos
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.FirebaseOptions
 import dev.gitlive.firebase.initialize
+import kotlinx.coroutines.suspendCancellableCoroutine
 import web.navigator.navigator
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 class JsPlatform: Platform {
     private val userAgent = navigator.userAgent
@@ -42,4 +45,48 @@ actual fun initPlatformFirebase() {
     } catch (_: Throwable) {
         // Ignorado si ya está inicializado o si hubo un error en JS
     }
+}
+
+actual suspend fun iniciarSesionGooglePlataforma(): GoogleUserData? = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = { result ->
+        if (result != null && result.user != null) {
+            val user = result.user
+            val email = user.email as? String
+            val displayName = user.displayName as? String
+            if (email != null) {
+                continuation.resume(GoogleUserData(email = email, displayName = displayName))
+            } else {
+                continuation.resume(null)
+            }
+        } else {
+            continuation.resume(null)
+        }
+    }
+
+    val onError: (dynamic) -> Unit = { error ->
+        val code = error?.code as? String ?: ""
+        if (code == "auth/popup-closed-by-user" || code == "auth/cancelled-popup-request") {
+            continuation.resume(null)
+        } else {
+            val message = error?.message as? String ?: "Error en autenticación con Google"
+            continuation.resumeWithException(Exception(message))
+        }
+    }
+
+    js("""
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebase.auth === 'function') {
+                var provider = new firebase.auth.GoogleAuthProvider();
+                provider.addScope('email');
+                provider.addScope('profile');
+                firebase.auth().signInWithPopup(provider)
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onSuccess(null);
+            }
+        } catch (e) {
+            onError(e);
+        }
+    """)
 }
