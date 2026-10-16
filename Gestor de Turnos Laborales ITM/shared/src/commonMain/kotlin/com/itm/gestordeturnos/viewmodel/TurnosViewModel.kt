@@ -155,7 +155,10 @@ class TurnosViewModel : ViewModel() {
             val actualizados = state.descansosNuevo.map { descanso ->
                 if (descanso.id == id) {
                     val iniMin = parsearHoraAMinutos(hora)
-                    val finAuto = if (iniMin != null) formatearMinutosAHora(iniMin + 15) else descanso.horaFin
+                    val duracionActual = parsearHoraAMinutos(descanso.horaFin)?.let { fn ->
+                        parsearHoraAMinutos(descanso.horaInicio)?.let { ini -> (fn - ini).takeIf { it >= 15 } }
+                    } ?: 15
+                    val finAuto = if (iniMin != null) formatearMinutosAHora(iniMin + duracionActual) else descanso.horaFin
                     descanso.copy(horaInicio = hora, horaFin = finAuto)
                 } else descanso
             }
@@ -245,9 +248,9 @@ class TurnosViewModel : ViewModel() {
             }
 
             val duracionDesc = dFn - dIni
-            if (duracionDesc != 15) {
+            if (duracionDesc < 15) {
                 _uiState.update {
-                    it.copy(mensajeErrorNuevo = "Cada descanso debe durar exactamente 15 minutos (el descanso ${d.horaInicio}-${d.horaFin} dura $duracionDesc min).")
+                    it.copy(mensajeErrorNuevo = "Cada descanso debe durar al menos 15 minutos (el descanso ${d.horaInicio}-${d.horaFin} dura $duracionDesc min).")
                 }
                 return
             }
@@ -263,7 +266,7 @@ class TurnosViewModel : ViewModel() {
         if (descansosParsed.isEmpty()) {
             if (duracionTotalMin > 165) {
                 _uiState.update {
-                    it.copy(mensajeErrorNuevo = "El turno dura más de 2 h 45 min (${formatearMinutosADuracion(duracionTotalMin)}). Debe incluir descansos de 15 minutos máximo cada 2 h 45 min.")
+                    it.copy(mensajeErrorNuevo = "El turno dura más de 2 h 45 min (${formatearMinutosADuracion(duracionTotalMin)}). Debe incluir descansos de al menos 15 minutos máximo cada 2 h 45 min.")
                 }
                 return
             }
@@ -324,7 +327,7 @@ class TurnosViewModel : ViewModel() {
         }
 
         // Cálculos de horas efectivas y formato
-        val totalDescansoMin = descansosParsed.size * 15
+        val totalDescansoMin = descansosParsed.sumOf { it.fin - it.inicio }
         val minutosEfectivos = duracionTotalMin - totalDescansoMin
         val horasEfectivasStr = formatearMinutosADuracion(minutosEfectivos)
 

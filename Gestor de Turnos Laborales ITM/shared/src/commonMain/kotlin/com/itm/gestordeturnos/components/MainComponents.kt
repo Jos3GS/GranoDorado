@@ -1381,7 +1381,7 @@ fun ModalCrearTurno(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("DESCANSOS (15 MIN)", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            Text("DESCANSOS (MÍN. 15 MIN)", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                             Text("Máx. cada 2h 45m de trabajo", color = CafeTextSecondary, fontSize = 10.sp)
                         }
                         Text(
