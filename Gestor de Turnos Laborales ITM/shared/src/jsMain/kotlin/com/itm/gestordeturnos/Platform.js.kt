@@ -1,5 +1,9 @@
 package com.itm.gestordeturnos
 
+import com.itm.gestordeturnos.domain.model.Cargo
+import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.EstadoEmpleado
+import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.FirebaseOptions
 import dev.gitlive.firebase.initialize
@@ -172,5 +176,179 @@ actual fun cerrarSesionPlataforma() {
                 firebase.auth().signOut();
             }
         } catch(e) {}
+    """)
+}
+
+private fun parsearEmpleadoJs(d: dynamic): Empleado? {
+    if (d == null || d == js("undefined")) return null
+    return try {
+        val id = (d.id as? String) ?: ""
+        val nombre = (d.nombre as? String) ?: ""
+        val apellido = (d.apellido as? String) ?: ""
+        val docNum = when (val docVal = d.documento) {
+            is Number -> docVal.toLong()
+            is String -> docVal.toLongOrNull() ?: 0L
+            else -> 0L
+        }
+        val tipoDoc = (d.tipoDocumento as? String) ?: "CC"
+        val correo = (d.correo as? String) ?: ""
+        val tel = (d.telefono as? String) ?: ""
+        val cargoStr = (d.cargo as? String) ?: "BARISTA"
+        val cargoEnum = Cargo.entries.find { it.name.equals(cargoStr, ignoreCase = true) || it.displayName.equals(cargoStr, ignoreCase = true) } ?: Cargo.BARISTA
+        val sucursal = (d.sucursal as? String) ?: "CENTRO"
+        val fechaIngreso = (d.fechaIngreso as? String) ?: "15/01/2024"
+        val estadoStr = (d.estado as? String) ?: "ACTIVO"
+        val estadoEnum = EstadoUsuario.entries.find { it.name.equals(estadoStr, ignoreCase = true) || it.displayName.equals(estadoStr, ignoreCase = true) } ?: EstadoUsuario.ACTIVO
+        val estadoLabStr = (d.estadoLaboral as? String) ?: "DISPONIBLE"
+        val estadoLabEnum = EstadoEmpleado.entries.find { it.name.equals(estadoLabStr, ignoreCase = true) || it.displayName.equals(estadoLabStr, ignoreCase = true) } ?: EstadoEmpleado.DISPONIBLE
+        val iniciales = (d.iniciales as? String) ?: ""
+
+        Empleado(
+            id = id,
+            nombre = nombre,
+            apellido = apellido,
+            documento = docNum,
+            tipoDocumento = tipoDoc,
+            correo = correo,
+            telefono = tel,
+            cargo = cargoEnum,
+            sucursal = sucursal,
+            fechaIngreso = fechaIngreso,
+            estado = estadoEnum,
+            estadoLaboral = estadoLabEnum,
+            iniciales = iniciales
+        )
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = {
+        js("console.log('Documento guardado con éxito en Firestore:', empleado.id);")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = error?.message as? String ?: "Error al guardar empleado en Firestore"
+        js("console.error('Error guardando en Firestore:', error);")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    val id = empleado.id
+    val nombre = empleado.nombre
+    val apellido = empleado.apellido
+    val documento = empleado.documento
+    val tipoDocumento = empleado.tipoDocumento
+    val correo = empleado.correo
+    val telefono = empleado.telefono
+    val cargo = empleado.cargo.name
+    val sucursal = empleado.sucursal
+    val fechaIngreso = empleado.fechaIngreso
+    val estado = empleado.estado.name
+    val estadoLaboral = empleado.estadoLaboral.name
+    val iniciales = empleado.iniciales
+
+    js("""
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                var db = firebase.firestore();
+                var data = {
+                    id: id,
+                    nombre: nombre,
+                    apellido: apellido,
+                    documento: documento,
+                    tipoDocumento: tipoDocumento,
+                    correo: correo,
+                    telefono: telefono,
+                    cargo: cargo,
+                    sucursal: sucursal,
+                    fechaIngreso: fechaIngreso,
+                    estado: estado,
+                    estadoLaboral: estadoLaboral,
+                    iniciales: iniciales
+                };
+                console.log("Enviando a Firestore /empleados/" + id, data);
+                db.collection("empleados").doc(id).set(data)
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                console.warn("firebase.firestore no está disponible en window");
+                onSuccess(null);
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual suspend fun obtenerEmpleadosFirestore(): List<Empleado> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<Empleado>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val emp = parsearEmpleadoJs(data)
+                    if (emp != null) {
+                        lista.add(emp)
+                    }
+                }
+            }
+        }
+        js("console.log('Empleados obtenidos de Firestore:', lista.size);")
+        continuation.resume(lista)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        js("console.error('Error obteniendo empleados de Firestore:', error);")
+        continuation.resume(emptyList())
+    }
+
+    js("""
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                var db = firebase.firestore();
+                db.collection("empleados").get()
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                continuation.resume([]);
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual fun observarEmpleadosFirestore(onUpdate: (List<Empleado>) -> Unit) {
+    val callback: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<Empleado>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val emp = parsearEmpleadoJs(data)
+                    if (emp != null) {
+                        lista.add(emp)
+                    }
+                }
+            }
+        }
+        js("console.log('Cambio en tiempo real de Firestore /empleados, total:', lista.size);")
+        onUpdate(lista)
+    }
+
+    js("""
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                var db = firebase.firestore();
+                db.collection("empleados").onSnapshot(callback, function(err) {
+                    console.error("Error en onSnapshot de Firestore:", err);
+                });
+            }
+        } catch(e) {
+            console.error("Error suscribiendo a Firestore:", e);
+        }
     """)
 }

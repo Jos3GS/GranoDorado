@@ -746,8 +746,13 @@ private fun FormularioEmpleadoDrawer(
         // Documento y Teléfono
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(modifier = Modifier.weight(1f)) {
-                EtiquetaCampo("NÚMERO DE DOCUMENTO *")
-                CampoTextoFormulario(valor = documento, onValorCambiado = { documento = it }, placeholder = "1020304050")
+                EtiquetaCampo(if (esNuevo) "NÚMERO DE DOCUMENTO *" else "NÚMERO DE DOCUMENTO (NO MODIFICABLE)")
+                CampoTextoFormulario(
+                    valor = documento,
+                    onValorCambiado = { if (esNuevo) documento = it },
+                    placeholder = "1020304050",
+                    enabled = esNuevo
+                )
             }
             Column(modifier = Modifier.weight(1f)) {
                 EtiquetaCampo("TELÉFONO")
@@ -824,7 +829,11 @@ private fun FormularioEmpleadoDrawer(
         ) {
             Button(
                 onClick = {
-                    val docLong = documento.filter { it.isDigit() }.toLongOrNull() ?: 0L
+                    val docLong = if (esNuevo) {
+                        documento.filter { it.isDigit() }.toLongOrNull() ?: 0L
+                    } else {
+                        empleado.documento
+                    }
                     val cargoEnum = Cargo.entries.find {
                         it.displayName.equals(rolSeleccionado, ignoreCase = true) || it.name.equals(rolSeleccionado, ignoreCase = true)
                     } ?: Cargo.BARISTA
@@ -892,19 +901,24 @@ private fun EtiquetaCampo(texto: String) {
 private fun CampoTextoFormulario(
     valor: String,
     onValorCambiado: (String) -> Unit,
-    placeholder: String
+    placeholder: String,
+    enabled: Boolean = true
 ) {
     OutlinedTextField(
         value = valor,
         onValueChange = onValorCambiado,
+        enabled = enabled,
         modifier = Modifier.fillMaxWidth(),
-        textStyle = TextStyle(fontSize = 13.sp, color = CafeTextPrimary),
+        textStyle = TextStyle(fontSize = 13.sp, color = if (enabled) CafeTextPrimary else CafeTextSecondary),
         singleLine = true,
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = CafeDarkBrown,
             unfocusedBorderColor = Color(0xFFD9D0C5),
             focusedContainerColor = Color.White,
-            unfocusedContainerColor = Color.White
+            unfocusedContainerColor = Color.White,
+            disabledContainerColor = Color(0xFFF7F4F0),
+            disabledBorderColor = Color(0xFFE2DCD5),
+            disabledTextColor = CafeTextSecondary
         ),
         shape = RoundedCornerShape(2.dp),
         placeholder = { Text(placeholder, fontSize = 13.sp, color = Color(0xFFAFA79D)) }

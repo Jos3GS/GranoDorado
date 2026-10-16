@@ -1,5 +1,7 @@
 package com.itm.gestordeturnos
 
+import com.itm.gestordeturnos.domain.model.Empleado
+
 class AndroidPlatform : Platform {
     override val name: String = "Android ${android.os.Build.VERSION.SDK_INT}"
 }
@@ -29,4 +31,15 @@ actual suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Uni
 
 actual fun cerrarSesionPlataforma() {
     // No-op en Android desarrollo
+}
+
+actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> {
+    return Result.success(Unit)
+}
+
+actual suspend fun obtenerEmpleadosFirestore(): List<Empleado> {
+    return emptyList()
+}
+
+actual fun observarEmpleadosFirestore(onUpdate: (List<Empleado>) -> Unit) {
 }

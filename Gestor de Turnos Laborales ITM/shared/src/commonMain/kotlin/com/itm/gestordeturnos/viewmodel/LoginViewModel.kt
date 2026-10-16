@@ -2,6 +2,7 @@ package com.itm.gestordeturnos.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itm.gestordeturnos.data.repository.EmpleadoRepository
 import com.itm.gestordeturnos.data.service.AuthResult
 import com.itm.gestordeturnos.data.service.AuthService
 import com.itm.gestordeturnos.data.service.FirebaseAuthService
@@ -70,6 +71,7 @@ class LoginViewModel(
             when (val resultado = authService.iniciarSesion(email, password)) {
                 is AuthResult.Success -> {
                     SessionManager.usuarioActivo = resultado.usuario
+                    EmpleadoRepository.iniciarSincronizacionFirestore()
                     _uiState.update { it.copy(isLoading = false, isSuccess = true, mensajeError = null) }
                 }
                 is AuthResult.Error -> {
@@ -87,6 +89,7 @@ class LoginViewModel(
             when (val resultado = authService.loginConGoogle()) {
                 is AuthResult.Success -> {
                     SessionManager.usuarioActivo = resultado.usuario
+                    EmpleadoRepository.iniciarSincronizacionFirestore()
                     _uiState.update { it.copy(isLoading = false, isSuccess = true, mensajeError = null) }
                 }
                 is AuthResult.Error -> {

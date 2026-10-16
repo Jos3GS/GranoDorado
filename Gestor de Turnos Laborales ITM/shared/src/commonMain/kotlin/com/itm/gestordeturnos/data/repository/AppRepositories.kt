@@ -21,10 +21,10 @@ object EmpleadoRepository {
         iniciarSincronizacionFirestore()
     }
 
-    private fun iniciarSincronizacionFirestore() {
+    fun iniciarSincronizacionFirestore() {
         repositoryScope.launch {
             try {
-                // 1. Si la colección de Firestore está vacía, poblarla con los datos iniciales
+                // 1. Si la colección de Firestore está vacía, poblarla con el usuario inicial
                 FirestoreService.inicializarSiEstaVacio()
 
                 // 2. Escuchar en tiempo real los cambios en la colección "empleados"
@@ -33,7 +33,7 @@ object EmpleadoRepository {
                         _empleados.value = listaRemota
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // En caso de estar sin conexión o fallo temporal de red, mantiene la memoria local
             }
         }
@@ -51,7 +51,10 @@ object EmpleadoRepository {
 
         // Persistencia asíncrona en Cloud Firestore
         repositoryScope.launch {
-            FirestoreService.guardarEmpleado(empleado)
+            val resultado = FirestoreService.guardarEmpleado(empleado)
+            if (resultado.isFailure) {
+                println("Fallo al guardar empleado en Firestore: ${resultado.exceptionOrNull()?.message}")
+            }
         }
     }
 
