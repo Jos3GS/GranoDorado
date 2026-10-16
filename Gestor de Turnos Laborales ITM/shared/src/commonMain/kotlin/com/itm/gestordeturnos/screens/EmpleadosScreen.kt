@@ -47,6 +47,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
+import kotlin.time.Clock
+import kotlinx.datetime.todayIn
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -724,7 +726,18 @@ private fun FormularioEmpleadoDrawer(
     var telefono by remember(empleado) { mutableStateOf(empleado.telefono) }
     var rolSeleccionado by remember(empleado) { mutableStateOf(empleado.cargo.displayName) }
     var sucursalSeleccionada by remember(empleado) { mutableStateOf(empleado.sucursal) }
-    var fechaIngreso by remember(empleado) { mutableStateOf(empleado.fechaIngreso) }
+    var fechaIngreso by remember(empleado) {
+        val fecha = if (empleado.fechaIngreso.isNotBlank() && (!esNuevo || empleado.fechaIngreso != "15/01/2024")) {
+            empleado.fechaIngreso
+        } else {
+            val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
+            val dia = hoy.dayOfMonth.toString().padStart(2, '0')
+            val mes = hoy.monthNumber.toString().padStart(2, '0')
+            val anio = hoy.year
+            "$dia/$mes/$anio"
+        }
+        mutableStateOf(fecha)
+    }
     var estadoAcceso by remember(empleado) { mutableStateOf(empleado.estado.displayName) }
 
     Column(
@@ -946,9 +959,17 @@ private fun FormularioEmpleadoDrawer(
                     kotlinx.datetime.LocalDate(anio, mes, dia)
                         .atStartOfDayIn(TimeZone.UTC)
                         .toEpochMilliseconds()
-                } else null
+                } else {
+                    val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
+                    kotlinx.datetime.LocalDate(hoy.year, hoy.monthNumber, hoy.dayOfMonth)
+                        .atStartOfDayIn(TimeZone.UTC)
+                        .toEpochMilliseconds()
+                }
             } catch (_: Exception) {
-                null
+                val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
+                kotlinx.datetime.LocalDate(hoy.year, hoy.monthNumber, hoy.dayOfMonth)
+                    .atStartOfDayIn(TimeZone.UTC)
+                    .toEpochMilliseconds()
             }
         }
         val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis, initialDisplayedMonthMillis = initialMillis)

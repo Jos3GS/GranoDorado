@@ -15,6 +15,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.random.Random
+import kotlin.time.Clock
+import kotlinx.datetime.todayIn
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 data class EmpleadosState(
     val empleadosOriginales: List<Empleado> = emptyList(),
@@ -55,6 +59,14 @@ class EmpleadosViewModel(
         val n = nombre.trim().firstOrNull()?.uppercaseChar()?.toString() ?: ""
         val a = apellido.trim().firstOrNull()?.uppercaseChar()?.toString() ?: ""
         return if (n.isNotEmpty() || a.isNotEmpty()) "$n$a" else "??"
+    }
+
+    private fun obtenerFechaActual(): String {
+        val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
+        val dia = hoy.dayOfMonth.toString().padStart(2, '0')
+        val mes = hoy.monthNumber.toString().padStart(2, '0')
+        val anio = hoy.year
+        return "$dia/$mes/$anio"
     }
 
     fun onBuscarTextoCambiado(nuevoTexto: String) {
@@ -120,7 +132,7 @@ class EmpleadosViewModel(
             telefono = "",
             cargo = Cargo.BARISTA,
             sucursal = "CENTRO",
-            fechaIngreso = "15/01/2024",
+            fechaIngreso = obtenerFechaActual(),
             estadoLaboral = EstadoEmpleado.DISPONIBLE,
             estado = EstadoUsuario.ACTIVO,
             iniciales = ""
