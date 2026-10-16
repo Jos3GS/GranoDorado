@@ -43,7 +43,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerDefaults
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -1163,12 +1168,102 @@ fun ModalSolicitarCambio(
     }
 }
 
+data class SelectorHoraTarget(
+    val titulo: String,
+    val horaActual: String,
+    val onConfirmar: (String) -> Unit
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DialogTimePicker(
+    titulo: String,
+    horaInicial: String,
+    onConfirmar: (String) -> Unit,
+    onDescartar: () -> Unit
+) {
+    val (h, m) = remember(horaInicial) {
+        val partes = horaInicial.split(":")
+        val hora = partes.getOrNull(0)?.toIntOrNull() ?: 8
+        val min = partes.getOrNull(1)?.toIntOrNull() ?: 0
+        hora.coerceIn(0, 23) to min.coerceIn(0, 59)
+    }
+
+    val timePickerState = rememberTimePickerState(
+        initialHour = h,
+        initialMinute = m,
+        is24Hour = true
+    )
+
+    Dialog(onDismissRequest = onDescartar) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = CafeSurfaceWarm),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = titulo.uppercase(),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CafeTextSecondary,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TimePicker(
+                    state = timePickerState,
+                    colors = TimePickerDefaults.colors(
+                        clockDialColor = Color(0xFFF7F4F0),
+                        selectorColor = CafeDarkBrown,
+                        periodSelectorBorderColor = CafeDarkBrown,
+                        periodSelectorSelectedContainerColor = CafeDarkBrown,
+                        periodSelectorSelectedContentColor = Color.White,
+                        timeSelectorSelectedContainerColor = CafeDarkBrown,
+                        timeSelectorSelectedContentColor = Color.White
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDescartar) {
+                        Text("Cancelar", color = CafeTextSecondary)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val horaStr = timePickerState.hour.toString().padStart(2, '0')
+                            val minStr = timePickerState.minute.toString().padStart(2, '0')
+                            onConfirmar("$horaStr:$minStr")
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text("Aceptar", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun ModalCrearTurno(
     nombre: String,
     horaInicio: String,
     horaFin: String,
     descansos: List<RangoDescanso>,
+    mensajeError: String? = null,
+    horasEfectivas: String = "",
     onNombreChange: (String) -> Unit,
     onHoraInicioChange: (String) -> Unit,
     onHoraFinChange: (String) -> Unit,
@@ -1179,11 +1274,13 @@ fun ModalCrearTurno(
     onGuardar: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var selectorHoraActivo by remember { mutableStateOf<SelectorHoraTarget?>(null) }
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.85f),
+                .fillMaxHeight(0.88f),
             colors = CardDefaults.cardColors(containerColor = CafeSurfaceWarm),
             shape = RoundedCornerShape(4.dp)
         ) {
@@ -1208,7 +1305,21 @@ fun ModalCrearTurno(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // MENSAJE DE ERROR
+                if (mensajeError != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(CafeStatusErrorBg, RoundedCornerShape(4.dp))
+                            .border(1.dp, Color(0xFFF5C6CB), RoundedCornerShape(4.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text(mensajeError, color = CafeStatusErrorText, fontSize = 12.sp)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
                 // CONTENIDO SCROLLEABLE
                 Column(
@@ -1217,81 +1328,134 @@ fun ModalCrearTurno(
                         .verticalScroll(rememberScrollState())
                 ) {
 
-                // NOMBRE DEL TURNO
-                Text("NOMBRE DEL TURNO", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = nombre,
-                    onValueChange = onNombreChange,
-                    placeholder = { Text("p. ej. Apertura", color = CafeTextSecondary, fontSize = 14.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = textFieldColorsGestor()
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // HORA DE INICIO Y FIN
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("HORA DE INICIO", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TimeFieldBox(valor = horaInicio, onClick = { })
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("HORA DE FIN", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TimeFieldBox(valor = horaFin, onClick = { })
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // SECCIÓN DESCANSOS (Dinámica)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("DESCANSOS", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    Text(
-                        text = "+ AÑADIR",
-                        color = CafeAccentYellow,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.clickable { onAgregarDescanso() }
+                    // NOMBRE DEL TURNO
+                    Text("NOMBRE DEL TURNO", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = nombre,
+                        onValueChange = onNombreChange,
+                        placeholder = { Text("p. ej. Apertura", color = CafeTextSecondary, fontSize = 14.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = textFieldColorsGestor()
                     )
-                }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                if (descansos.isEmpty()) {
-                    Text("Sin descansos configurados.", color = CafeTextSecondary, fontSize = 12.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
-                } else {
-                    descansos.forEach { descanso ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                TimeFieldBox(valor = descanso.horaInicio, onClick = { })
-                            }
-                            Text("-", color = CafeTextSecondary)
-                            Box(modifier = Modifier.weight(1f)) {
-                                TimeFieldBox(valor = descanso.horaFin, onClick = { })
-                            }
-                            IconButton(onClick = { onQuitarDescanso(descanso.id) }, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Default.Close, contentDescription = "Quitar descanso", tint = CafeTextSecondary, modifier = Modifier.size(16.dp))
+                    // HORA DE INICIO Y FIN
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("HORA DE INICIO", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TimeFieldBox(
+                                valor = horaInicio,
+                                onClick = {
+                                    selectorHoraActivo = SelectorHoraTarget("Hora de inicio", horaInicio) {
+                                        onHoraInicioChange(it)
+                                    }
+                                }
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("HORA DE FIN", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TimeFieldBox(
+                                valor = horaFin,
+                                onClick = {
+                                    selectorHoraActivo = SelectorHoraTarget("Hora de fin", horaFin) {
+                                        onHoraFinChange(it)
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // SECCIÓN DESCANSOS (Dinámica)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("DESCANSOS (15 MIN)", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            Text("Máx. cada 2h 45m de trabajo", color = CafeTextSecondary, fontSize = 10.sp)
+                        }
+                        Text(
+                            text = "+ AÑADIR",
+                            color = CafeAccentYellow,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp,
+                            modifier = Modifier.clickable { onAgregarDescanso() }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (descansos.isEmpty()) {
+                        Text(
+                            "Sin descansos configurados (se calcularán automáticamente al indicar inicio y fin).",
+                            color = CafeTextSecondary,
+                            fontSize = 12.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                    } else {
+                        descansos.forEach { descanso ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    TimeFieldBox(
+                                        valor = descanso.horaInicio,
+                                        onClick = {
+                                            selectorHoraActivo = SelectorHoraTarget("Inicio de descanso", descanso.horaInicio) {
+                                                onDescansoInicioChange(descanso.id, it)
+                                            }
+                                        }
+                                    )
+                                }
+                                Text("-", color = CafeTextSecondary)
+                                Box(modifier = Modifier.weight(1f)) {
+                                    TimeFieldBox(
+                                        valor = descanso.horaFin,
+                                        onClick = {
+                                            selectorHoraActivo = SelectorHoraTarget("Fin de descanso", descanso.horaFin) {
+                                                onDescansoFinChange(descanso.id, it)
+                                            }
+                                        }
+                                    )
+                                }
+                                IconButton(onClick = { onQuitarDescanso(descanso.id) }, modifier = Modifier.size(24.dp)) {
+                                    Icon(Icons.Default.Close, contentDescription = "Quitar descanso", tint = CafeTextSecondary, modifier = Modifier.size(16.dp))
+                                }
                             }
                         }
                     }
-                }
+
+                    // RESUMEN HORAS EFECTIVAS
+                    if (horasEfectivas.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFFAF6F0), RoundedCornerShape(4.dp))
+                                .border(1.dp, Color(0xFFE8DFD5), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("TIEMPO LABORABLE EFECTIVO", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CafeTextSecondary, letterSpacing = 1.sp)
+                            Text(horasEfectivas, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = CafeDarkBrown)
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -1322,8 +1486,22 @@ fun ModalCrearTurno(
             }
         }
     }
-}
 
+    // Modal TimePicker
+    selectorHoraActivo?.let { target ->
+        DialogTimePicker(
+            titulo = target.titulo,
+            horaInicial = target.horaActual,
+            onConfirmar = { horaSeleccionada ->
+                target.onConfirmar(horaSeleccionada)
+                selectorHoraActivo = null
+            },
+            onDescartar = {
+                selectorHoraActivo = null
+            }
+        )
+    }
+}
 // Componente auxiliar para los campos de hora visuales
 @Composable
 fun TimeFieldBox(valor: String, onClick: () -> Unit) {

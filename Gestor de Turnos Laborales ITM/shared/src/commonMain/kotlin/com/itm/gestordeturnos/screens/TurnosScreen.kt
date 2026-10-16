@@ -130,6 +130,8 @@ fun TurnosScreen(viewModel: TurnosViewModel) {
             horaInicio = state.horaInicioNuevo,
             horaFin = state.horaFinNuevo,
             descansos = state.descansosNuevo,
+            mensajeError = state.mensajeErrorNuevo,
+            horasEfectivas = state.horasEfectivasCalculadas,
             onNombreChange = { viewModel.onNombreTurnoCambio(it) },
             onHoraInicioChange = { viewModel.onHoraInicioCambio(it) },
             onHoraFinChange = { viewModel.onHoraFinCambio(it) },
