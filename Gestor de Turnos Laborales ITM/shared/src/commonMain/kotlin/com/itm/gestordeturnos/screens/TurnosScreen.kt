@@ -38,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itm.gestordeturnos.CafeAccentYellow
@@ -99,7 +98,6 @@ fun TurnosScreen(viewModel: TurnosViewModel) {
                         TablaTurnos(
                             turnos = state.turnos,
                             onEditarTurno = { viewModel.abrirEditarTurno(it) },
-                            onAlternarEstado = { viewModel.alternarEstadoTurno(it) },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -127,7 +125,6 @@ fun TurnosScreen(viewModel: TurnosViewModel) {
                         TablaTurnos(
                             turnos = state.turnos,
                             onEditarTurno = { viewModel.abrirEditarTurno(it) },
-                            onAlternarEstado = { viewModel.alternarEstadoTurno(it) },
                             modifier = Modifier.width(850.dp)
                         )
                     }
@@ -271,7 +268,6 @@ fun LeyendaTurno(color: Color, nombre: String, horario: String) {
 fun TablaTurnos(
     turnos: List<TurnoTemplate>,
     onEditarTurno: (TurnoTemplate) -> Unit,
-    onAlternarEstado: (String) -> Unit,
     modifier: Modifier
 ) {
     Card(
@@ -301,8 +297,7 @@ fun TablaTurnos(
             turnos.forEach { turno ->
                 FilaTurno(
                     turno = turno,
-                    onEditar = { onEditarTurno(turno) },
-                    onAlternarEstado = { onAlternarEstado(turno.id) }
+                    onEditar = { onEditarTurno(turno) }
                 )
                 HorizontalDivider(color = CafeBorderColor)
             }
@@ -313,8 +308,7 @@ fun TablaTurnos(
 @Composable
 fun FilaTurno(
     turno: TurnoTemplate,
-    onEditar: () -> Unit,
-    onAlternarEstado: () -> Unit
+    onEditar: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -359,7 +353,6 @@ fun FilaTurno(
                 modifier = Modifier
                     .background(color = bgColor, shape = RoundedCornerShape(2.dp))
                     .border(BorderStroke(0.5.dp, textColor.copy(alpha = 0.3f)), RoundedCornerShape(2.dp))
-                    .clickable { onAlternarEstado() }
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ){
@@ -375,22 +368,13 @@ fun FilaTurno(
             }
         }
 
-        Column(modifier = Modifier.weight(1.2f)) {
-            Text(
-                "${turno.asignaciones} asignaciones",
-                color = CafeTextPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            val textoAccion = if (turno.estado == "ACTIVO") "Inactivar" else "Activar"
-            Text(
-                textoAccion,
-                color = CafeTextSecondary,
-                fontSize = 11.sp,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable { onAlternarEstado() }
-            )
-        }
+        Text(
+            "${turno.asignaciones} asignaciones",
+            modifier = Modifier.weight(1.2f),
+            color = CafeTextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
 
         Row(
             modifier = Modifier.weight(1.1f),
