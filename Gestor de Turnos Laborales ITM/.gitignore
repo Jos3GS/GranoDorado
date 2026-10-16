@@ -21,3 +21,5 @@ node_modules/
 # Firebase configuration & secrets
 google-services.json
 GoogleService-Info.plist
+firebase-config.js
+**/firebase-config.js
