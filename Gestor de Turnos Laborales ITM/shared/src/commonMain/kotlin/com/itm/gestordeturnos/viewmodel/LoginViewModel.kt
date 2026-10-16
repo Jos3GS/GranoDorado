@@ -2,8 +2,9 @@ package com.itm.gestordeturnos.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.itm.gestordeturnos.domain.model.RolUsuario
-import com.itm.gestordeturnos.domain.model.UsuarioActual
+import com.itm.gestordeturnos.data.service.AuthResult
+import com.itm.gestordeturnos.data.service.AuthService
+import com.itm.gestordeturnos.data.service.FirebaseAuthService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,7 +13,6 @@ import kotlinx.coroutines.launch
 
 /**
  * Representa los diferentes estados de feedback para la recuperación de contraseña.
- * Diseñado para desacoplar la UI de la respuesta del servicio externo (API/Firebase/etc.).
  */
 sealed interface FeedbackRecuperacion {
     data class Exito(
@@ -31,99 +31,101 @@ data class LoginState(
     val password: String = "",
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
+    val mensajeError: String? = null,
     val feedbackRecuperacion: FeedbackRecuperacion? = null,
     val isRecuperandoClave: Boolean = false
 )
 
-class LoginViewModel: ViewModel() {
+class LoginViewModel(
+    private val authService: AuthService = FirebaseAuthService()
+) : ViewModel() {
     private val _uiState = MutableStateFlow(LoginState())
     val uiState: StateFlow<LoginState> = _uiState.asStateFlow()
 
     fun onEmailChanged(nuevoEmail: String) {
-        _uiState.update { it.copy(email = nuevoEmail) }
+        _uiState.update { it.copy(email = nuevoEmail, mensajeError = null) }
     }
 
     fun onPasswordChanged(nuevoPassword: String) {
-        _uiState.update { it.copy(password = nuevoPassword) }
+        _uiState.update { it.copy(password = nuevoPassword, mensajeError = null) }
     }
 
     fun resetSuccess() {
         _uiState.update { it.copy(isSuccess = false) }
     }
 
-    // 1. Botón normal -> Entra como Administrador
+    // Iniciar sesión con Correo y Contraseña
     fun iniciarSesion() {
+        val email = _uiState.value.email.trim()
+        val password = _uiState.value.password
+
+        if (email.isBlank() || password.isBlank()) {
+            _uiState.update { it.copy(mensajeError = "Por favor ingresa tu correo y contraseña.") }
+            return
+        }
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, mensajeError = null) }
 
-            val admin = UsuarioActual(
-                nombre = "Diego Marín",
-                iniciales = "DM",
-                cargo = "ADMINISTRADOR_GENERAL",
-                rol = RolUsuario.ADMINISTRADOR_GENERAL
-            )
-
-            SessionManager.usuarioActivo = admin
-
-            _uiState.update { it.copy(isLoading = false, isSuccess = true) }
+            when (val resultado = authService.iniciarSesion(email, password)) {
+                is AuthResult.Success -> {
+                    SessionManager.usuarioActivo = resultado.usuario
+                    _uiState.update { it.copy(isLoading = false, isSuccess = true, mensajeError = null) }
+                }
+                is AuthResult.Error -> {
+                    _uiState.update { it.copy(isLoading = false, mensajeError = resultado.mensaje) }
+                }
+            }
         }
     }
 
-    // 2. Botón de Google -> Entra como Empleado
+    // Iniciar sesión con Google
     fun loginConGoogle() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, mensajeError = null) }
 
-            val empleado = UsuarioActual(
-                nombre = "José Manuel",
-                iniciales = "JM",
-                cargo = "EMPLEADO",
-                rol = RolUsuario.EMPLEADO
-            )
-
-            SessionManager.usuarioActivo = empleado
-
-            _uiState.update { it.copy(isLoading = false, isSuccess = true) }
+            when (val resultado = authService.loginConGoogle()) {
+                is AuthResult.Success -> {
+                    SessionManager.usuarioActivo = resultado.usuario
+                    _uiState.update { it.copy(isLoading = false, isSuccess = true, mensajeError = null) }
+                }
+                is AuthResult.Error -> {
+                    _uiState.update { it.copy(isLoading = false, mensajeError = resultado.mensaje) }
+                }
+            }
         }
     }
 
     /**
-     * Inicia el proceso de recuperación de contraseña.
-     * Actualmente emite feedback de Éxito por defecto, pero está 100% preparado
-     * para conmutar según la respuesta del servicio externo.
-     *
-     * @param simularError Útil para pruebas inmediatas del caso de correo no encontrado.
+     * Inicia el proceso de recuperación de contraseña en Firebase Auth.
      */
-    fun recuperarContrasena(simularError: Boolean = false) {
+    fun recuperarContrasena() {
+        val emailIngresado = _uiState.value.email.trim()
+        if (emailIngresado.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    feedbackRecuperacion = FeedbackRecuperacion.ErrorNoEncontrado(
+                        titulo = "Correo requerido",
+                        mensaje = "Ingresa tu correo electrónico en el campo superior para enviarte las instrucciones."
+                    )
+                )
+            }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isRecuperandoClave = true) }
 
-            val emailIngresado = _uiState.value.email.trim()
-
-            // --- PREPARADO PARA SERVICIO EXTERNO ---
-            // El día de mañana al conectar con backend/Firebase/Supabase:
-            // val respuesta = authService.solicitarRecuperacion(emailIngresado)
-            // val feedback = when (respuesta) {
-            //     is AuthResult.Success -> FeedbackRecuperacion.Exito(...)
-            //     is AuthResult.UserNotFound -> FeedbackRecuperacion.ErrorNoEncontrado(...)
-            // }
-            val feedback = if (!simularError) {
+            val resultado = authService.recuperarContrasena(emailIngresado)
+            val feedback = if (resultado.isSuccess) {
                 FeedbackRecuperacion.Exito(
                     titulo = "Correo enviado con éxito",
-                    mensaje = if (emailIngresado.isNotEmpty()) {
-                        "Hemos enviado las instrucciones para restablecer tu contraseña a $emailIngresado. Revisa tu bandeja de entrada y la carpeta de spam."
-                    } else {
-                        "Hemos enviado las instrucciones para restablecer tu contraseña a tu correo registrado. Revisa tu bandeja de entrada y la carpeta de spam."
-                    }
+                    mensaje = "Hemos enviado las instrucciones para restablecer tu contraseña a $emailIngresado. Revisa tu bandeja de entrada y la carpeta de spam."
                 )
             } else {
                 FeedbackRecuperacion.ErrorNoEncontrado(
-                    titulo = "Correo no encontrado",
-                    mensaje = if (emailIngresado.isNotEmpty()) {
-                        "No se encontró ninguna cuenta asociada a '$emailIngresado' en el sistema de Grano Dorado. Verifica los datos o consulta con administración."
-                    } else {
-                        "No se encontró ninguna cuenta registrada con este correo electrónico. Por favor verifica la información o contacta al administrador."
-                    }
+                    titulo = "No se pudo enviar",
+                    mensaje = "No se encontró ninguna cuenta asociada a '$emailIngresado' o hubo un error al procesar la solicitud."
                 )
             }
 

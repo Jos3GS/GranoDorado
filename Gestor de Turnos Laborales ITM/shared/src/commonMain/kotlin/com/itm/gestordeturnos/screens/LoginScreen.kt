@@ -1,6 +1,8 @@
-package com.itm.gestordeturnos.screens
+﻿package com.itm.gestordeturnos.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -177,6 +179,18 @@ fun FormularioLogin(
             placeholder = "********",
             isPassword = true
         )
+
+        if (state.mensajeError != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF9DFDF), RoundedCornerShape(2.dp))
+                    .border(1.dp, Color(0xFFF5C6CB), RoundedCornerShape(2.dp))
+                    .padding(12.dp)
+            ) {
+                Text(state.mensajeError, color = Color(0xFF8B3A3A), fontSize = 12.sp)
+            }
+        }
 
         PrimarySolidButton(
             text = if (state.isLoading) "Iniciando sesión..." else "Iniciar sesión",
