@@ -16,8 +16,12 @@ data class TurnosState(
     // Estado de la lista principal (Catálogo)
     val turnos: List<TurnoTemplate> = emptyList(),
 
-    // Estado del Modal de Creación
+    // Estado del Modal de Creación / Edición
     val mostrarModalCrearTurno: Boolean = false,
+    val esEdicion: Boolean = false,
+    val idTurnoEditando: String? = null,
+    val estadoTurnoNuevo: String = "ACTIVO",
+    val asignacionesTurnoEditando: Int = 0,
     val nombreTurnoNuevo: String = "",
     val horaInicioNuevo: String = "",
     val horaFinNuevo: String = "",
@@ -52,6 +56,10 @@ class TurnosViewModel : ViewModel() {
                 val horasEfectivas = calcularHorasEfectivas(inicioDefault, finDefault, descansosAuto)
                 it.copy(
                     mostrarModalCrearTurno = true,
+                    esEdicion = false,
+                    idTurnoEditando = null,
+                    estadoTurnoNuevo = "ACTIVO",
+                    asignacionesTurnoEditando = 0,
                     nombreTurnoNuevo = "",
                     horaInicioNuevo = inicioDefault,
                     horaFinNuevo = finDefault,
@@ -62,6 +70,10 @@ class TurnosViewModel : ViewModel() {
             } else {
                 it.copy(
                     mostrarModalCrearTurno = false,
+                    esEdicion = false,
+                    idTurnoEditando = null,
+                    estadoTurnoNuevo = "ACTIVO",
+                    asignacionesTurnoEditando = 0,
                     nombreTurnoNuevo = "",
                     horaInicioNuevo = "",
                     horaFinNuevo = "",
@@ -71,6 +83,44 @@ class TurnosViewModel : ViewModel() {
                 )
             }
         }
+    }
+
+    fun abrirEditarTurno(turno: TurnoTemplate) {
+        val (iniParse, fnParse) = extraerHorasDeTexto(turno.horario)
+        val inicio = if (turno.horaInicio.isNotBlank()) turno.horaInicio else if (iniParse.isNotBlank()) iniParse else "08:00"
+        val fin = if (turno.horaFin.isNotBlank()) turno.horaFin else if (fnParse.isNotBlank()) fnParse else "16:00"
+
+        val descansos = if (turno.listaDescansos.isNotEmpty()) {
+            turno.listaDescansos
+        } else {
+            extraerDescansosDeTexto(turno.descansos)
+        }
+
+        val horasEf = calcularHorasEfectivas(inicio, fin, descansos)
+
+        _uiState.update {
+            it.copy(
+                mostrarModalCrearTurno = true,
+                esEdicion = true,
+                idTurnoEditando = turno.id,
+                estadoTurnoNuevo = turno.estado,
+                asignacionesTurnoEditando = turno.asignaciones,
+                nombreTurnoNuevo = turno.nombre,
+                horaInicioNuevo = inicio,
+                horaFinNuevo = fin,
+                descansosNuevo = descansos,
+                horasEfectivasCalculadas = horasEf,
+                mensajeErrorNuevo = null
+            )
+        }
+    }
+
+    fun onEstadoTurnoCambio(nuevoEstado: String) {
+        _uiState.update { it.copy(estadoTurnoNuevo = nuevoEstado) }
+    }
+
+    fun alternarEstadoTurno(idTurno: String) {
+        TurnoRepository.alternarEstadoTurno(idTurno)
     }
 
     // --- Actualización de campos principales ---
@@ -338,18 +388,27 @@ class TurnosViewModel : ViewModel() {
             "-"
         }
 
-        val idNuevo = "t_${Random.nextInt(1000, 9999)}"
-        val nuevo = TurnoTemplate(
-            id = idNuevo,
+        val esEdicion = actual.esEdicion
+        val idTurno = if (esEdicion && !actual.idTurnoEditando.isNullOrBlank()) {
+            actual.idTurnoEditando
+        } else {
+            "t_${Random.nextInt(1000, 9999)}"
+        }
+
+        val turnoGuardado = TurnoTemplate(
+            id = idTurno,
             nombre = actual.nombreTurnoNuevo.trim(),
             horario = horarioStr,
             descansos = descansosStr,
             horasEfectivas = horasEfectivasStr,
-            estado = "ACTIVO",
-            asignaciones = 0
+            estado = actual.estadoTurnoNuevo,
+            asignaciones = if (esEdicion) actual.asignacionesTurnoEditando else 0,
+            horaInicio = actual.horaInicioNuevo,
+            horaFin = actual.horaFinNuevo,
+            listaDescansos = descansosParsed.map { it.original }
         )
 
-        TurnoRepository.agregarTurnoCatalogo(nuevo)
+        TurnoRepository.guardarTurnoCatalogo(turnoGuardado, esNuevo = !esEdicion)
         toggleModalCrearTurno(false)
     }
 
@@ -429,6 +488,32 @@ class TurnosViewModel : ViewModel() {
             }
 
             return descansos
+        }
+
+        fun extraerHorasDeTexto(horarioStr: String): Pair<String, String> {
+            val limpio = horarioStr.replace("-\r\n", "-").replace("-\n", "-").replace("\r", "").replace("\n", "").trim()
+            val partes = limpio.split("-")
+            val ini = if (partes.isNotEmpty()) partes[0].trim() else ""
+            val fn = if (partes.size > 1) partes[1].trim() else ""
+            return Pair(ini, fn)
+        }
+
+        fun extraerDescansosDeTexto(descansosStr: String): List<RangoDescanso> {
+            if (descansosStr.isBlank() || descansosStr.trim() == "-") return emptyList()
+            val normalizado = descansosStr
+                .replace("-\r\n", "-")
+                .replace("-\n", "-")
+                .replace("\r", "")
+            return normalizado.split("\n", ";", ",").mapNotNull { item ->
+                val limpio = item.trim()
+                if (limpio.isBlank() || limpio == "-") null
+                else {
+                    val p = limpio.split("-")
+                    if (p.size == 2 && p[0].contains(":") && p[1].contains(":")) {
+                        RangoDescanso(horaInicio = p[0].trim(), horaFin = p[1].trim())
+                    } else null
+                }
+            }
         }
     }
 }

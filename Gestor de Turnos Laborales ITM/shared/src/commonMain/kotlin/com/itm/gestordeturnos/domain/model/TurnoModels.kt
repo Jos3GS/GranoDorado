@@ -15,6 +15,12 @@ data class TurnoAsignado(
     val sinAsignar: Boolean = false
 )
 
+data class RangoDescanso(
+    val id: String = Uuid.random().toString(),
+    val horaInicio: String = "",
+    val horaFin: String = ""
+)
+
 data class TurnoTemplate(
     val id: String,
     val nombre: String,
@@ -22,13 +28,10 @@ data class TurnoTemplate(
     val descansos: String,
     val horasEfectivas: String,
     val estado: String,
-    val asignaciones: Int
-)
-
-data class RangoDescanso(
-    val id: String = Uuid.random().toString(),
+    val asignaciones: Int,
     val horaInicio: String = "",
-    val horaFin: String = ""
+    val horaFin: String = "",
+    val listaDescansos: List<RangoDescanso> = emptyList()
 )
 
 data class TurnoCelda(

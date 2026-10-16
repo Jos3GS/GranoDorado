@@ -2,15 +2,20 @@ package com.itm.gestordeturnos.data.service
 
 import com.itm.gestordeturnos.data.mock.MockDataProviders
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import com.itm.gestordeturnos.guardarEmpleadoFirestore
+import com.itm.gestordeturnos.guardarTurnoFirestore
 import com.itm.gestordeturnos.observarEmpleadosFirestore
+import com.itm.gestordeturnos.observarTurnosFirestore
 import com.itm.gestordeturnos.obtenerEmpleadosFirestore
+import com.itm.gestordeturnos.obtenerTurnosFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
 object FirestoreService {
 
+    // --- Empleados ---
     fun observarEmpleados(): Flow<List<Empleado>> = callbackFlow {
         observarEmpleadosFirestore { lista ->
             trySend(lista)
@@ -37,6 +42,39 @@ object FirestoreService {
                 } else {
                     false
                 }
+            } else {
+                false
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    // --- Turnos de Catálogo ---
+    fun observarTurnos(): Flow<List<TurnoTemplate>> = callbackFlow {
+        observarTurnosFirestore { lista ->
+            trySend(lista)
+        }
+        awaitClose { }
+    }
+
+    suspend fun obtenerTurnos(): List<TurnoTemplate> {
+        return obtenerTurnosFirestore()
+    }
+
+    suspend fun guardarTurno(turno: TurnoTemplate): Result<Unit> {
+        return guardarTurnoFirestore(turno)
+    }
+
+    suspend fun inicializarTurnosSiEstaVacio(): Boolean {
+        return try {
+            val existentes = obtenerTurnosFirestore()
+            if (existentes.isEmpty()) {
+                val iniciales = MockDataProviders.inicialTurnosCatalogo()
+                for (t in iniciales) {
+                    guardarTurnoFirestore(t)
+                }
+                true
             } else {
                 false
             }

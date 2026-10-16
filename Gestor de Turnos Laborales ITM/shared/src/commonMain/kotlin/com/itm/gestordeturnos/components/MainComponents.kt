@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -1264,9 +1265,12 @@ fun ModalCrearTurno(
     descansos: List<RangoDescanso>,
     mensajeError: String? = null,
     horasEfectivas: String = "",
+    esEdicion: Boolean = false,
+    estado: String = "ACTIVO",
     onNombreChange: (String) -> Unit,
     onHoraInicioChange: (String) -> Unit,
     onHoraFinChange: (String) -> Unit,
+    onEstadoChange: (String) -> Unit = {},
     onAgregarDescanso: () -> Unit,
     onQuitarDescanso: (String) -> Unit,
     onDescansoInicioChange: (String, String) -> Unit,
@@ -1296,9 +1300,9 @@ fun ModalCrearTurno(
                     verticalAlignment = Alignment.Top
                 ) {
                     Column {
-                        Text("NUEVO TURNO", color = CafeTextSecondary, fontSize = 10.sp, letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
+                        Text(if (esEdicion) "EDITAR TURNO" else "NUEVO TURNO", color = CafeTextSecondary, fontSize = 10.sp, letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("Crear turno", color = CafeTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(if (esEdicion) "Modificar turno" else "Crear turno", color = CafeTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     }
                     IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
                         Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = CafeTextSecondary)
@@ -1327,6 +1331,58 @@ fun ModalCrearTurno(
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
                 ) {
+
+                    // ESTADO DEL TURNO
+                    Text("ESTADO DEL TURNO", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        listOf("ACTIVO", "INACTIVO").forEach { opcion ->
+                            val seleccionado = estado == opcion
+                            val bgChip = if (seleccionado) {
+                                if (opcion == "ACTIVO") CafeStatusSuccessBg else CafeStatusErrorBg
+                            } else Color.White
+                            val textChip = if (seleccionado) {
+                                if (opcion == "ACTIVO") CafeStatusSuccessText else CafeStatusErrorText
+                            } else CafeTextSecondary
+                            val borderChip = if (seleccionado) {
+                                if (opcion == "ACTIVO") CafeStatusSuccessText else CafeStatusErrorText
+                            } else CafeBorderColor
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .background(bgChip, RoundedCornerShape(4.dp))
+                                    .border(1.dp, borderChip, RoundedCornerShape(4.dp))
+                                    .clickable { onEstadoChange(opcion) }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .background(
+                                                if (opcion == "ACTIVO") CafeStatusSuccessText else CafeStatusErrorText,
+                                                CircleShape
+                                            )
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = opcion,
+                                        color = textChip,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // NOMBRE DEL TURNO
                     Text("NOMBRE DEL TURNO", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
@@ -1471,7 +1527,7 @@ fun ModalCrearTurno(
                         colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
                         shape = RoundedCornerShape(4.dp)
                     ) {
-                        Text("Guardar", fontWeight = FontWeight.Bold)
+                        Text(if (esEdicion) "Guardar cambios" else "Guardar", fontWeight = FontWeight.Bold)
                     }
                     OutlinedButton(
                         onClick = onDismiss,

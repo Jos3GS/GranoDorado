@@ -78,6 +78,7 @@ object EmpleadoRepository {
 }
 
 object TurnoRepository {
+    private val repositoryScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val _turnosCatalogo = MutableStateFlow(MockDataProviders.inicialTurnosCatalogo())
     val turnosCatalogo: StateFlow<List<TurnoTemplate>> = _turnosCatalogo.asStateFlow()
 
@@ -93,8 +94,56 @@ object TurnoRepository {
     private val _turnosCompaneros = MutableStateFlow(MockDataProviders.inicialTurnosCompaneros())
     val turnosCompaneros: StateFlow<List<TurnoCompaneroSeleccionable>> = _turnosCompaneros.asStateFlow()
 
+    init {
+        iniciarSincronizacionFirestore()
+    }
+
+    fun iniciarSincronizacionFirestore() {
+        repositoryScope.launch {
+            try {
+                // 1. Si la colección de Firestore está vacía, poblarla con los turnos iniciales del catálogo
+                FirestoreService.inicializarTurnosSiEstaVacio()
+
+                // 2. Escuchar en tiempo real los cambios en la colección "turnos"
+                FirestoreService.observarTurnos().collect { listaRemota ->
+                    if (listaRemota.isNotEmpty()) {
+                        _turnosCatalogo.value = listaRemota
+                    }
+                }
+            } catch (e: Exception) {
+                // En caso de estar sin conexión o fallo temporal, mantiene la memoria local
+            }
+        }
+    }
+
+    fun guardarTurnoCatalogo(turno: TurnoTemplate, esNuevo: Boolean) {
+        // Actualización optimista inmediata en memoria
+        _turnosCatalogo.update { lista ->
+            if (esNuevo) {
+                lista + turno
+            } else {
+                lista.map { if (it.id == turno.id) turno else it }
+            }
+        }
+
+        // Persistencia asíncrona en Cloud Firestore
+        repositoryScope.launch {
+            val resultado = FirestoreService.guardarTurno(turno)
+            if (resultado.isFailure) {
+                println("Fallo al guardar turno en Firestore: ${resultado.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    fun alternarEstadoTurno(idTurno: String) {
+        val turnoActual = _turnosCatalogo.value.find { it.id == idTurno } ?: return
+        val nuevoEstado = if (turnoActual.estado == "ACTIVO") "INACTIVO" else "ACTIVO"
+        val turnoActualizado = turnoActual.copy(estado = nuevoEstado)
+        guardarTurnoCatalogo(turnoActualizado, esNuevo = false)
+    }
+
     fun agregarTurnoCatalogo(turno: TurnoTemplate) {
-        _turnosCatalogo.update { it + turno }
+        guardarTurnoCatalogo(turno, esNuevo = true)
     }
 
     fun getTurnoHoy(): TurnoAsignado? {

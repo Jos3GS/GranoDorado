@@ -2,6 +2,8 @@ package com.itm.gestordeturnos.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itm.gestordeturnos.CafeAccentYellow
@@ -93,7 +96,12 @@ fun TurnosScreen(viewModel: TurnosViewModel) {
                     Row(
                         modifier = Modifier.weight(2f)
                     ){
-                        TablaTurnos(turnos = state.turnos, modifier = Modifier.fillMaxWidth())
+                        TablaTurnos(
+                            turnos = state.turnos,
+                            onEditarTurno = { viewModel.abrirEditarTurno(it) },
+                            onAlternarEstado = { viewModel.alternarEstadoTurno(it) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
 
                     Row(
@@ -116,14 +124,19 @@ fun TurnosScreen(viewModel: TurnosViewModel) {
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState())
                     ){
-                        TablaTurnos(turnos = state.turnos, modifier = Modifier.width(800.dp))
+                        TablaTurnos(
+                            turnos = state.turnos,
+                            onEditarTurno = { viewModel.abrirEditarTurno(it) },
+                            onAlternarEstado = { viewModel.alternarEstadoTurno(it) },
+                            modifier = Modifier.width(850.dp)
+                        )
                     }
                 }
             }
         }
     }
 
-    // LÓGICA DEL MODAL
+    // LÓGICA DEL MODAL (Crear o Editar)
     if (state.mostrarModalCrearTurno) {
         ModalCrearTurno(
             nombre = state.nombreTurnoNuevo,
@@ -132,9 +145,12 @@ fun TurnosScreen(viewModel: TurnosViewModel) {
             descansos = state.descansosNuevo,
             mensajeError = state.mensajeErrorNuevo,
             horasEfectivas = state.horasEfectivasCalculadas,
+            esEdicion = state.esEdicion,
+            estado = state.estadoTurnoNuevo,
             onNombreChange = { viewModel.onNombreTurnoCambio(it) },
             onHoraInicioChange = { viewModel.onHoraInicioCambio(it) },
             onHoraFinChange = { viewModel.onHoraFinCambio(it) },
+            onEstadoChange = { viewModel.onEstadoTurnoCambio(it) },
             onAgregarDescanso = { viewModel.agregarDescanso() },
             onQuitarDescanso = { viewModel.quitarDescanso(it) },
             onDescansoInicioChange = { id, hora -> viewModel.onDescansoInicioCambio(id, hora) },
@@ -252,7 +268,12 @@ fun LeyendaTurno(color: Color, nombre: String, horario: String) {
 }
 
 @Composable
-fun TablaTurnos(turnos: List<TurnoTemplate>, modifier: Modifier) {
+fun TablaTurnos(
+    turnos: List<TurnoTemplate>,
+    onEditarTurno: (TurnoTemplate) -> Unit,
+    onAlternarEstado: (String) -> Unit,
+    modifier: Modifier
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = Color.White,
@@ -267,17 +288,22 @@ fun TablaTurnos(turnos: List<TurnoTemplate>, modifier: Modifier) {
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ){
-                CabeceraTabla("TURNO", modifier = Modifier.weight(1.5f))
+                CabeceraTabla("TURNO", modifier = Modifier.weight(1.4f))
                 CabeceraTabla("HORARIO", modifier = Modifier.weight(1f))
                 CabeceraTabla("DESCANSOS", modifier = Modifier.weight(1f))
                 CabeceraTabla("EFECTIVA", modifier = Modifier.weight(1f))
-                CabeceraTabla("ESTADO", modifier = Modifier.weight(1.2f))
-                CabeceraTabla("ASIGNACIONES", modifier = Modifier.weight(1.5f))
+                CabeceraTabla("ESTADO", modifier = Modifier.weight(1.1f))
+                CabeceraTabla("ASIGNACIONES", modifier = Modifier.weight(1.2f))
+                CabeceraTabla("ACCIONES", modifier = Modifier.weight(1.1f))
             }
             HorizontalDivider(color = CafeBorderColor)
 
             turnos.forEach { turno ->
-                FilaTurno(turno)
+                FilaTurno(
+                    turno = turno,
+                    onEditar = { onEditarTurno(turno) },
+                    onAlternarEstado = { onAlternarEstado(turno.id) }
+                )
                 HorizontalDivider(color = CafeBorderColor)
             }
         }
@@ -285,14 +311,18 @@ fun TablaTurnos(turnos: List<TurnoTemplate>, modifier: Modifier) {
 }
 
 @Composable
-fun FilaTurno(turno: TurnoTemplate) {
+fun FilaTurno(
+    turno: TurnoTemplate,
+    onEditar: () -> Unit,
+    onAlternarEstado: () -> Unit
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding( 16.dp),
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ){
         Text(
             turno.nombre,
-            modifier = Modifier.weight(1.5f),
+            modifier = Modifier.weight(1.4f),
             color = CafeTextPrimary,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold
@@ -318,7 +348,7 @@ fun FilaTurno(turno: TurnoTemplate) {
         )
 
         Box(
-            modifier = Modifier.weight(1.2f)
+            modifier = Modifier.weight(1.1f)
         ){
             val isActivo = turno.estado == "ACTIVO"
             val bgColor = if (isActivo) CafeStatusSuccessBg else CafeStatusErrorBg
@@ -326,7 +356,11 @@ fun FilaTurno(turno: TurnoTemplate) {
             val dotColor = if (isActivo) CafeStatusSuccessText else CafeStatusErrorText
 
             Row(
-                modifier = Modifier.background(color = bgColor, shape = RoundedCornerShape(2.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
+                modifier = Modifier
+                    .background(color = bgColor, shape = RoundedCornerShape(2.dp))
+                    .border(BorderStroke(0.5.dp, textColor.copy(alpha = 0.3f)), RoundedCornerShape(2.dp))
+                    .clickable { onAlternarEstado() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ){
                 Box(modifier = Modifier.size(6.dp).background(dotColor, CircleShape))
@@ -341,18 +375,41 @@ fun FilaTurno(turno: TurnoTemplate) {
             }
         }
 
-        Column(modifier = Modifier.weight(1.5f)) {
+        Column(modifier = Modifier.weight(1.2f)) {
             Text(
-                "${turno.asignaciones} solo",
+                "${turno.asignaciones} asignaciones",
                 color = CafeTextPrimary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
             )
+            val textoAccion = if (turno.estado == "ACTIVO") "Inactivar" else "Activar"
             Text(
-                "inactivar",
+                textoAccion,
                 color = CafeTextSecondary,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable { onAlternarEstado() }
             )
+        }
+
+        Row(
+            modifier = Modifier.weight(1.1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .border(1.dp, CafeBorderColor, RoundedCornerShape(4.dp))
+                    .background(Color.White, RoundedCornerShape(4.dp))
+                    .clickable { onEditar() }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    "Editar",
+                    color = CafeDarkBrown,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

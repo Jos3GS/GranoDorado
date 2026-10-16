@@ -1,6 +1,7 @@
 package com.itm.gestordeturnos
 
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.TurnoTemplate
 
 class AndroidPlatform : Platform {
     override val name: String = "Android ${android.os.Build.VERSION.SDK_INT}"
@@ -42,4 +43,15 @@ actual suspend fun obtenerEmpleadosFirestore(): List<Empleado> {
 }
 
 actual fun observarEmpleadosFirestore(onUpdate: (List<Empleado>) -> Unit) {
+}
+
+actual suspend fun guardarTurnoFirestore(turno: TurnoTemplate): Result<Unit> {
+    return Result.success(Unit)
+}
+
+actual suspend fun obtenerTurnosFirestore(): List<TurnoTemplate> {
+    return emptyList()
+}
+
+actual fun observarTurnosFirestore(onUpdate: (List<TurnoTemplate>) -> Unit) {
 }

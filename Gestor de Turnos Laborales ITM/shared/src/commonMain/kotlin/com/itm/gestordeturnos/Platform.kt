@@ -1,6 +1,7 @@
 package com.itm.gestordeturnos
 
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.TurnoTemplate
 
 interface Platform {
     val name: String
@@ -29,3 +30,9 @@ expect suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit>
 expect suspend fun obtenerEmpleadosFirestore(): List<Empleado>
 
 expect fun observarEmpleadosFirestore(onUpdate: (List<Empleado>) -> Unit)
+
+expect suspend fun guardarTurnoFirestore(turno: TurnoTemplate): Result<Unit>
+
+expect suspend fun obtenerTurnosFirestore(): List<TurnoTemplate>
+
+expect fun observarTurnosFirestore(onUpdate: (List<TurnoTemplate>) -> Unit)
