@@ -40,7 +40,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.CalendarLocale
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DatePickerFormatter
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -674,6 +676,37 @@ private fun BadgeRol(rol: String) {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+private object UtcDatePickerFormatter : DatePickerFormatter {
+    private val meses = listOf(
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    )
+
+    override fun formatMonthYear(monthMillis: Long?, locale: CalendarLocale): String? {
+        if (monthMillis == null) return null
+        val instant = Instant.fromEpochMilliseconds(monthMillis)
+        val ldt = instant.toLocalDateTime(TimeZone.UTC)
+        val nombreMes = meses.getOrElse(ldt.monthNumber - 1) { "" }
+        return "$nombreMes ${ldt.year}"
+    }
+
+    override fun formatDate(
+        dateMillis: Long?,
+        locale: CalendarLocale,
+        forContentDescription: Boolean
+    ): String? {
+        if (dateMillis == null) return null
+        val instant = Instant.fromEpochMilliseconds(dateMillis)
+        val ldt = instant.toLocalDateTime(TimeZone.UTC)
+        val dia = ldt.dayOfMonth.toString().padStart(2, '0')
+        val mes = ldt.monthNumber.toString().padStart(2, '0')
+        val anio = ldt.year
+        val nombreMes = meses.getOrElse(ldt.monthNumber - 1) { "" }
+        return if (forContentDescription) "$dia de $nombreMes de $anio" else "$dia/$mes/$anio"
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FormularioEmpleadoDrawer(
     empleado: Empleado,
@@ -918,7 +951,7 @@ private fun FormularioEmpleadoDrawer(
                 null
             }
         }
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis, initialDisplayedMonthMillis = initialMillis)
 
         DatePickerDialog(
             onDismissRequest = { mostrarDatePicker = false },
@@ -947,6 +980,7 @@ private fun FormularioEmpleadoDrawer(
         ) {
             DatePicker(
                 state = datePickerState,
+                dateFormatter = remember { UtcDatePickerFormatter },
                 colors = DatePickerDefaults.colors(
                     selectedDayContainerColor = CafeDarkBrown,
                     selectedDayContentColor = Color.White,
