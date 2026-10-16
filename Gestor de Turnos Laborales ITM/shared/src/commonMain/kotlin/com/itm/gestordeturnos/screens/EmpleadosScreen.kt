@@ -746,7 +746,7 @@ private fun FormularioEmpleadoDrawer(
         // Documento y Teléfono
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(modifier = Modifier.weight(1f)) {
-                EtiquetaCampo(if (esNuevo) "NÚMERO DE DOCUMENTO *" else "NÚMERO DE DOCUMENTO (NO MODIFICABLE)")
+                EtiquetaCampo("NÚMERO DE DOCUMENTO *")
                 CampoTextoFormulario(
                     valor = documento,
                     onValorCambiado = { if (esNuevo) documento = it },
