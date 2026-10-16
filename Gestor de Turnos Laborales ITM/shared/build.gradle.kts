@@ -1,4 +1,3 @@
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -11,12 +10,6 @@ plugins {
 
 kotlin {
     js {
-        browser()
-        binaries.executable()
-    }
-    
-    @OptIn(ExperimentalWasmDsl::class)
-    wasmJs {
         browser()
         binaries.executable()
     }
@@ -44,6 +37,7 @@ kotlin {
     
     sourceSets {
         androidMain.dependencies {
+            implementation(project.dependencies.platform("com.google.firebase:firebase-bom:33.4.0"))
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
         }

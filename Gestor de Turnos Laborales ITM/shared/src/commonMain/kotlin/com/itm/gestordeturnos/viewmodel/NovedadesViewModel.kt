@@ -3,6 +3,7 @@ package com.itm.gestordeturnos.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itm.gestordeturnos.data.repository.NovedadRepository
+import com.itm.gestordeturnos.domain.model.EstadoNovedad
 import com.itm.gestordeturnos.domain.model.Novedad
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,12 +16,12 @@ data class NovedadesState(
     val filtroActual: String = "Todas"
 ){
     val pendientesCount: Int
-        get() = novedades.count { it.estado == "REPORTADA"}
+        get() = novedades.count { it.estado == EstadoNovedad.REPORTADA }
 
     val novedadesFiltradas: List<Novedad>
         get() = when(filtroActual){
-            "Reportada" -> novedades.filter { it.estado == "REPORTADA" }
-            "Revisada" -> novedades.filter { it.estado == "REVISADA" }
+            "Reportada" -> novedades.filter { it.estado == EstadoNovedad.REPORTADA }
+            "Revisada" -> novedades.filter { it.estado == EstadoNovedad.REVISADA }
             else -> novedades
         }
 }

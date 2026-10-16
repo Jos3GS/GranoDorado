@@ -6,13 +6,15 @@ import com.itm.gestordeturnos.data.repository.CambiosTurnoRepository
 import com.itm.gestordeturnos.data.repository.EmpleadoRepository
 import com.itm.gestordeturnos.data.repository.NovedadRepository
 import com.itm.gestordeturnos.data.repository.TurnoRepository
+import com.itm.gestordeturnos.domain.model.EstadoNovedad
+import com.itm.gestordeturnos.domain.model.EstadoSolicitudCambio
+import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.UsuarioActual
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class PanelState(
@@ -39,15 +41,15 @@ class PanelViewModel : ViewModel() {
                 CambiosTurnoRepository.solicitudes
             ) { empleados, turnos, novedades, solicitudes ->
                 val empActivos = if (usuario.rol == RolUsuario.ADMINISTRADOR_GENERAL) {
-                    empleados.count { it.estado.equals("ACTIVO", ignoreCase = true) }
+                    empleados.count { it.estado == EstadoUsuario.ACTIVO }
                 } else {
-                    empleados.count { it.estado.equals("ACTIVO", ignoreCase = true) && it.sucursal.equals("CENTRO", ignoreCase = true) }
+                    empleados.count { it.estado == EstadoUsuario.ACTIVO && it.sucursal.equals("CENTRO", ignoreCase = true) }
                 }
 
                 val turnosActivos = turnos.count { it.estado.equals("ACTIVO", ignoreCase = true) }
-                val novPendientes = novedades.count { it.estado.equals("REPORTADA", ignoreCase = true) }
+                val novPendientes = novedades.count { it.estado == EstadoNovedad.REPORTADA }
                 val cambiosPendientes = solicitudes.count {
-                    it.estadoResumen == "SOLICITADA" || it.estadoResumen == "ACEPTADA POR EL COMPAÑERO"
+                    it.estado == EstadoSolicitudCambio.PENDIENTE || it.estado == EstadoSolicitudCambio.ACEPTADA_COMPANERO
                 }
 
                 val ronda = listOf(

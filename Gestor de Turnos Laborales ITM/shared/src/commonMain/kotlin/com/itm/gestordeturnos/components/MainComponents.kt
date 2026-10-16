@@ -503,14 +503,14 @@ fun EmpleadoCard(empleado: Empleado){
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "${empleado.cargo} - SUCURSAL ${empleado.sucursal}".uppercase(),
+                    text = "${empleado.cargo.displayName} - SUCURSAL ${empleado.sucursal}".uppercase(),
                     fontSize = 10.sp,
                     color = CafeTextSecondary,
                     letterSpacing = 1.sp
                 )
             }
 
-            val isActivo = empleado.estado == "ACTIVO"
+            val isActivo = empleado.estado == com.itm.gestordeturnos.domain.model.EstadoUsuario.ACTIVO
             val colorFondoEstado = if (isActivo) CafeStatusSuccessBg else CafeStatusErrorBg
             val colorTextoEstado = if (isActivo) CafeStatusSuccessText else CafeStatusErrorText
 
@@ -520,7 +520,7 @@ fun EmpleadoCard(empleado: Empleado){
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ){
                 Text(
-                    text = empleado.estado,
+                    text = empleado.estado.displayName.uppercase(),
                     color = colorTextoEstado,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
@@ -722,6 +722,14 @@ fun SucursalChip(
             letterSpacing = 1.sp
         )
     }
+}
+
+@Composable
+fun NovedadEstadoBadge(
+    estado: com.itm.gestordeturnos.domain.model.EstadoNovedad,
+    modifier: Modifier = Modifier
+) {
+    NovedadEstadoBadge(estado = estado.displayName, modifier = modifier)
 }
 
 @Composable

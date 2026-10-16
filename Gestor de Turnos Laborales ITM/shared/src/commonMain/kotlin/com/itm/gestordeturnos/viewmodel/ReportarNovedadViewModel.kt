@@ -3,6 +3,7 @@ package com.itm.gestordeturnos.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itm.gestordeturnos.data.repository.NovedadRepository
+import com.itm.gestordeturnos.domain.model.EstadoNovedad
 import com.itm.gestordeturnos.domain.model.Novedad
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,10 +33,10 @@ class ReportarNovedadViewModel : ViewModel() {
     val uiState: StateFlow<ReportarNovedadState> = _uiState.asStateFlow()
 
     init {
-        observarHistorial()
+        observarNovedades()
     }
 
-    private fun observarHistorial() {
+    private fun observarNovedades() {
         viewModelScope.launch {
             NovedadRepository.novedades.collect { lista ->
                 _uiState.update { it.copy(historial = lista) }
@@ -43,39 +44,36 @@ class ReportarNovedadViewModel : ViewModel() {
         }
     }
 
-    fun onTipoNovedadSeleccionado(tipo: String) {
-        val fechaRestaurada = if (tipo == "Incapacidad médica" || tipo == "Permiso especial") {
-            _uiState.value.fechaReferencia
-        } else {
-            "2026-09-17"
-        }
-
-        _uiState.update {
-            it.copy(
-                tipoNovedad = tipo,
-                menuExpandido = false,
-                fechaReferencia = fechaRestaurada
-            )
-        }
+    fun onFechaCambio(nuevaFecha: String) {
+        _uiState.update { it.copy(fechaReferencia = nuevaFecha) }
     }
 
-    fun onDescripcionCambiada(texto: String) {
-        _uiState.update { it.copy(descripcion = texto) }
-    }
-
-    fun toggleMenu(expandido: Boolean) {
-        _uiState.update { it.copy(menuExpandido = expandido) }
-    }
+    fun onFechaReferenciaCambiada(nuevaFecha: String) = onFechaCambio(nuevaFecha)
 
     fun toggleDatePicker(mostrar: Boolean) {
         _uiState.update { it.copy(mostrarDatePicker = mostrar) }
     }
 
-    fun onFechaReferenciaCambiada(nuevaFecha: String) {
-        _uiState.update { it.copy(fechaReferencia = nuevaFecha, mostrarDatePicker = false) }
+    fun onTipoNovedadSeleccionado(tipo: String) {
+        _uiState.update {
+            it.copy(
+                tipoNovedad = tipo,
+                menuExpandido = false
+            )
+        }
     }
 
-    fun enviarFormulario() {
+    fun toggleMenu(expandir: Boolean) {
+        _uiState.update { it.copy(menuExpandido = expandir) }
+    }
+
+    fun onDescripcionCambio(nuevaDescripcion: String) {
+        _uiState.update { it.copy(descripcion = nuevaDescripcion) }
+    }
+
+    fun onDescripcionCambiada(nuevaDescripcion: String) = onDescripcionCambio(nuevaDescripcion)
+
+    fun guardarNovedad() {
         val actual = _uiState.value
         if (actual.tipoNovedad == "Selecciona..." || actual.descripcion.isBlank()) {
             return
@@ -88,7 +86,7 @@ class ReportarNovedadViewModel : ViewModel() {
             sucursal = "CENTRO",
             detalleTurno = "${actual.turnoReferencia} · ${actual.fechaReferencia}",
             diferencia = actual.descripcion,
-            estado = "REPORTADA",
+            estado = EstadoNovedad.REPORTADA,
             colorVorde = "VERDE"
         )
         NovedadRepository.reportarNovedad(nueva)
@@ -101,4 +99,6 @@ class ReportarNovedadViewModel : ViewModel() {
             )
         }
     }
+
+    fun enviarFormulario() = guardarNovedad()
 }

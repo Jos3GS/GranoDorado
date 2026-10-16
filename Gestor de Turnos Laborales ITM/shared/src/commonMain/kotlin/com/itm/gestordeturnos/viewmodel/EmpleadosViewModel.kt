@@ -3,7 +3,10 @@ package com.itm.gestordeturnos.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itm.gestordeturnos.data.repository.EmpleadoRepository
+import com.itm.gestordeturnos.domain.model.Cargo
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.EstadoEmpleado
+import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -76,17 +79,19 @@ class EmpleadosViewModel : ViewModel() {
             val coincideTexto = state.textoBusqueda.isBlank() ||
                     emp.nombre.contains(state.textoBusqueda, ignoreCase = true) ||
                     emp.apellido.contains(state.textoBusqueda, ignoreCase = true) ||
-                    emp.documento.contains(state.textoBusqueda, ignoreCase = true) ||
+                    emp.documento.toString().contains(state.textoBusqueda, ignoreCase = true) ||
                     emp.correo.contains(state.textoBusqueda, ignoreCase = true)
 
             val coincideRol = state.filtroRol == "Todos" ||
-                    emp.cargo.equals(state.filtroRol, ignoreCase = true)
+                    emp.cargo.displayName.equals(state.filtroRol, ignoreCase = true) ||
+                    emp.cargo.name.equals(state.filtroRol, ignoreCase = true)
 
             val coincideSucursal = state.filtroSucursal == "Todas" ||
                     emp.sucursal.equals(state.filtroSucursal, ignoreCase = true)
 
             val coincideEstado = state.filtroEstado == "Todos" ||
-                    emp.estado.equals(state.filtroEstado, ignoreCase = true)
+                    emp.estado.displayName.equals(state.filtroEstado, ignoreCase = true) ||
+                    emp.estado.name.equals(state.filtroEstado, ignoreCase = true)
 
             coincideTexto && coincideRol && coincideSucursal && coincideEstado
         }
@@ -98,13 +103,14 @@ class EmpleadosViewModel : ViewModel() {
             id = (uiState.value.empleadosOriginales.size + 1).toString(),
             nombre = "",
             apellido = "",
-            documento = "",
+            documento = 0L,
             correo = "",
             telefono = "",
-            cargo = "BARISTA",
+            cargo = Cargo.BARISTA,
             sucursal = "CENTRO",
             fechaIngreso = "15/01/2024",
-            estado = "ACTIVO",
+            estadoLaboral = EstadoEmpleado.DISPONIBLE,
+            estado = EstadoUsuario.ACTIVO,
             iniciales = ""
         )
         _uiState.update {
@@ -146,7 +152,7 @@ class EmpleadosViewModel : ViewModel() {
             _uiState.update { it.copy(mensajeError = "Nombre y apellido son obligatorios.") }
             return
         }
-        if (empleadoActualizado.documento.isBlank()) {
+        if (empleadoActualizado.documento <= 0L) {
             _uiState.update { it.copy(mensajeError = "El número de documento es obligatorio.") }
             return
         }
@@ -155,24 +161,33 @@ class EmpleadosViewModel : ViewModel() {
             return
         }
 
-        // Validación de documento único si es nuevo o si cambió
+        // Validación de documento único
         val documentoExiste = estadoActual.empleadosOriginales.any {
-            it.documento.equals(empleadoActualizado.documento, ignoreCase = true) && it.id != empleadoActualizado.id
+            it.documento == empleadoActualizado.documento && it.id != empleadoActualizado.id
         }
         if (documentoExiste) {
             _uiState.update { it.copy(mensajeError = "Ya existe un empleado con este número de documento.") }
             return
         }
 
+        // Validación de correo único
+        val correoExiste = estadoActual.empleadosOriginales.any {
+            it.correo.equals(empleadoActualizado.correo, ignoreCase = true) && it.id != empleadoActualizado.id
+        }
+        if (correoExiste) {
+            _uiState.update { it.copy(mensajeError = "Ya existe un empleado con este correo electrónico.") }
+            return
+        }
+
         // Regla CA-04.5: Proteger último Administrador General activo
         if (!estadoActual.esNuevoEmpleado) {
             val empleadoPrevio = estadoActual.empleadosOriginales.find { it.id == empleadoActualizado.id }
-            val eraAdminGeneralActivo = empleadoPrevio?.cargo == "ADMINISTRADOR GENERAL" && empleadoPrevio.estado == "ACTIVO"
-            val dejaraDeSerlo = empleadoActualizado.cargo != "ADMINISTRADOR GENERAL" || empleadoActualizado.estado != "ACTIVO"
+            val eraAdminGeneralActivo = empleadoPrevio?.cargo == Cargo.ADMINISTRADOR_GENERAL && empleadoPrevio.estado == EstadoUsuario.ACTIVO
+            val dejaraDeSerlo = empleadoActualizado.cargo != Cargo.ADMINISTRADOR_GENERAL || empleadoActualizado.estado != EstadoUsuario.ACTIVO
 
             if (eraAdminGeneralActivo && dejaraDeSerlo) {
                 val otrosAdminGeneralActivos = estadoActual.empleadosOriginales.count {
-                    it.cargo == "ADMINISTRADOR GENERAL" && it.estado == "ACTIVO" && it.id != empleadoActualizado.id
+                    it.cargo == Cargo.ADMINISTRADOR_GENERAL && it.estado == EstadoUsuario.ACTIVO && it.id != empleadoActualizado.id
                 }
                 if (otrosAdminGeneralActivos == 0) {
                     _uiState.update { it.copy(mensajeError = "No se puede inactivar o cambiar el rol del único Administrador General activo del sistema.") }

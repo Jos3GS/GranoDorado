@@ -68,7 +68,9 @@ import com.itm.gestordeturnos.CafeTextPrimary
 import com.itm.gestordeturnos.CafeTextSecondary
 import com.itm.gestordeturnos.components.AppDropdown
 import com.itm.gestordeturnos.components.EncabezadoPantalla
+import com.itm.gestordeturnos.domain.model.Cargo
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import com.itm.gestordeturnos.viewmodel.EmpleadosViewModel
 
 // Constantes estáticas para evitar realocaciones innecesarias durante la recomposición
@@ -115,173 +117,63 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                     }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                // Barra de filtros: Buscador + Dropdowns con título ENCIMA
-                if (isCompact) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text = "BÚSQUEDA",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = CafeTextSecondary,
-                                letterSpacing = 1.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            FiltroBuscadorInput(
-                                valor = state.textoBusqueda,
-                                onValorCambio = { viewModel.onBuscarTextoCambiado(it) },
-                                modifier = Modifier.fillMaxWidth().height(44.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FiltroSelectorCompacto(
-                                label = "Rol",
-                                valorActual = state.filtroRol,
-                                opciones = OPCIONES_ROLES_FILTRO,
-                                onSeleccion = { viewModel.onFiltroRolCambiado(it) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            FiltroSelectorCompacto(
-                                label = "Sucursal",
-                                valorActual = state.filtroSucursal,
-                                opciones = OPCIONES_SUCURSALES_FILTRO,
-                                onSeleccion = { viewModel.onFiltroSucursalCambiado(it) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            FiltroSelectorCompacto(
-                                label = "Estado",
-                                valorActual = state.filtroEstado,
-                                opciones = OPCIONES_ESTADOS_FILTRO,
-                                onSeleccion = { viewModel.onFiltroEstadoCambiado(it) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "BÚSQUEDA",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = CafeTextSecondary,
-                                letterSpacing = 1.sp
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            FiltroBuscadorInput(
-                                valor = state.textoBusqueda,
-                                onValorCambio = { viewModel.onBuscarTextoCambiado(it) },
-                                modifier = Modifier.fillMaxWidth().height(48.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(14.dp))
-                        FiltroSelector(
-                            label = "Rol",
-                            valorActual = state.filtroRol,
-                            opciones = OPCIONES_ROLES_FILTRO,
-                            onSeleccion = { viewModel.onFiltroRolCambiado(it) },
-                            modifier = Modifier.width(170.dp)
-                        )
-                        Spacer(modifier = Modifier.width(14.dp))
-                        FiltroSelector(
-                            label = "Sucursal",
-                            valorActual = state.filtroSucursal,
-                            opciones = OPCIONES_SUCURSALES_FILTRO,
-                            onSeleccion = { viewModel.onFiltroSucursalCambiado(it) },
-                            modifier = Modifier.width(150.dp)
-                        )
-                        Spacer(modifier = Modifier.width(14.dp))
-                        FiltroSelector(
-                            label = "Estado",
-                            valorActual = state.filtroEstado,
-                            opciones = OPCIONES_ESTADOS_FILTRO,
-                            onSeleccion = { viewModel.onFiltroEstadoCambiado(it) },
-                            modifier = Modifier.width(140.dp)
-                        )
-                    }
-                }
+                // Fila de Filtros y Búsqueda
+                BarraFiltros(
+                    textoBusqueda = state.textoBusqueda,
+                    onBuscarTextoCambiado = viewModel::onBuscarTextoCambiado,
+                    filtroRol = state.filtroRol,
+                    onFiltroRolCambiado = viewModel::onFiltroRolCambiado,
+                    filtroSucursal = state.filtroSucursal,
+                    onFiltroSucursalCambiado = viewModel::onFiltroSucursalCambiado,
+                    filtroEstado = state.filtroEstado,
+                    onFiltroEstadoCambiado = viewModel::onFiltroEstadoCambiado,
+                    isCompact = isCompact
+                )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Tabla / Lista de Empleados
+                // Vista según ancho de pantalla: Tabla para escritorio, Tarjetas para móvil
                 if (isCompact) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(state.empleadosFiltrados, key = { it.id }) { empleado ->
-                            EmpleadoCardMovil(
-                                empleado = empleado,
-                                onEditarClick = { viewModel.abrirEditarEmpleado(empleado) }
-                            )
-                        }
-                    }
+                    ListaTarjetasEmpleados(
+                        empleados = state.empleadosFiltrados,
+                        onEditarClick = viewModel::abrirEditarEmpleado
+                    )
                 } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .border(1.dp, Color(0xFFEFE9E1), RoundedCornerShape(2.dp))
-                            .background(Color.White)
-                    ) {
-                        // Cabecera de la tabla
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFFFCFAF7))
-                                .border(1.dp, Color(0xFFEFE9E1))
-                                .padding(horizontal = 24.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("EMPLEADO", color = CafeTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(2.5f))
-                            Text("DOCUMENTO", color = CafeTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1.3f))
-                            Text("ROL", color = CafeTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(2.2f))
-                            Text("SUCURSAL", color = CafeTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1.1f))
-                            Text("ESTADO", color = CafeTextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1.1f))
-                            Text("", modifier = Modifier.width(80.dp))
-                        }
-
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(state.empleadosFiltrados, key = { it.id }) { empleado ->
-                                EmpleadoFilaTabla(
-                                    empleado = empleado,
-                                    onEditarClick = { viewModel.abrirEditarEmpleado(empleado) }
-                                )
-                                HorizontalDivider(color = Color(0xFFF3EDE4), thickness = 1.dp)
-                            }
-                        }
-                    }
+                    TablaEmpleados(
+                        empleados = state.empleadosFiltrados,
+                        onEditarClick = viewModel::abrirEditarEmpleado
+                    )
                 }
             }
 
-            // Panel Lateral / Drawer del Formulario (Crear / Editar Empleado)
+            // Drawer lateral para Crear / Editar Empleado
             if (state.mostrarDrawerFormulario && state.empleadoEnEdicion != null) {
+                // Fondo oscurecido
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.45f))
+                        .background(Color.Black.copy(alpha = 0.4f))
                         .clickable { viewModel.cerrarFormulario() }
                 )
 
+                // Panel del Formulario
+                val drawerWidth = if (anchoMaximo < 500.dp) anchoMaximo else 480.dp
                 Box(
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
                         .fillMaxHeight()
-                        .width(if (isCompact) anchoMaximo else 450.dp)
-                        .background(Color(0xFFFAF7F2))
+                        .width(drawerWidth)
+                        .align(Alignment.CenterEnd)
+                        .background(Color.White)
                         .clickable(enabled = false) {}
                 ) {
                     FormularioEmpleadoDrawer(
                         empleado = state.empleadoEnEdicion!!,
                         esNuevo = state.esNuevoEmpleado,
                         mensajeError = state.mensajeError,
-                        onGuardar = { viewModel.guardarEmpleado(it) },
-                        onCancelar = { viewModel.cerrarFormulario() }
+                        onGuardar = viewModel::guardarEmpleado,
+                        onCancelar = viewModel::cerrarFormulario
                     )
                 }
             }
@@ -290,88 +182,220 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
 }
 
 @Composable
-private fun FiltroBuscadorInput(
-    valor: String,
-    onValorCambio: (String) -> Unit,
-    modifier: Modifier = Modifier
+private fun BarraFiltros(
+    textoBusqueda: String,
+    onBuscarTextoCambiado: (String) -> Unit,
+    filtroRol: String,
+    onFiltroRolCambiado: (String) -> Unit,
+    filtroSucursal: String,
+    onFiltroSucursalCambiado: (String) -> Unit,
+    filtroEstado: String,
+    onFiltroEstadoCambiado: (String) -> Unit,
+    isCompact: Boolean
 ) {
-    Box(
-        modifier = modifier
-            .background(Color.White, RoundedCornerShape(2.dp))
-            .border(1.dp, CafeBorderColor, RoundedCornerShape(2.dp))
-            .padding(horizontal = 14.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        BasicTextField(
-            value = valor,
-            onValueChange = onValorCambio,
-            singleLine = true,
-            textStyle = TextStyle(
-                color = CafeTextPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Normal
-            ),
-            cursorBrush = SolidColor(CafeDarkBrown),
+    if (isCompact) {
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            decorationBox = { innerTextField ->
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    if (valor.isEmpty()) {
-                        Text(
-                            text = "Buscar por nombre, documento o correo...",
-                            fontSize = 13.sp,
-                            color = CafeTextSecondary.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    innerTextField()
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            CampoBusqueda(
+                texto = textoBusqueda,
+                onTextoCambiado = onBuscarTextoCambiado,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    AppDropdown(
+                        valorActual = filtroRol,
+                        opciones = OPCIONES_ROLES_FILTRO,
+                        onSeleccion = onFiltroRolCambiado,
+                        label = "ROL"
+                    )
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    AppDropdown(
+                        valorActual = filtroSucursal,
+                        opciones = OPCIONES_SUCURSALES_FILTRO,
+                        onSeleccion = onFiltroSucursalCambiado,
+                        label = "SUCURSAL"
+                    )
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    AppDropdown(
+                        valorActual = filtroEstado,
+                        opciones = OPCIONES_ESTADOS_FILTRO,
+                        onSeleccion = onFiltroEstadoCambiado,
+                        label = "ESTADO"
+                    )
                 }
             }
-        )
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CampoBusqueda(
+                texto = textoBusqueda,
+                onTextoCambiado = onBuscarTextoCambiado,
+                modifier = Modifier.weight(1.5f)
+            )
+            Box(modifier = Modifier.width(170.dp)) {
+                AppDropdown(
+                    valorActual = filtroRol,
+                    opciones = OPCIONES_ROLES_FILTRO,
+                    onSeleccion = onFiltroRolCambiado,
+                    label = "ROL"
+                )
+            }
+            Box(modifier = Modifier.width(140.dp)) {
+                AppDropdown(
+                    valorActual = filtroSucursal,
+                    opciones = OPCIONES_SUCURSALES_FILTRO,
+                    onSeleccion = onFiltroSucursalCambiado,
+                    label = "SUCURSAL"
+                )
+            }
+            Box(modifier = Modifier.width(130.dp)) {
+                AppDropdown(
+                    valorActual = filtroEstado,
+                    opciones = OPCIONES_ESTADOS_FILTRO,
+                    onSeleccion = onFiltroEstadoCambiado,
+                    label = "ESTADO"
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun EmpleadoFilaTabla(
+private fun CampoBusqueda(
+    texto: String,
+    onTextoCambiado: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BasicTextField(
+        value = texto,
+        onValueChange = onTextoCambiado,
+        modifier = modifier
+            .height(42.dp)
+            .background(Color.White, RoundedCornerShape(2.dp))
+            .border(1.dp, Color(0xFFD9D0C5), RoundedCornerShape(2.dp))
+            .padding(horizontal = 14.dp),
+        textStyle = TextStyle(fontSize = 13.sp, color = CafeTextPrimary),
+        singleLine = true,
+        cursorBrush = SolidColor(CafeDarkBrown),
+        decorationBox = { innerTextField ->
+            Box(contentAlignment = Alignment.CenterStart) {
+                if (texto.isEmpty()) {
+                    Text(
+                        text = "Buscar por nombre, documento o correo...",
+                        fontSize = 13.sp,
+                        color = CafeTextSecondary
+                    )
+                }
+                innerTextField()
+            }
+        }
+    )
+}
+
+@Composable
+private fun TablaEmpleados(
+    empleados: List<Empleado>,
+    onEditarClick: (Empleado) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(2.dp),
+        border = BorderStroke(1.dp, Color(0xFFE8DFD5))
+    ) {
+        Column {
+            // Encabezado de la Tabla
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFFAF6F0))
+                    .padding(horizontal = 24.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("COLABORADOR", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CafeTextSecondary, letterSpacing = 1.sp, modifier = Modifier.weight(2.5f))
+                Text("DOCUMENTO", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CafeTextSecondary, letterSpacing = 1.sp, modifier = Modifier.weight(1.3f))
+                Text("ROL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CafeTextSecondary, letterSpacing = 1.sp, modifier = Modifier.weight(2.2f))
+                Text("SUCURSAL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CafeTextSecondary, letterSpacing = 1.sp, modifier = Modifier.weight(1.1f))
+                Text("ESTADO", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CafeTextSecondary, letterSpacing = 1.sp, modifier = Modifier.weight(1.1f))
+                Text("ACCIONES", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CafeTextSecondary, letterSpacing = 1.sp, modifier = Modifier.width(80.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+            }
+
+            HorizontalDivider(color = Color(0xFFE8DFD5))
+
+            if (empleados.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "No se encontraron empleados con los filtros seleccionados.",
+                        color = CafeTextSecondary,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                LazyColumn {
+                    items(empleados, key = { it.id }) { empleado ->
+                        FilaEmpleado(empleado = empleado, onEditarClick = { onEditarClick(empleado) })
+                        HorizontalDivider(color = Color(0xFFF3EDE4))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilaEmpleado(
     empleado: Empleado,
     onEditarClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 14.dp),
+            .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Avatar + Nombre + Correo
+        // Colaborador (Avatar Iniciales + Nombre + Correo)
         Row(
             modifier = Modifier.weight(2.5f),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(42.dp)
-                    .background(Color(0xFFF5E6D3), RoundedCornerShape(2.dp)),
+                    .size(38.dp)
+                    .background(Color(0xFFEFE8DE), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = empleado.iniciales,
                     fontWeight = FontWeight.Bold,
-                    color = CafeDarkBrown,
-                    fontSize = 14.sp
+                    fontSize = 13.sp,
+                    color = CafeDarkBrown
                 )
             }
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
-                    text = "${empleado.nombre} ${empleado.apellido}",
-                    fontWeight = FontWeight.Bold,
+                    text = "${empleado.nombre} ${empleado.apellido}".trim(),
                     fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = CafeTextPrimary
                 )
-                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = empleado.correo,
                     fontSize = 12.sp,
@@ -382,7 +406,7 @@ private fun EmpleadoFilaTabla(
 
         // Documento
         Text(
-            text = empleado.documento,
+            text = if (empleado.documento > 0L) empleado.documento.toString() else "",
             fontSize = 14.sp,
             color = CafeTextPrimary,
             modifier = Modifier.weight(1.3f)
@@ -390,7 +414,7 @@ private fun EmpleadoFilaTabla(
 
         // Badge de Rol
         Box(modifier = Modifier.weight(2.2f)) {
-            BadgeRol(rol = empleado.cargo)
+            BadgeRol(rol = empleado.cargo.displayName)
         }
 
         // Chip de Sucursal
@@ -415,7 +439,7 @@ private fun EmpleadoFilaTabla(
             modifier = Modifier.weight(1.1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val isActivo = empleado.estado.equals("ACTIVO", ignoreCase = true)
+            val isActivo = empleado.estado == EstadoUsuario.ACTIVO
             val puntoColor = if (isActivo) CafeStatusSuccessText else CafeStatusErrorText
             val textoColor = if (isActivo) CafeStatusSuccessText else CafeStatusErrorText
 
@@ -426,7 +450,7 @@ private fun EmpleadoFilaTabla(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = empleado.estado.uppercase(),
+                text = empleado.estado.displayName.uppercase(),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = textoColor,
@@ -445,25 +469,52 @@ private fun EmpleadoFilaTabla(
                 fontWeight = FontWeight.Bold,
                 color = CafeTextSecondary,
                 letterSpacing = 1.sp,
-                textDecoration = TextDecoration.Underline,
                 modifier = Modifier
                     .clickable { onEditarClick() }
-                    .padding(vertical = 4.dp, horizontal = 6.dp)
+                    .padding(4.dp),
+                textDecoration = TextDecoration.Underline
             )
         }
     }
 }
 
 @Composable
-private fun EmpleadoCardMovil(
+private fun ListaTarjetasEmpleados(
+    empleados: List<Empleado>,
+    onEditarClick: (Empleado) -> Unit
+) {
+    if (empleados.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "No se encontraron empleados con los filtros seleccionados.",
+                color = CafeTextSecondary,
+                fontSize = 14.sp
+            )
+        }
+    } else {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(empleados, key = { it.id }) { empleado ->
+                TarjetaEmpleadoCompacta(empleado = empleado, onEditarClick = { onEditarClick(empleado) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun TarjetaEmpleadoCompacta(
     empleado: Empleado,
     onEditarClick: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, CafeBorderLight),
-        shape = RoundedCornerShape(4.dp)
+        shape = RoundedCornerShape(2.dp),
+        border = BorderStroke(1.dp, Color(0xFFE8DFD5))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -474,28 +525,28 @@ private fun EmpleadoCardMovil(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
-                            .background(Color(0xFFF5E6D3), RoundedCornerShape(2.dp)),
+                            .size(36.dp)
+                            .background(Color(0xFFEFE8DE), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = empleado.iniciales,
                             fontWeight = FontWeight.Bold,
-                            color = CafeDarkBrown,
-                            fontSize = 13.sp
+                            fontSize = 12.sp,
+                            color = CafeDarkBrown
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "${empleado.nombre} ${empleado.apellido}",
+                            text = "${empleado.nombre} ${empleado.apellido}".trim(),
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
                             color = CafeTextPrimary
                         )
                         Text(
-                            text = empleado.correo,
-                            fontSize = 12.sp,
+                            text = if (empleado.documento > 0L) "CC: ${empleado.documento}" else "",
+                            fontSize = 11.sp,
                             color = CafeTextSecondary
                         )
                     }
@@ -505,7 +556,8 @@ private fun EmpleadoCardMovil(
                     text = "EDITAR",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = CafeDarkBrown,
+                    color = CafeTextSecondary,
+                    letterSpacing = 1.sp,
                     textDecoration = TextDecoration.Underline,
                     modifier = Modifier.clickable { onEditarClick() }
                 )
@@ -520,7 +572,7 @@ private fun EmpleadoCardMovil(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                BadgeRol(rol = empleado.cargo)
+                BadgeRol(rol = empleado.cargo.displayName)
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
@@ -537,9 +589,9 @@ private fun EmpleadoCardMovil(
                     }
                     Spacer(modifier = Modifier.width(10.dp))
 
-                    val isActivo = empleado.estado.equals("ACTIVO", ignoreCase = true)
+                    val isActivo = empleado.estado == EstadoUsuario.ACTIVO
                     Text(
-                        text = "• ${empleado.estado}",
+                        text = "• ${empleado.estado.displayName}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isActivo) CafeStatusSuccessText else CafeStatusErrorText
@@ -558,7 +610,8 @@ private fun BadgeRol(rol: String) {
         "BARISTA" -> Color(0xFFE2EBD8) to Color(0xFF3C6036)
         "COCINERO" -> Color(0xFFF9DFDF) to Color(0xFF8B3A3A)
         "CAJERO" -> Color(0xFFD8EAF2) to Color(0xFF27556C)
-        else -> Color(0xFFEEEEEE) to Color(0xFF555555)
+        "SUPERVISOR" -> Color(0xFFF3DEBA) to Color(0xFF5D4037)
+        else -> Color(0xFFECE7DF) to Color(0xFF4A3E39)
     }
 
     Box(
@@ -568,57 +621,12 @@ private fun BadgeRol(rol: String) {
     ) {
         Text(
             text = rol.uppercase(),
-            color = texto,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            color = texto,
+            letterSpacing = 0.5.sp
         )
     }
-}
-
-@Composable
-private fun FiltroSelector(
-    label: String,
-    valorActual: String,
-    opciones: List<String>,
-    onSeleccion: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    AppDropdown(
-        label = label,
-        valorActual = valorActual,
-        opciones = opciones,
-        onSeleccion = onSeleccion,
-        modifier = modifier,
-        altura = 48.dp,
-        formatoItemMenu = { opcion ->
-            if (opcion == "Todos" || opcion == "Todas") "$opcion ($label)" else opcion
-        }
-    )
-}
-
-@Composable
-private fun FiltroSelectorCompacto(
-    label: String,
-    valorActual: String,
-    opciones: List<String>,
-    onSeleccion: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    AppDropdown(
-        label = label,
-        valorActual = valorActual,
-        opciones = opciones,
-        onSeleccion = onSeleccion,
-        modifier = modifier,
-        altura = 44.dp,
-        isCompact = true,
-        formatoItemMenu = { opcion ->
-            if (opcion == "Todos" || opcion == "Todas") "$opcion ($label)" else opcion
-        }
-    )
 }
 
 @Composable
@@ -631,13 +639,13 @@ private fun FormularioEmpleadoDrawer(
 ) {
     var nombre by remember(empleado) { mutableStateOf(empleado.nombre) }
     var apellido by remember(empleado) { mutableStateOf(empleado.apellido) }
-    var documento by remember(empleado) { mutableStateOf(empleado.documento) }
+    var documento by remember(empleado) { mutableStateOf(if (empleado.documento > 0L) empleado.documento.toString() else "") }
     var correo by remember(empleado) { mutableStateOf(empleado.correo) }
     var telefono by remember(empleado) { mutableStateOf(empleado.telefono) }
-    var rolSeleccionado by remember(empleado) { mutableStateOf(empleado.cargo) }
+    var rolSeleccionado by remember(empleado) { mutableStateOf(empleado.cargo.displayName) }
     var sucursalSeleccionada by remember(empleado) { mutableStateOf(empleado.sucursal) }
     var fechaIngreso by remember(empleado) { mutableStateOf(empleado.fechaIngreso) }
-    var estadoAcceso by remember(empleado) { mutableStateOf(empleado.estado) }
+    var estadoAcceso by remember(empleado) { mutableStateOf(empleado.estado.displayName) }
 
     Column(
         modifier = Modifier
@@ -678,65 +686,45 @@ private fun FormularioEmpleadoDrawer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(CafeStatusErrorBg, RoundedCornerShape(2.dp))
-                    .border(1.dp, Color(0xFFF8B4B4), RoundedCornerShape(2.dp))
+                    .border(1.dp, Color(0xFFF5C6CB), RoundedCornerShape(2.dp))
                     .padding(12.dp)
             ) {
-                Text(
-                    text = mensajeError,
-                    color = CafeStatusErrorText,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Text(mensajeError, color = CafeStatusErrorText, fontSize = 12.sp)
             }
             Spacer(modifier = Modifier.height(16.dp))
         }
 
+        // Nombre y Apellido
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(modifier = Modifier.weight(1f)) {
-                EtiquetaCampo("NOMBRE")
-                CampoTextoFormulario(valor = nombre, onValorCambio = { nombre = it }, placeholder = "Ej: Diego")
+                EtiquetaCampo("NOMBRE *")
+                CampoTextoFormulario(valor = nombre, onValorCambiado = { nombre = it }, placeholder = "Ej: Carlos")
             }
             Column(modifier = Modifier.weight(1f)) {
-                EtiquetaCampo("APELLIDO")
-                CampoTextoFormulario(valor = apellido, onValorCambio = { apellido = it }, placeholder = "Ej: Marín")
+                EtiquetaCampo("APELLIDO *")
+                CampoTextoFormulario(valor = apellido, onValorCambiado = { apellido = it }, placeholder = "Ej: Ruiz")
             }
         }
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        EtiquetaCampo("NÚMERO DE DOCUMENTO")
-        CampoTextoFormulario(
-            valor = documento,
-            onValorCambio = { documento = it },
-            placeholder = "Ej: 1000112233",
-            habilitado = esNuevo
-        )
-        if (!esNuevo) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "No editable: identifica al empleado.",
-                fontSize = 11.sp,
-                color = CafeTextSecondary
-            )
+        // Documento y Teléfono
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(modifier = Modifier.weight(1f)) {
+                EtiquetaCampo("NÚMERO DE DOCUMENTO *")
+                CampoTextoFormulario(valor = documento, onValorCambiado = { documento = it }, placeholder = "1020304050")
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                EtiquetaCampo("TELÉFONO")
+                CampoTextoFormulario(valor = telefono, onValorCambiado = { telefono = it }, placeholder = "3001234567")
+            }
         }
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        EtiquetaCampo("CORREO ELECTRÓNICO")
-        CampoTextoFormulario(
-            valor = correo,
-            onValorCambio = { correo = it },
-            placeholder = "nombre.apellido@granodorado.com"
-        )
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        EtiquetaCampo("TELÉFONO (OPCIONAL)")
-        CampoTextoFormulario(
-            valor = telefono,
-            onValorCambio = { telefono = it },
-            placeholder = "Ej: 3001112233"
-        )
+        // Correo Electrónico
+        EtiquetaCampo("CORREO ELECTRÓNICO *")
+        CampoTextoFormulario(valor = correo, onValorCambiado = { correo = it }, placeholder = "carlos.ruiz@granodorado.com")
 
         Spacer(modifier = Modifier.height(18.dp))
 
@@ -801,16 +789,24 @@ private fun FormularioEmpleadoDrawer(
         ) {
             Button(
                 onClick = {
+                    val docLong = documento.filter { it.isDigit() }.toLongOrNull() ?: 0L
+                    val cargoEnum = Cargo.entries.find {
+                        it.displayName.equals(rolSeleccionado, ignoreCase = true) || it.name.equals(rolSeleccionado, ignoreCase = true)
+                    } ?: Cargo.BARISTA
+                    val estadoEnum = EstadoUsuario.entries.find {
+                        it.displayName.equals(estadoAcceso, ignoreCase = true) || it.name.equals(estadoAcceso, ignoreCase = true)
+                    } ?: EstadoUsuario.ACTIVO
+
                     val modificado = empleado.copy(
                         nombre = nombre.trim(),
                         apellido = apellido.trim(),
-                        documento = documento.trim(),
+                        documento = docLong,
                         correo = correo.trim(),
                         telefono = telefono.trim(),
-                        cargo = rolSeleccionado,
+                        cargo = cargoEnum,
                         sucursal = sucursalSeleccionada,
                         fechaIngreso = fechaIngreso,
-                        estado = estadoAcceso
+                        estado = estadoEnum
                     )
                     onGuardar(modificado)
                 },
@@ -845,7 +841,7 @@ private fun EtiquetaCampo(texto: String) {
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
         color = CafeTextSecondary,
-        letterSpacing = 1.sp,
+        letterSpacing = 0.5.sp,
         modifier = Modifier.padding(bottom = 6.dp)
     )
 }
@@ -853,32 +849,23 @@ private fun EtiquetaCampo(texto: String) {
 @Composable
 private fun CampoTextoFormulario(
     valor: String,
-    onValorCambio: (String) -> Unit,
-    placeholder: String,
-    habilitado: Boolean = true
+    onValorCambiado: (String) -> Unit,
+    placeholder: String
 ) {
-    val fondo = if (habilitado) Color.White else Color(0xFFF0EAE1)
-    val borde = if (habilitado) Color(0xFFD9D0C5) else Color(0xFFE4DDD5)
-
     OutlinedTextField(
         value = valor,
-        onValueChange = onValorCambio,
-        enabled = habilitado,
+        onValueChange = onValorCambiado,
         modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text(placeholder, fontSize = 13.sp, color = CafeTextSecondary.copy(alpha = 0.6f)) },
+        textStyle = TextStyle(fontSize = 13.sp, color = CafeTextPrimary),
         singleLine = true,
-        shape = RoundedCornerShape(2.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = fondo,
-            unfocusedContainerColor = fondo,
-            disabledContainerColor = fondo,
-            focusedBorderColor = CafeAccentYellow,
-            unfocusedBorderColor = borde,
-            disabledBorderColor = borde,
-            focusedTextColor = CafeTextPrimary,
-            unfocusedTextColor = CafeTextPrimary,
-            disabledTextColor = CafeTextSecondary
-        )
+            focusedBorderColor = CafeDarkBrown,
+            unfocusedBorderColor = Color(0xFFD9D0C5),
+            focusedContainerColor = Color.White,
+            unfocusedContainerColor = Color.White
+        ),
+        shape = RoundedCornerShape(2.dp),
+        placeholder = { Text(placeholder, fontSize = 13.sp, color = Color(0xFFAFA79D)) }
     )
 }
 
@@ -892,7 +879,6 @@ private fun DropdownFormulario(
         valorActual = valorActual,
         opciones = opciones,
         onSeleccion = onSeleccion,
-        altura = 56.dp,
-        colorBorde = CafeBorderLight
+        label = ""
     )
 }
