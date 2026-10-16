@@ -227,11 +227,11 @@ private fun parsearEmpleadoJs(d: dynamic): Empleado? {
 
 actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = suspendCancellableCoroutine { continuation ->
     val onSuccess: (dynamic) -> Unit = {
-        js("console.log('Documento guardado con éxito en Firestore:', empleado.id);")
+        println("Documento guardado con éxito en Firestore: " + empleado.id)
         continuation.resume(Result.success(Unit))
     }
     val onError: (dynamic) -> Unit = { error ->
-        val msg = error?.message as? String ?: "Error al guardar empleado en Firestore"
+        val msg = (error?.message as? String) ?: "Error al guardar empleado en Firestore"
         js("console.error('Error guardando en Firestore:', error);")
         continuation.resume(Result.failure(Exception(msg)))
     }
@@ -298,11 +298,11 @@ actual suspend fun obtenerEmpleadosFirestore(): List<Empleado> = suspendCancella
                 }
             }
         }
-        js("console.log('Empleados obtenidos de Firestore:', lista.size);")
+        println("Empleados obtenidos de Firestore: " + lista.size)
         continuation.resume(lista)
     }
     val onError: (dynamic) -> Unit = { error ->
-        js("console.error('Error obteniendo empleados de Firestore:', error);")
+        println("Error obteniendo empleados de Firestore: " + error)
         continuation.resume(emptyList())
     }
 
@@ -337,7 +337,7 @@ actual fun observarEmpleadosFirestore(onUpdate: (List<Empleado>) -> Unit) {
                 }
             }
         }
-        js("console.log('Cambio en tiempo real de Firestore /empleados, total:', lista.size);")
+        println("Cambio en tiempo real de Firestore /empleados, total: " + lista.size)
         onUpdate(lista)
     }
 
@@ -406,12 +406,12 @@ private fun parsearTurnoJs(d: dynamic): TurnoTemplate? {
 
 actual suspend fun guardarTurnoFirestore(turno: TurnoTemplate): Result<Unit> = suspendCancellableCoroutine { continuation ->
     val onSuccess: (dynamic) -> Unit = {
-        js("console.log('Turno guardado con éxito en Firestore:', turno.id);")
+        println("Turno guardado con éxito en Firestore: " + turno.id)
         continuation.resume(Result.success(Unit))
     }
     val onError: (dynamic) -> Unit = { error ->
-        val msg = error?.message as? String ?: "Error al guardar turno en Firestore"
-        js("console.error('Error guardando turno en Firestore:', error);")
+        val msg = (error?.message as? String) ?: "Error al guardar turno en Firestore"
+        println("Error guardando turno en Firestore: " + msg)
         continuation.resume(Result.failure(Exception(msg)))
     }
 
@@ -472,6 +472,10 @@ actual suspend fun obtenerTurnosFirestore(): List<TurnoTemplate> = suspendCancel
             for (doc in docs) {
                 val data = doc.data()
                 if (data != null) {
+                    val docId = doc.id as? String
+                    if ((data.id as? String).isNullOrBlank() && !docId.isNullOrBlank()) {
+                        data.id = docId
+                    }
                     val t = parsearTurnoJs(data)
                     if (t != null) {
                         lista.add(t)
@@ -479,11 +483,11 @@ actual suspend fun obtenerTurnosFirestore(): List<TurnoTemplate> = suspendCancel
                 }
             }
         }
-        js("console.log('Turnos obtenidos de Firestore:', lista.size);")
+        println("Turnos obtenidos de Firestore: " + lista.size)
         continuation.resume(lista)
     }
     val onError: (dynamic) -> Unit = { error ->
-        js("console.error('Error obteniendo turnos de Firestore:', error);")
+        println("Error obteniendo turnos de Firestore: " + error)
         continuation.resume(emptyList())
     }
 
@@ -518,7 +522,7 @@ actual fun observarTurnosFirestore(onUpdate: (List<TurnoTemplate>) -> Unit) {
                 }
             }
         }
-        js("console.log('Cambio en tiempo real de Firestore /turnos, total:', lista.size);")
+        println("Cambio en tiempo real de Firestore /turnos, total: " + lista.size)
         onUpdate(lista)
     }
 

@@ -101,8 +101,20 @@ object TurnoRepository {
     fun iniciarSincronizacionFirestore() {
         repositoryScope.launch {
             try {
-                // 1. Si la colección de Firestore está vacía, poblarla con los turnos iniciales del catálogo
-                FirestoreService.inicializarTurnosSiEstaVacio()
+                // 1. Cargar inmediatamente desde Firestore si ya existen turnos
+                val remotos = FirestoreService.obtenerTurnos()
+                if (remotos.isNotEmpty()) {
+                    _turnosCatalogo.value = remotos
+                } else {
+                    // Si Firestore está vacío, inicializar con los turnos base del catálogo
+                    val inicializados = FirestoreService.inicializarTurnosSiEstaVacio()
+                    if (inicializados) {
+                        val turnosCargados = FirestoreService.obtenerTurnos()
+                        if (turnosCargados.isNotEmpty()) {
+                            _turnosCatalogo.value = turnosCargados
+                        }
+                    }
+                }
 
                 // 2. Escuchar en tiempo real los cambios en la colección "turnos"
                 FirestoreService.observarTurnos().collect { listaRemota ->
@@ -111,7 +123,20 @@ object TurnoRepository {
                     }
                 }
             } catch (e: Exception) {
-                // En caso de estar sin conexión o fallo temporal, mantiene la memoria local
+                println("Error en sincronización de turnos con Firestore: ${e.message}")
+            }
+        }
+    }
+
+    fun refrescarDesdeFirestore() {
+        repositoryScope.launch {
+            try {
+                val remotos = FirestoreService.obtenerTurnos()
+                if (remotos.isNotEmpty()) {
+                    _turnosCatalogo.value = remotos
+                }
+            } catch (e: Exception) {
+                println("Error al refrescar turnos desde Firestore: ${e.message}")
             }
         }
     }
@@ -120,7 +145,8 @@ object TurnoRepository {
         // Actualización optimista inmediata en memoria
         _turnosCatalogo.update { lista ->
             if (esNuevo) {
-                lista + turno
+                val sinDuplicado = lista.filterNot { it.id == turno.id }
+                sinDuplicado + turno
             } else {
                 lista.map { if (it.id == turno.id) turno else it }
             }
@@ -131,6 +157,8 @@ object TurnoRepository {
             val resultado = FirestoreService.guardarTurno(turno)
             if (resultado.isFailure) {
                 println("Fallo al guardar turno en Firestore: ${resultado.exceptionOrNull()?.message}")
+            } else {
+                println("Turno ${turno.id} persistido exitosamente en Firestore")
             }
         }
     }
