@@ -129,13 +129,7 @@ class FirebaseAuthService : AuthService {
     }
 
     private suspend fun resolverUsuario(correo: String, displayName: String?): UsuarioActual {
-        val listaEmpleados = try {
-            EmpleadoRepository.empleados.first()
-        } catch (_: Exception) {
-            emptyList()
-        }
-
-        val empleado = listaEmpleados.find { it.correo.equals(correo, ignoreCase = true) }
+        val empleado = EmpleadoRepository.buscarPorCorreo(correo)
         return if (empleado != null) {
             val rol = when (empleado.cargo.name) {
                 "ADMINISTRADOR_GENERAL" -> RolUsuario.ADMINISTRADOR_GENERAL
