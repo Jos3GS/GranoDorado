@@ -45,11 +45,11 @@ class FirebaseAuthService : AuthService {
             AuthResult.Success(usuarioActual)
         } catch (e: Exception) {
             val mensaje = when {
-                e.message?.contains("user-not-found", ignoreCase = true) == true ->
-                    "No existe ninguna cuenta registrada con este correo electrónico."
+                e.message?.contains("user-not-found", ignoreCase = true) == true ||
                 e.message?.contains("wrong-password", ignoreCase = true) == true ||
-                e.message?.contains("invalid-credential", ignoreCase = true) == true ->
-                    "La contraseña ingresada es incorrecta."
+                e.message?.contains("invalid-credential", ignoreCase = true) == true ||
+                e.message?.contains("invalid-login-credentials", ignoreCase = true) == true ->
+                    "Los datos de acceso son errados."
                 e.message?.contains("invalid-email", ignoreCase = true) == true ->
                     "El formato del correo electrónico no es válido."
                 e.message?.contains("user-disabled", ignoreCase = true) == true ->
