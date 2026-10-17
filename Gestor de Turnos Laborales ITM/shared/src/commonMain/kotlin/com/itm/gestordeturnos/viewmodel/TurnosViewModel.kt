@@ -27,8 +27,7 @@ data class TurnosState(
     val horaFinNuevo: String = "",
     val descansosNuevo: List<RangoDescanso> = emptyList(),
     val horasEfectivasCalculadas: String = "",
-    val mensajeErrorNuevo: String? = null,
-    val isSincronizando: Boolean = false
+    val mensajeErrorNuevo: String? = null
 )
 
 class TurnosViewModel : ViewModel() {
@@ -45,14 +44,6 @@ class TurnosViewModel : ViewModel() {
             TurnoRepository.turnosCatalogo.collect { lista ->
                 _uiState.update { it.copy(turnos = lista) }
             }
-        }
-    }
-
-    fun sincronizarConFirestore() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSincronizando = true) }
-            TurnoRepository.forzarSincronizacionCatalogo()
-            _uiState.update { it.copy(isSincronizando = false) }
         }
     }
 

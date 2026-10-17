@@ -30,7 +30,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -71,34 +70,16 @@ fun TurnosScreen(viewModel: TurnosViewModel) {
             titulo = "Catálogo de turnos",
             subtitulo = "Franjas reutilizables que convierten la programación en una selección, no una redacción. Operación 06:00 - 22:00.",
             accion = {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Button(
+                    onClick = { viewModel.toggleModalCrearTurno(true) },
+                    colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                    shape = RoundedCornerShape(4.dp),
                     modifier = Modifier.padding(start = 16.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = { viewModel.sincronizarConFirestore() },
-                        enabled = !state.isSincronizando,
-                        shape = RoundedCornerShape(4.dp),
-                        border = BorderStroke(1.dp, CafeBorderColor),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeDarkBrown)
-                    ) {
-                        Text(
-                            if (state.isSincronizando) "Sincronizando..." else "↻ Sincronizar Firestore",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    Button(
-                        onClick = { viewModel.toggleModalCrearTurno(true) },
-                        colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Text(
-                            "+ Crear turno",
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Text(
+                        "+ Crear turno",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         )
