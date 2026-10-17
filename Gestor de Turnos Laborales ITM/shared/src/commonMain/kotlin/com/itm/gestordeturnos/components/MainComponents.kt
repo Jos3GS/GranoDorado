@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -713,19 +714,35 @@ private fun TurnoDetalleBox(modifier: Modifier, label: String, nombre: String, t
 fun SucursalChip(
     sucursal: String,
     modifier: Modifier = Modifier,
-    borderColor: Color = Color(0xFFD6D6D6),
-    textColor: Color = CafeTextSecondary
+    borderColor: Color? = null,
+    textColor: Color? = null
 ) {
+    val esCentro = sucursal.equals("CENTRO", ignoreCase = true)
+    val esNorte = sucursal.equals("NORTE", ignoreCase = true)
+
+    val finalTextColor = textColor ?: when {
+        esCentro -> Color(0xFFD97706)
+        esNorte -> Color(0xFF2563EB)
+        else -> CafeTextSecondary
+    }
+
+    val finalBorderColor = borderColor ?: when {
+        esCentro -> Color(0xFFFDE68A)
+        esNorte -> Color(0xFFBFDBFE)
+        else -> Color(0xFFD6D6D6)
+    }
+
     Box(
         modifier = modifier
-            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+            .border(1.dp, finalBorderColor, RoundedCornerShape(12.dp))
             .padding(horizontal = 8.dp, vertical = 2.dp)
     ) {
         Text(
-            text = sucursal,
-            color = textColor,
+            text = sucursal.uppercase(),
+            color = finalTextColor,
             fontSize = 10.sp,
-            letterSpacing = 1.sp
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp
         )
     }
 }
@@ -735,7 +752,7 @@ fun NovedadEstadoBadge(
     estado: com.itm.gestordeturnos.domain.model.EstadoNovedad,
     modifier: Modifier = Modifier
 ) {
-    NovedadEstadoBadge(estado = estado.displayName, modifier = modifier)
+    NovedadEstadoBadge(estado = estado.name, modifier = modifier)
 }
 
 @Composable
@@ -743,7 +760,7 @@ fun NovedadEstadoBadge(
     estado: String,
     modifier: Modifier = Modifier
 ) {
-    val isRevisada = estado == "REVISADA"
+    val isRevisada = estado.equals("REVISADA", ignoreCase = true)
     val bgEstado = if (isRevisada) CafeStatusSuccessBg else CafeStatusWarningBg
     val textEstado = if (isRevisada) CafeStatusSuccessText else CafeDarkBrown
 
@@ -753,7 +770,7 @@ fun NovedadEstadoBadge(
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Text(
-            text = estado,
+            text = estado.uppercase(),
             color = textEstado,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
@@ -761,7 +778,6 @@ fun NovedadEstadoBadge(
         )
     }
 }
-
 /**
  * Dropdown selector unificado y genérico para filtros, selecciones y formularios.
  */
@@ -866,14 +882,13 @@ fun FiltroDropdown(
         valorActual = opcionSeleccionada,
         opciones = opciones,
         onSeleccion = onOpcionSeleccionada,
-        modifier = modifier,
+        modifier = modifier.width(130.dp),
         altura = 40.dp,
-        colorBorde = CafeTextPrimary,
+        colorBorde = CafeBorderColor,
         shape = RoundedCornerShape(4.dp),
         textoSize = 14.sp
     )
 }
-
 @Composable
 fun EncabezadoPantalla(
     titulo: String,
@@ -973,100 +988,135 @@ fun EncabezadoPantalla(
 }
 
 @Composable
-fun NovedadCard(novedad: Novedad){
-    val colorBarra = when (novedad.colorVorde){
+fun NovedadCard(novedad: Novedad) {
+    val colorBarra = when (novedad.colorBorde.ifBlank { novedad.colorVorde }.uppercase()) {
         "ROJO" -> Color(0xFFAC3927)
-        "VERDE" -> Color(0xFF437637)
-        "VERDE_CLARO" -> Color(0xFF9E3422)
-        else -> Color(0xFF8C8C8C)
+        "VERDE", "VERDE_OSCURO" -> Color(0xFF437637)
+        "GRIS", "GRIS_OSCURO" -> Color(0xFF5A5A5A)
+        "ROJO_OSCURO", "MARRON", "VERDE_CLARO" -> Color(0xFF78281F)
+        else -> Color(0xFF5A5A5A)
     }
 
     BoxWithConstraints {
-        val isCompact = maxWidth < 500.dp
+        val isCompact = maxWidth < 600.dp
         Card(
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             border = BorderStroke(1.dp, CafeBorderColor),
-            shape = RoundedCornerShape(2.dp)
-        ){
+            shape = RoundedCornerShape(4.dp)
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(IntrinsicSize.Min)
-                    .padding(16.dp),
-                verticalAlignment = if (isCompact) Alignment.Top else Alignment.CenterVertically
-            ){
+                    .height(IntrinsicSize.Min),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Borde izquierdo de color solido que indica su gravedad o tipo
                 Box(
                     modifier = Modifier
-                        .width(3.dp)
+                        .width(4.dp)
                         .fillMaxHeight()
                         .background(colorBarra)
                 )
 
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = if (isCompact) Alignment.Top else Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
-                        Text(
-                            novedad.tipo,
-                            color = CafeTextPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        if (!isCompact) {
-                            Text(
-                                " - ${novedad.empleado} ",
-                                color = CafeTextSecondary,
-                                fontSize = 14.sp
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            SucursalChip(sucursal = novedad.sucursal)
+                        if (isCompact) {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = novedad.tipo,
+                                        color = CafeTextPrimary,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (novedad.empleado.isNotBlank()) {
+                                        Text(
+                                            text = " \u00B7 " + novedad.empleado,
+                                            color = CafeTextPrimary,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Normal
+                                        )
+                                    }
+                                }
+                                if (novedad.sucursal.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    SucursalChip(sucursal = novedad.sucursal)
+                                }
+                            }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = novedad.tipo,
+                                        color = CafeTextPrimary,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (novedad.empleado.isNotBlank()) {
+                                        Text(
+                                            text = " \u00B7 " + novedad.empleado,
+                                            color = CafeTextPrimary,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Normal
+                                        )
+                                    }
+                                }
+                                if (novedad.sucursal.isNotBlank()) {
+                                    SucursalChip(sucursal = novedad.sucursal)
+                                }
+                            }
                         }
-                    }
-                    
-                    if (isCompact) {
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Subtitulo 1: Turno y Fecha (Gris medio)
+                        if (novedad.detalleTurno.isNotBlank()) {
+                            Text(
+                                text = novedad.detalleTurno,
+                                color = CafeTextSecondary,
+                                fontSize = 13.sp
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+
+                        // Subtitulo 2: Diferencia horaria (Gris oscuro, fuente monoespaciada)
+                        if (novedad.diferencia.isNotBlank()) {
                             Text(
-                                novedad.empleado,
-                                color = CafeTextSecondary,
-                                fontSize = 14.sp
+                                text = novedad.diferencia,
+                                color = Color(0xFF333333),
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            SucursalChip(sucursal = novedad.sucursal)
+                        }
+
+                        if (isCompact) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            NovedadEstadoBadge(estado = novedad.estado)
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        novedad.detalleTurno,
-                        color = CafeTextSecondary,
-                        fontSize = 12.sp
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        novedad.diferencia,
-                        color = CafeTextPrimary,
-                        fontSize = 12.sp
-                    )
-
-                    if (isCompact) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                    if (!isCompact) {
+                        Spacer(modifier = Modifier.width(16.dp))
                         NovedadEstadoBadge(estado = novedad.estado)
                     }
-                }
-
-                if (!isCompact) {
-                    NovedadEstadoBadge(estado = novedad.estado)
                 }
             }
         }
     }
 }
-
 @Composable
 fun ModalSolicitarCambio(
     turnosPropios: List<TurnoSeleccionable>,

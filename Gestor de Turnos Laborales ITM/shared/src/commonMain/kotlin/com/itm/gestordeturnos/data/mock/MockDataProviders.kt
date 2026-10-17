@@ -100,7 +100,70 @@ object MockDataProviders {
     }
 
     fun inicialNovedades(): List<Novedad> = listOf(
-        Novedad("1", "Salida antes de la hora", "Salida anticipada por cierre", null, null, EstadoNovedad.REPORTADA, "Administrador General", "CENTRO", "Cierre, 14:00 a 22:00 · 2026-09-08", "90 minutos menos que el turno programado", "ROJO", "ROJO")
+        Novedad(
+            id = "1",
+            tipo = "Salida antes de la hora",
+            descripcion = "Salida antes de la hora programada",
+            horaInicioReal = null,
+            horaFinReal = null,
+            estado = EstadoNovedad.REPORTADA,
+            empleado = "Ana Pérez",
+            sucursal = "CENTRO",
+            detalleTurno = "Cierre, 14:00 a 22:00 · 2026-09-08",
+            diferencia = "90 minutos menos que el turno programado",
+            colorBorde = "ROJO",
+            colorVorde = "ROJO",
+            empleadoId = "3",
+            asignacionTurnoId = "t1"
+        ),
+        Novedad(
+            id = "2",
+            tipo = "Ampliación del turno",
+            descripcion = "Extensión de turno por afluencia",
+            horaInicioReal = null,
+            horaFinReal = null,
+            estado = EstadoNovedad.REPORTADA,
+            empleado = "Marta León",
+            sucursal = "CENTRO",
+            detalleTurno = "Apertura, 06:00 a 14:00 · 2026-09-09",
+            diferencia = "90 minutos más que el turno programado",
+            colorBorde = "VERDE",
+            colorVorde = "VERDE",
+            empleadoId = "5",
+            asignacionTurnoId = "t2"
+        ),
+        Novedad(
+            id = "3",
+            tipo = "Ampliación del turno",
+            descripcion = "Ampliación por cierre y cuadre",
+            horaInicioReal = null,
+            horaFinReal = null,
+            estado = EstadoNovedad.REPORTADA,
+            empleado = "Carlos Ruiz",
+            sucursal = "NORTE",
+            detalleTurno = "Cierre, 14:00 a 22:00 · 2026-09-08",
+            diferencia = "sin diferencia",
+            colorBorde = "GRIS",
+            colorVorde = "GRIS",
+            empleadoId = "6",
+            asignacionTurnoId = "t3"
+        ),
+        Novedad(
+            id = "4",
+            tipo = "Llegada tarde",
+            descripcion = "Retraso involuntario en el ingreso",
+            horaInicioReal = null,
+            horaFinReal = null,
+            estado = EstadoNovedad.REVISADA,
+            empleado = "Julián Vera",
+            sucursal = "CENTRO",
+            detalleTurno = "Intermedio, 10:00 a 18:00 · 2026-09-07",
+            diferencia = "25 minutos menos que el turno programado",
+            colorBorde = "ROJO_OSCURO",
+            colorVorde = "ROJO_OSCURO",
+            empleadoId = "7",
+            asignacionTurnoId = "t4"
+        )
     )
 
     fun inicialSolicitudesCambio(): List<SolicitudCambioTurno> = emptyList()

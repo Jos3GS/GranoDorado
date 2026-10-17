@@ -19,9 +19,9 @@ data class NovedadesState(
         get() = novedades.count { it.estado == EstadoNovedad.REPORTADA }
 
     val novedadesFiltradas: List<Novedad>
-        get() = when(filtroActual){
-            "Reportada" -> novedades.filter { it.estado == EstadoNovedad.REPORTADA }
-            "Revisada" -> novedades.filter { it.estado == EstadoNovedad.REVISADA }
+        get() = when(filtroActual.lowercase()){
+            "reportada" -> novedades.filter { it.estado == EstadoNovedad.REPORTADA }
+            "revisada" -> novedades.filter { it.estado == EstadoNovedad.REVISADA }
             else -> novedades
         }
 }
