@@ -1,0 +1,24 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Colección de empleados
+    match /empleados/{empleadoId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Colección de turnos del catálogo
+    match /turnos/{turnoId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // NOTA PARA ENTORNO DE DESARROLLO / PRUEBAS LOCALES:
+    // Si aún no tienes usuarios autenticados en Firebase Auth en tu entorno local
+    // o quieres permitir acceso público temporal durante el desarrollo,
+    // puedes usar la siguiente regla en Firebase Console:
+    //
+    // match /{document=**} {
+    //   allow read, write: if true;
+    // }
+  }
+}

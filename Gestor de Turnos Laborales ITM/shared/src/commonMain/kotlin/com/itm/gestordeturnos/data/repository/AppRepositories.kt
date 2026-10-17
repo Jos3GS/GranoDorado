@@ -167,16 +167,18 @@ object TurnoRepository {
     }
 
     suspend fun guardarTurnoCatalogo(turno: TurnoTemplate, esNuevo: Boolean): Result<Unit> {
+        // Actualización optimista en memoria para que no se pierdan los cambios del usuario
+        _turnosCatalogo.update { lista ->
+            if (esNuevo) {
+                val sinDuplicado = lista.filterNot { it.id == turno.id }
+                sinDuplicado + turno
+            } else {
+                lista.map { if (it.id == turno.id) turno else it }
+            }
+        }
+
         val resultado = FirestoreService.guardarTurno(turno)
         if (resultado.isSuccess) {
-            _turnosCatalogo.update { lista ->
-                if (esNuevo) {
-                    val sinDuplicado = lista.filterNot { it.id == turno.id }
-                    sinDuplicado + turno
-                } else {
-                    lista.map { if (it.id == turno.id) turno else it }
-                }
-            }
             println("Turno ${turno.id} persistido exitosamente en Firestore")
         } else {
             val errMsg = resultado.exceptionOrNull()?.message ?: "Error desconocido"
