@@ -226,16 +226,6 @@ private fun parsearEmpleadoJs(d: dynamic): Empleado? {
 }
 
 actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = suspendCancellableCoroutine { continuation ->
-    val onSuccess: (dynamic) -> Unit = {
-        println("Documento guardado con éxito en Firestore: " + empleado.id)
-        continuation.resume(Result.success(Unit))
-    }
-    val onError: (dynamic) -> Unit = { error ->
-        val msg = (error?.message as? String) ?: "Error al guardar empleado en Firestore"
-        js("console.error('Error guardando en Firestore:', error);")
-        continuation.resume(Result.failure(Exception(msg)))
-    }
-
     val id = empleado.id
     val nombre = empleado.nombre
     val apellido = empleado.apellido
@@ -249,6 +239,16 @@ actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = 
     val estado = empleado.estado.name
     val estadoLaboral = empleado.estadoLaboral.name
     val iniciales = empleado.iniciales
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Documento guardado con éxito en Firestore: $id")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: "Error al guardar empleado en Firestore"
+        println("Error guardando en Firestore ($id): $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
 
     js("""
         try {
@@ -434,18 +434,6 @@ private fun parsearTurnoJs(d: dynamic): TurnoTemplate? {
 }
 
 actual suspend fun guardarTurnoFirestore(turno: TurnoTemplate): Result<Unit> = suspendCancellableCoroutine { continuation ->
-    val onSuccess: (dynamic) -> Unit = {
-        println("Turno guardado con éxito en Firestore: " + turno.id)
-        js("console.log('Turno persistido exitosamente en Firestore:', id);")
-        continuation.resume(Result.success(Unit))
-    }
-    val onError: (dynamic) -> Unit = { error ->
-        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar turno en Firestore"
-        println("Error guardando turno en Firestore: " + msg)
-        js("console.error('Firestore ERROR guardando en /turnos/' + id + ':', error);")
-        continuation.resume(Result.failure(Exception(msg)))
-    }
-
     val id = if (turno.id.isNotBlank()) turno.id else "t_${kotlin.random.Random.nextInt(1000, 9999)}"
     val nombre = turno.nombre
     val horario = turno.horario
@@ -456,13 +444,22 @@ actual suspend fun guardarTurnoFirestore(turno: TurnoTemplate): Result<Unit> = s
     val horaInicio = turno.horaInicio
     val horaFin = turno.horaFin
 
-    val descansosJs = js("[]")
+    val onSuccess: (dynamic) -> Unit = {
+        println("Turno guardado con éxito en Firestore: $id")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar turno en Firestore"
+        println("Error guardando turno en Firestore ($id): $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    val descansosJs: dynamic = js("[]")
     for (d in turno.listaDescansos) {
-        val dObj = js("{}")
-        val dId = d.id
-        val dIni = d.horaInicio
-        val dFin = d.horaFin
-        js("dObj.id = dId || ''; dObj.horaInicio = dIni || ''; dObj.horaFin = dFin || '';")
+        val dObj: dynamic = js("({})")
+        dObj.id = d.id
+        dObj.horaInicio = d.horaInicio
+        dObj.horaFin = d.horaFin
         descansosJs.push(dObj)
     }
 
@@ -535,7 +532,6 @@ actual suspend fun obtenerTurnosFirestore(): List<TurnoTemplate> = suspendCancel
     val onError: (dynamic) -> Unit = { error ->
         val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error obteniendo turnos de Firestore"
         println("Error obteniendo turnos de Firestore: " + msg)
-        js("console.error('Firestore fallo al obtener /turnos:', error);")
         continuation.resume(emptyList())
     }
 
