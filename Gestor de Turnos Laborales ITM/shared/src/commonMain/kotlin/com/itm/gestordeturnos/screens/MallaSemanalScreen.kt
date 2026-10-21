@@ -28,11 +28,13 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CalendarLocale
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DatePickerFormatter
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,6 +73,37 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+
+@OptIn(ExperimentalMaterial3Api::class)
+private object MallaUtcDatePickerFormatter : DatePickerFormatter {
+    private val meses = listOf(
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    )
+
+    override fun formatMonthYear(monthMillis: Long?, locale: CalendarLocale): String? {
+        if (monthMillis == null) return null
+        val instant = Instant.fromEpochMilliseconds(monthMillis)
+        val ldt = instant.toLocalDateTime(TimeZone.UTC)
+        val nombreMes = meses.getOrElse(ldt.monthNumber - 1) { "" }
+        return "$nombreMes ${ldt.year}"
+    }
+
+    override fun formatDate(
+        dateMillis: Long?,
+        locale: CalendarLocale,
+        forContentDescription: Boolean
+    ): String? {
+        if (dateMillis == null) return null
+        val instant = Instant.fromEpochMilliseconds(dateMillis)
+        val ldt = instant.toLocalDateTime(TimeZone.UTC)
+        val dia = ldt.dayOfMonth.toString().padStart(2, '0')
+        val mes = ldt.monthNumber.toString().padStart(2, '0')
+        val anio = ldt.year
+        val nombreMes = meses.getOrElse(ldt.monthNumber - 1) { "" }
+        return if (forContentDescription) "$dia de $nombreMes de $anio" else "$dia/$mes/$anio"
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -491,6 +524,7 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
             ) {
                 DatePicker(
                     state = datePickerState,
+                    dateFormatter = remember { MallaUtcDatePickerFormatter },
                     colors = DatePickerDefaults.colors(
                         selectedDayContainerColor = CafeDarkBrown,
                         selectedDayContentColor = Color.White,
