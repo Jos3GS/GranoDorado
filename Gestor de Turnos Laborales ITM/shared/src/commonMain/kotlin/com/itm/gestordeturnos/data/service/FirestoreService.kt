@@ -1,12 +1,17 @@
 package com.itm.gestordeturnos.data.service
 
 import com.itm.gestordeturnos.data.mock.MockDataProviders
+import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
+import com.itm.gestordeturnos.guardarAsignacionFirestore
+import com.itm.gestordeturnos.guardarAsignacionesBatchFirestore
 import com.itm.gestordeturnos.guardarEmpleadoFirestore
 import com.itm.gestordeturnos.guardarTurnoFirestore
+import com.itm.gestordeturnos.observarAsignacionesFirestore
 import com.itm.gestordeturnos.observarEmpleadosFirestore
 import com.itm.gestordeturnos.observarTurnosFirestore
+import com.itm.gestordeturnos.obtenerAsignacionesFirestore
 import com.itm.gestordeturnos.obtenerEmpleadosFirestore
 import com.itm.gestordeturnos.obtenerTurnosFirestore
 import kotlinx.coroutines.channels.awaitClose
@@ -35,13 +40,15 @@ object FirestoreService {
         return try {
             val existentes = obtenerEmpleadosFirestore()
             if (existentes.isEmpty()) {
-                val adminInicial = MockDataProviders.inicialEmpleados().firstOrNull()
-                if (adminInicial != null) {
-                    guardarEmpleadoFirestore(adminInicial)
-                    true
-                } else {
-                    false
+                val iniciales = MockDataProviders.inicialEmpleados()
+                var algunGuardado = false
+                for (emp in iniciales) {
+                    val res = guardarEmpleadoFirestore(emp)
+                    if (res.isSuccess) {
+                        algunGuardado = true
+                    }
                 }
+                algunGuardado
             } else {
                 false
             }
@@ -94,5 +101,25 @@ object FirestoreService {
             if (res.isFailure) return res
         }
         return Result.success(Unit)
+    }
+
+    // --- Asignaciones Diarias Individuales ---
+    fun observarAsignaciones(): Flow<List<AsignacionTurno>> = callbackFlow {
+        observarAsignacionesFirestore { lista ->
+            trySend(lista)
+        }
+        awaitClose { }
+    }
+
+    suspend fun obtenerAsignaciones(): List<AsignacionTurno> {
+        return obtenerAsignacionesFirestore()
+    }
+
+    suspend fun guardarAsignacion(asignacion: AsignacionTurno): Result<Unit> {
+        return guardarAsignacionFirestore(asignacion)
+    }
+
+    suspend fun guardarAsignacionesBatch(asignaciones: List<AsignacionTurno>): Result<Unit> {
+        return guardarAsignacionesBatchFirestore(asignaciones)
     }
 }

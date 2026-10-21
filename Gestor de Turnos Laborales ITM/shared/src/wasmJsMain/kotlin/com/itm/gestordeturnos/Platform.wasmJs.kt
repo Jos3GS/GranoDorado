@@ -1,5 +1,6 @@
 package com.itm.gestordeturnos
 
+import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 
@@ -33,4 +34,13 @@ actual suspend fun guardarTurnoFirestore(turno: TurnoTemplate): Result<Unit> = R
 actual suspend fun obtenerTurnosFirestore(): List<TurnoTemplate> = emptyList()
 
 actual fun observarTurnosFirestore(onUpdate: (List<TurnoTemplate>) -> Unit) {
+}
+
+actual suspend fun guardarAsignacionFirestore(asignacion: AsignacionTurno): Result<Unit> = Result.success(Unit)
+
+actual suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<AsignacionTurno>): Result<Unit> = Result.success(Unit)
+
+actual suspend fun obtenerAsignacionesFirestore(): List<AsignacionTurno> = emptyList()
+
+actual fun observarAsignacionesFirestore(onUpdate: (List<AsignacionTurno>) -> Unit) {
 }

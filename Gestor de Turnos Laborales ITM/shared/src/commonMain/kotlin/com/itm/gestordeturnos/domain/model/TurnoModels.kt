@@ -34,10 +34,26 @@ data class TurnoTemplate(
     val listaDescansos: List<RangoDescanso> = emptyList()
 )
 
+enum class TipoCeldaMalla {
+    TURNO,
+    DESCANSO,
+    VACACIONES,
+    INCAPACIDAD,
+    SIN_ASIGNAR
+}
+
 data class TurnoCelda(
-    val tipo: String,
-    val horario: String,
-    val esDescanso: Boolean = false
+    val tipo: String = "",
+    val horario: String = "",
+    val esDescanso: Boolean = false,
+    val tipoCelda: TipoCeldaMalla = if (esDescanso) TipoCeldaMalla.DESCANSO else TipoCeldaMalla.TURNO,
+    val modificadoTrasPublicar: Boolean = false
+)
+
+data class DiaColumnaMalla(
+    val diaSemana: String,
+    val numeroDia: String,
+    val cubierto: Boolean = true
 )
 
 data class FilaMalla(

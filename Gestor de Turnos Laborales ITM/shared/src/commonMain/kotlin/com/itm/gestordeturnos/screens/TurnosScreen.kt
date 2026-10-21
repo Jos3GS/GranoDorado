@@ -369,7 +369,7 @@ fun FilaTurno(
         }
 
         Text(
-            "${turno.asignaciones} asignaciones",
+            "${turno.asignaciones} ${if (turno.asignaciones == 1) "empleado" else "empleados"}",
             modifier = Modifier.weight(1.2f),
             color = CafeTextPrimary,
             fontSize = 12.sp,

@@ -5,12 +5,19 @@ import androidx.lifecycle.viewModelScope
 import com.itm.gestordeturnos.data.repository.TurnoRepository
 import com.itm.gestordeturnos.domain.model.RangoDescanso
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
+import kotlin.random.Random
+import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.random.Random
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.todayIn
 
 data class TurnosState(
     // Estado de la lista principal (Catálogo)
@@ -41,8 +48,38 @@ class TurnosViewModel : ViewModel() {
 
     private fun observarTurnosCatalogo() {
         viewModelScope.launch {
-            TurnoRepository.turnosCatalogo.collect { lista ->
-                _uiState.update { it.copy(turnos = lista) }
+            combine(
+                TurnoRepository.turnosCatalogo,
+                TurnoRepository.asignaciones
+            ) { turnos, asignaciones ->
+                val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
+                val diasDesdeLunes = hoy.dayOfWeek.ordinal
+                val lunesActual = hoy.minus(DatePeriod(days = diasDesdeLunes))
+                val lunesIso = lunesActual.toString()
+
+                // Filtrar solo asignaciones válidas (no descansos) de la semana en curso o futuras
+                val asignacionesVigentes = asignaciones.filter { asig ->
+                    if (asig.esDescanso || asig.empleadoId.isBlank()) return@filter false
+                    val fechaAsig = asig.fecha ?: runCatching { LocalDate.parse(asig.fechaIso) }.getOrNull()
+                    if (fechaAsig != null) {
+                        fechaAsig >= lunesActual
+                    } else if (asig.fechaIso.length >= 10) {
+                        asig.fechaIso.take(10) >= lunesIso
+                    } else {
+                        false
+                    }
+                }
+
+                turnos.map { turno ->
+                    val empleadosAsignados = asignacionesVigentes.filter { asig ->
+                        (asig.turnoId.isNotBlank() && asig.turnoId == turno.id) ||
+                        (asig.tipoTurno.isNotBlank() && asig.tipoTurno.trim().equals(turno.nombre.trim(), ignoreCase = true))
+                    }.map { it.empleadoId.trim() }.distinct().size
+
+                    turno.copy(asignaciones = empleadosAsignados)
+                }
+            }.collect { listaConAsignaciones ->
+                _uiState.update { it.copy(turnos = listaConAsignaciones) }
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.itm.gestordeturnos
 
+import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import com.itm.gestordeturnos.domain.model.RangoDescanso
 import com.itm.gestordeturnos.domain.model.Cargo
@@ -606,6 +607,286 @@ actual fun observarTurnosFirestore(onUpdate: (List<TurnoTemplate>) -> Unit) {
             }
         } catch(e) {
             console.error("Error suscribiendo a Firestore /turnos:", e);
+        }
+    """)
+}
+private fun parsearAsignacionJs(d: dynamic): AsignacionTurno? {
+    if (d == null || d == js("undefined")) return null
+    return try {
+        val id = (d.id as? String) ?: ""
+        val fechaIso = (d.fechaIso as? String) ?: ""
+        val empleadoId = (d.empleadoId as? String) ?: ""
+        val empleadoNombre = (d.empleadoNombre as? String) ?: ""
+        val turnoId = (d.turnoId as? String) ?: ""
+        val tipoTurno = (d.tipoTurno as? String) ?: ""
+        val horario = (d.horario as? String) ?: ""
+        val sucursalId = (d.sucursalId as? String) ?: ""
+        val programacionId = (d.programacionId as? String) ?: ""
+        val esDescanso = (d.esDescanso as? Boolean) ?: false
+        val estado = (d.estado as? String) ?: "BORRADOR"
+        val modificadoTrasPublicar = (d.modificadoTrasPublicar as? Boolean) ?: false
+
+        AsignacionTurno(
+            id = id,
+            fechaIso = fechaIso,
+            empleadoId = empleadoId,
+            empleadoNombre = empleadoNombre,
+            turnoId = turnoId,
+            tipoTurno = tipoTurno,
+            horario = horario,
+            sucursalId = sucursalId,
+            programacionId = programacionId,
+            esDescanso = esDescanso,
+            estado = estado,
+            modificadoTrasPublicar = modificadoTrasPublicar
+        )
+    } catch (e: Throwable) {
+        println("Error parseando asignacion de Firestore: " + e.message)
+        null
+    }
+}
+
+actual suspend fun guardarAsignacionFirestore(asignacion: AsignacionTurno): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val id = if (asignacion.id.isNotBlank()) asignacion.id else "${asignacion.empleadoId}_${asignacion.fechaIso}"
+    val fechaIso = asignacion.fechaIso
+    val empleadoId = asignacion.empleadoId
+    val empleadoNombre = asignacion.empleadoNombre
+    val turnoId = asignacion.turnoId
+    val tipoTurno = asignacion.tipoTurno
+    val horario = asignacion.horario
+    val sucursalId = asignacion.sucursalId
+    val programacionId = asignacion.programacionId
+    val esDescanso = asignacion.esDescanso
+    val estado = asignacion.estado
+    val modificadoTrasPublicar = asignacion.modificadoTrasPublicar
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Asignacion guardada con éxito en Firestore: $id")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar asignacion en Firestore"
+        println("Error guardando asignacion en Firestore ($id): $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                var data = {
+                    id: String(id || ''),
+                    fechaIso: String(fechaIso || ''),
+                    empleadoId: String(empleadoId || ''),
+                    empleadoNombre: String(empleadoNombre || ''),
+                    turnoId: String(turnoId || ''),
+                    tipoTurno: String(tipoTurno || ''),
+                    horario: String(horario || ''),
+                    sucursalId: String(sucursalId || ''),
+                    programacionId: String(programacionId || ''),
+                    esDescanso: Boolean(esDescanso),
+                    estado: String(estado || 'BORRADOR'),
+                    modificadoTrasPublicar: Boolean(modificadoTrasPublicar)
+                };
+                console.log("Enviando asignacion a Firestore /asignaciones/" + id, data);
+                db.collection("asignaciones").doc(id).set(data)
+                    .then(onSuccess)
+                    .catch(function(err) {
+                        console.error("Firestore fallo al guardar en /asignaciones/" + id + ":", err);
+                        onError(err);
+                    });
+            } else {
+                var errNoDb = new Error("Firebase Firestore no está disponible en window");
+                console.error(errNoDb);
+                onError(errNoDb);
+            }
+        } catch(e) {
+            console.error("Excepción en guardarAsignacionFirestore:", e);
+            onError(e);
+        }
+    """)
+}
+
+actual suspend fun obtenerAsignacionesFirestore(): List<AsignacionTurno> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<AsignacionTurno>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val docId = doc.id as? String
+                    if ((data.id as? String).isNullOrBlank() && !docId.isNullOrBlank()) {
+                        data.id = docId
+                    }
+                    val a = parsearAsignacionJs(data)
+                    if (a != null) {
+                        lista.add(a)
+                    }
+                }
+            }
+        }
+        println("Asignaciones obtenidas de Firestore: " + lista.size)
+        continuation.resume(lista)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error obteniendo asignaciones de Firestore"
+        println("Error obteniendo asignaciones de Firestore: " + msg)
+        continuation.resume(emptyList())
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("asignaciones").get()
+                    .then(onSuccess)
+                    .catch(function(err) {
+                        console.error("Firestore fallo al obtener /asignaciones:", err);
+                        onError(err);
+                    });
+            } else {
+                onSuccess({ docs: [] });
+            }
+        } catch(e) {
+            console.error("Excepción en obtenerAsignacionesFirestore:", e);
+            onError(e);
+        }
+    """)
+}
+
+actual fun observarAsignacionesFirestore(onUpdate: (List<AsignacionTurno>) -> Unit) {
+    val callback: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<AsignacionTurno>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val docId = doc.id as? String
+                    if ((data.id as? String).isNullOrBlank() && !docId.isNullOrBlank()) {
+                        data.id = docId
+                    }
+                    val a = parsearAsignacionJs(data)
+                    if (a != null) {
+                        lista.add(a)
+                    }
+                }
+            }
+        }
+        println("Cambio en tiempo real de Firestore /asignaciones, total: " + lista.size)
+        onUpdate(lista)
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("asignaciones").onSnapshot(callback, function(err) {
+                    console.error("Error en onSnapshot /asignaciones de Firestore:", err);
+                });
+            }
+        } catch(e) {
+            console.error("Error suscribiendo a Firestore /asignaciones:", e);
+        }
+    """)
+}
+actual suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<AsignacionTurno>): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    if (asignaciones.isEmpty()) {
+        continuation.resume(Result.success(Unit))
+        return@suspendCancellableCoroutine
+    }
+
+    val jsItems: dynamic = js("[]")
+    for (asig in asignaciones) {
+        val id = if (asig.id.isNotBlank()) asig.id else "${asig.empleadoId}_${asig.fechaIso}"
+        val obj: dynamic = js("({})")
+        obj.id = id
+        obj.fechaIso = asig.fechaIso
+        obj.empleadoId = asig.empleadoId
+        obj.empleadoNombre = asig.empleadoNombre
+        obj.turnoId = asig.turnoId
+        obj.tipoTurno = asig.tipoTurno
+        obj.horario = asig.horario
+        obj.sucursalId = asig.sucursalId
+        obj.programacionId = asig.programacionId
+        obj.esDescanso = asig.esDescanso
+        obj.estado = asig.estado
+        obj.modificadoTrasPublicar = asig.modificadoTrasPublicar
+        jsItems.push(obj)
+    }
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Lote de asignaciones (${asignaciones.size}) guardado con éxito en Firestore")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar lote de asignaciones en Firestore"
+        println("Error guardando lote en Firestore: $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                var batch = db.batch();
+                for (var i = 0; i < jsItems.length; i++) {
+                    var item = jsItems[i];
+                    var docRef = db.collection("asignaciones").doc(item.id);
+                    batch.set(docRef, item);
+                }
+                console.log("Ejecutando commit de batch en /asignaciones para " + jsItems.length + " registros");
+                batch.commit()
+                    .then(onSuccess)
+                    .catch(function(err) {
+                        console.error("Firestore batch commit fallo:", err);
+                        onError(err);
+                    });
+            } else {
+                var errNoDb = new Error("Firebase Firestore no está disponible en window");
+                console.error(errNoDb);
+                onError(errNoDb);
+            }
+        } catch(e) {
+            console.error("Excepción en guardarAsignacionesBatchFirestore:", e);
+            onError(e);
         }
     """)
 }
