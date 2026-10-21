@@ -1,4 +1,4 @@
-package com.itm.gestordeturnos.screens
+﻿package com.itm.gestordeturnos.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -60,12 +60,15 @@ import com.itm.gestordeturnos.CafeDarkBrown
 import com.itm.gestordeturnos.components.MallaEmployeeRow
 import com.itm.gestordeturnos.components.MallaHeaderRow
 import com.itm.gestordeturnos.components.MallaLeyenda
+import com.itm.gestordeturnos.components.ModalAsignarTurno
 import com.itm.gestordeturnos.domain.model.FilaMalla
 import com.itm.gestordeturnos.domain.model.TurnoCelda
 import com.itm.gestordeturnos.viewmodel.MallaSemanalViewModel
+import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,7 +78,7 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
     var dropdownExpanded by remember { mutableStateOf(false) }
     var mostrarDatePickerSemana by remember { mutableStateOf(false) }
 
-    // Estado de celda seleccionada (para futuro modal de asignación/edición)
+    // Estado de celda seleccionada para el modal de asignación/edición de turno
     var celdaSeleccionada by remember { mutableStateOf<Triple<FilaMalla, Int, TurnoCelda>?>(null) }
 
     Box(modifier = Modifier.fillMaxSize().background(CafeBackgroundLight)) {
@@ -500,5 +503,27 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                 )
             }
         }
+
+        // ==========================================
+        // 6. MODAL ASIGNAR TURNO
+        // ==========================================
+        celdaSeleccionada?.let { (fila, diaIndex, _) ->
+            val fechaDia = state.fechaInicioSemana.plus(DatePeriod(days = diaIndex))
+            ModalAsignarTurno(
+                nombreEmpleado = fila.nombre,
+                fechaIso = fechaDia.toString(),
+                turnosDisponibles = state.turnosCatalogoActivos,
+                onSeleccionarTurno = { turnoTemplate ->
+                    viewModel.asignarTurnoAEmpleado(fila.idEmpleado, diaIndex, turnoTemplate)
+                    celdaSeleccionada = null
+                },
+                onAsignarDescanso = {
+                    viewModel.asignarDescansoAEmpleado(fila.idEmpleado, diaIndex)
+                    celdaSeleccionada = null
+                },
+                onDismiss = { celdaSeleccionada = null }
+            )
+        }
     }
 }
+

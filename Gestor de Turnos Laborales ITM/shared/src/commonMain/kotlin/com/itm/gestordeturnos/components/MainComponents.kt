@@ -1,4 +1,4 @@
-package com.itm.gestordeturnos.components
+﻿package com.itm.gestordeturnos.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.draw.drawBehind
@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -100,6 +101,8 @@ import com.itm.gestordeturnos.domain.model.TurnoAsignado
 import com.itm.gestordeturnos.domain.model.TurnoCelda
 import com.itm.gestordeturnos.domain.model.TurnoCompaneroSeleccionable
 import com.itm.gestordeturnos.domain.model.TurnoSeleccionable
+
+import com.itm.gestordeturnos.domain.model.TurnoTemplate
 
 @Composable
 fun DrawerMenuItem(
@@ -329,7 +332,7 @@ fun MallaHeaderRow(
             modifier = Modifier.width(170.dp)
         )
 
-        // Columnas 2-8 (DÃ­as de la semana)
+        // Columnas 2-8 (D\u00EDas de la semana)
         dias.forEach { dia ->
             Column(
                 modifier = Modifier
@@ -338,7 +341,7 @@ fun MallaHeaderRow(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // DÃ­a abreviado (ej. LUN)
+                // D\u00EDa abreviado (ej. LUN)
                 Text(
                     text = dia.diaSemana.uppercase(),
                     color = Color(0xFF6B7280),
@@ -346,7 +349,7 @@ fun MallaHeaderRow(
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                // NÃºmero del dÃ­a (ej. 14 en negrita oscura)
+                // Número del día (ej. 14 en negrita oscura)
                 Text(
                     text = dia.numeroDia,
                     color = CafeDarkBrown,
@@ -931,6 +934,169 @@ fun MallaEstadoSucursalBadge(
     }
 }
 
+
+@Composable
+fun ModalAsignarTurno(
+    nombreEmpleado: String,
+    fechaIso: String,
+    turnosDisponibles: List<TurnoTemplate>,
+    onSeleccionarTurno: (TurnoTemplate) -> Unit,
+    onAsignarDescanso: (() -> Unit)? = null,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .widthIn(max = 480.dp)
+                .padding(16.dp),
+            shape = RoundedCornerShape(4.dp),
+            colors = CardDefaults.cardColors(containerColor = CafeBackgroundLight),
+            border = BorderStroke(1.dp, CafeBorderColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+            ) {
+                // 1. Cabecera de Contexto
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "ASIGNAR TURNO",
+                            color = CafeTextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "$nombreEmpleado \u00B7 $fechaIso",
+                            color = CafeTextPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cerrar",
+                            tint = CafeTextSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // 2. Lista de Turnos Disponibles
+                if (turnosDisponibles.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No hay turnos activos configurados en el cat\u00E1logo.",
+                            color = CafeTextSecondary,
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        turnosDisponibles.forEach { turno ->
+                            val formatoHorario = if (turno.horaInicio.isNotBlank() && turno.horaFin.isNotBlank()) {
+                                "${turno.horaInicio}-${turno.horaFin}"
+                            } else {
+                                turno.horario.replace("\n", "")
+                            }
+                            val horasLimpias = turno.horasEfectivas.replace("\n", " ")
+                            val detalleHorario = "$formatoHorario \u00B7 $horasLimpias"
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.White, RoundedCornerShape(3.dp))
+                                    .border(
+                                        width = 1.dp,
+                                        color = CafeBorderColor,
+                                        shape = RoundedCornerShape(3.dp)
+                                    )
+                                    .clickable { onSeleccionarTurno(turno) }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = turno.nombre,
+                                    color = CafeTextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Text(
+                                    text = detalleHorario,
+                                    color = CafeTextSecondary,
+                                    fontSize = 12.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    textAlign = TextAlign.End
+                                )
+                            }
+                        }
+
+                        if (onAsignarDescanso != null) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFFF3F4F6), RoundedCornerShape(3.dp))
+                                    .border(
+                                        width = 1.dp,
+                                        color = CafeBorderColor,
+                                        shape = RoundedCornerShape(3.dp)
+                                    )
+                                    .clickable { onAsignarDescanso() }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Descanso",
+                                    color = Color(0xFF4B5563),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "D\u00EDa libre",
+                                    color = CafeTextSecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun BuscadorEmpleados(
@@ -2123,3 +2289,4 @@ fun textFieldColorsGestor() = OutlinedTextFieldDefaults.colors(
     unfocusedTextColor = CafeTextPrimary,
     focusedTextColor = CafeTextPrimary
 )
+

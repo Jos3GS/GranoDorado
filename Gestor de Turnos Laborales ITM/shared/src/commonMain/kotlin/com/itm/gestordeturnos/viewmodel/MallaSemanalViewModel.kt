@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.itm.gestordeturnos.data.repository.TurnoRepository
 import com.itm.gestordeturnos.domain.model.DiaColumnaMalla
 import com.itm.gestordeturnos.domain.model.FilaMalla
+import com.itm.gestordeturnos.domain.model.TipoCeldaMalla
+import com.itm.gestordeturnos.domain.model.TurnoCelda
+import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +36,7 @@ data class MallaSemanalState(
         DiaColumnaMalla("DOM", "20", cubierto = true)
     ),
     val filas: List<FilaMalla> = emptyList(),
+    val turnosCatalogoActivos: List<TurnoTemplate> = emptyList(),
     val publicado: Boolean = false
 )
 
@@ -42,12 +46,22 @@ class MallaSemanalViewModel : ViewModel() {
 
     init {
         observarFilasMalla()
+        observarTurnosCatalogo()
     }
 
     private fun observarFilasMalla() {
         viewModelScope.launch {
             TurnoRepository.filasMalla.collect { filas ->
                 _uiState.update { it.copy(filas = filas) }
+            }
+        }
+    }
+
+    private fun observarTurnosCatalogo() {
+        viewModelScope.launch {
+            TurnoRepository.turnosCatalogo.collect { catalogo ->
+                val activos = catalogo.filter { it.estado.equals("ACTIVO", ignoreCase = true) }
+                _uiState.update { it.copy(turnosCatalogoActivos = activos) }
             }
         }
     }
@@ -75,6 +89,97 @@ class MallaSemanalViewModel : ViewModel() {
         val actual = _uiState.value.fechaInicioSemana
         val nueva = actual.plus(DatePeriod(days = deltaSemanas * 7))
         actualizarSemana(nueva)
+    }
+
+    fun asignarTurnoAEmpleado(
+        idEmpleado: String,
+        diaIndex: Int,
+        turnoTemplate: TurnoTemplate
+    ) {
+        _uiState.update { state ->
+            val horarioFormateado = if (turnoTemplate.horaInicio.isNotBlank() && turnoTemplate.horaFin.isNotBlank()) {
+                "${turnoTemplate.horaInicio}-${turnoTemplate.horaFin}"
+            } else {
+                turnoTemplate.horario.replace("\n", "")
+            }
+
+            val nuevasFilas = state.filas.map { fila ->
+                if (fila.idEmpleado == idEmpleado) {
+                    val nuevosTurnos = fila.turnos.toMutableList()
+                    if (diaIndex in nuevosTurnos.indices) {
+                        nuevosTurnos[diaIndex] = TurnoCelda(
+                            tipo = turnoTemplate.nombre,
+                            horario = horarioFormateado,
+                            tipoCelda = TipoCeldaMalla.TURNO,
+                            modificadoTrasPublicar = state.publicado
+                        )
+                    }
+                    fila.copy(turnos = nuevosTurnos, totalHoras = calcularTotalHoras(nuevosTurnos))
+                } else {
+                    fila
+                }
+            }
+            state.copy(filas = nuevasFilas)
+        }
+    }
+
+    fun asignarDescansoAEmpleado(
+        idEmpleado: String,
+        diaIndex: Int
+    ) {
+        _uiState.update { state ->
+            val nuevasFilas = state.filas.map { fila ->
+                if (fila.idEmpleado == idEmpleado) {
+                    val nuevosTurnos = fila.turnos.toMutableList()
+                    if (diaIndex in nuevosTurnos.indices) {
+                        nuevosTurnos[diaIndex] = TurnoCelda(
+                            tipo = "Descanso",
+                            horario = "-",
+                            tipoCelda = TipoCeldaMalla.DESCANSO,
+                            esDescanso = true
+                        )
+                    }
+                    fila.copy(turnos = nuevosTurnos, totalHoras = calcularTotalHoras(nuevosTurnos))
+                } else {
+                    fila
+                }
+            }
+            state.copy(filas = nuevasFilas)
+        }
+    }
+
+    private fun calcularTotalHoras(turnos: List<TurnoCelda>): String {
+        var minutosTotales = 0
+        turnos.forEach { t ->
+            if (t.tipoCelda == TipoCeldaMalla.TURNO) {
+                val partes = t.horario.split("-")
+                if (partes.size == 2) {
+                    try {
+                        val pIni = partes[0].trim().split(":")
+                        val pFin = partes[1].trim().split(":")
+                        val hIni = pIni[0].toInt()
+                        val mIni = pIni[1].toInt()
+                        val hFin = pFin[0].toInt()
+                        val mFin = pFin[1].toInt()
+                        var duracionMin = (hFin * 60 + mFin) - (hIni * 60 + mIni)
+                        if (duracionMin < 0) duracionMin += 24 * 60
+                        val duracionEfectiva = if (duracionMin >= 240) duracionMin - 30 else duracionMin
+                        minutosTotales += duracionEfectiva
+                    } catch (e: Exception) {
+                        minutosTotales += 450
+                    }
+                } else {
+                    minutosTotales += 450
+                }
+            }
+        }
+        val horas = minutosTotales / 60
+        val minutos = minutosTotales % 60
+        return if (minutos > 0) {
+            "$horas h ${minutos.toString().padStart(2, '0')} min"
+        } else {
+            "$horas h 00 min"
+        }
     }
 
     private fun actualizarSemana(lunes: LocalDate) {
