@@ -40,6 +40,8 @@ expect fun observarTurnosFirestore(onUpdate: (List<TurnoTemplate>) -> Unit)
 
 expect suspend fun guardarAsignacionFirestore(asignacion: AsignacionTurno): Result<Unit>
 
+expect suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<AsignacionTurno>): Result<Unit>
+
 expect suspend fun obtenerAsignacionesFirestore(): List<AsignacionTurno>
 
 expect fun observarAsignacionesFirestore(onUpdate: (List<AsignacionTurno>) -> Unit)

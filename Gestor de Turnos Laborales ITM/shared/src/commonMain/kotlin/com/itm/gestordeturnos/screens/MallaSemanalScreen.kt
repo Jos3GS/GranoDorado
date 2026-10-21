@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,6 +75,13 @@ import kotlinx.datetime.toLocalDateTime
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
+    // Al salir de la pantalla (cambiar de pantalla en la app), guardar automáticamente los cambios pendientes en Firestore
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.guardarCambiosSiHayPendientes()
+        }
+    }
+
     val state by viewModel.uiState.collectAsState()
     var dropdownExpanded by remember { mutableStateOf(false) }
     var mostrarDatePickerSemana by remember { mutableStateOf(false) }
@@ -286,44 +294,43 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // ==========================================
-                // 2. FILA DE CONTEXTO (Debajo del título) CON DATE PICKER
+                // 2. FILA DE CONTEXTO Y SELECTOR DE SEMANA
                 // ==========================================
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Etiqueta tipo "Pill" con borde ocre y texto CENTRO
+                    // Etiqueta tipo "Pill" con borde ocre y texto de la sucursal actual
                     Box(
                         modifier = Modifier
                             .border(
                                 width = 1.dp,
-                                color = Color(0xFFD97706),
-                                shape = RoundedCornerShape(12.dp)
+                                color = Color(0xFFB45309),
+                                shape = RoundedCornerShape(50)
                             )
-                            .background(Color.White, shape = RoundedCornerShape(12.dp))
-                            .padding(horizontal = 10.dp, vertical = 3.dp)
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = state.sucursal.uppercase(),
-                            color = Color(0xFFD97706),
+                            color = Color(0xFFB45309),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
+                            letterSpacing = 1.sp
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    // Controles de navegación y DatePicker de semana
+                    // Selector dinámico de semana (Flechas anteriores/siguientes + Botón con Icono y Calendario)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .background(Color.White, RoundedCornerShape(6.dp))
-                            .border(1.dp, Color(0xFFD1D5DB), RoundedCornerShape(6.dp))
+                            .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
                     ) {
                         IconButton(
                             onClick = { viewModel.cambiarSemana(-1) },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ChevronLeft,
@@ -333,7 +340,6 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                             )
                         }
 
-                        // Selector de fecha / rango de semana clickeable
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -342,29 +348,22 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                         ) {
                             Icon(
                                 imageVector = Icons.Default.DateRange,
-                                contentDescription = "Abrir calendario",
-                                tint = Color(0xFF6B7280),
+                                contentDescription = "Seleccionar fecha en calendario",
+                                tint = CafeDarkBrown,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = state.rangoSemana,
+                                color = CafeDarkBrown,
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF374151)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                tint = Color(0xFF6B7280),
-                                modifier = Modifier.size(18.dp)
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
 
                         IconButton(
                             onClick = { viewModel.cambiarSemana(1) },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ChevronRight,
@@ -374,8 +373,6 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.width(14.dp))
 
                     // Etiqueta de estado con fondo amarillo pálido y texto ocre en mayúsculas
                     Box(
@@ -526,4 +523,3 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
         }
     }
 }
-

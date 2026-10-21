@@ -5,6 +5,7 @@ import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import com.itm.gestordeturnos.guardarAsignacionFirestore
+import com.itm.gestordeturnos.guardarAsignacionesBatchFirestore
 import com.itm.gestordeturnos.guardarEmpleadoFirestore
 import com.itm.gestordeturnos.guardarTurnoFirestore
 import com.itm.gestordeturnos.observarAsignacionesFirestore
@@ -116,5 +117,9 @@ object FirestoreService {
 
     suspend fun guardarAsignacion(asignacion: AsignacionTurno): Result<Unit> {
         return guardarAsignacionFirestore(asignacion)
+    }
+
+    suspend fun guardarAsignacionesBatch(asignaciones: List<AsignacionTurno>): Result<Unit> {
+        return guardarAsignacionesBatchFirestore(asignaciones)
     }
 }

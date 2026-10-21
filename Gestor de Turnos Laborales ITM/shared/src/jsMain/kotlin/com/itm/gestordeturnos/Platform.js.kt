@@ -818,3 +818,75 @@ actual fun observarAsignacionesFirestore(onUpdate: (List<AsignacionTurno>) -> Un
         }
     """)
 }
+actual suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<AsignacionTurno>): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    if (asignaciones.isEmpty()) {
+        continuation.resume(Result.success(Unit))
+        return@suspendCancellableCoroutine
+    }
+
+    val jsItems: dynamic = js("[]")
+    for (asig in asignaciones) {
+        val id = if (asig.id.isNotBlank()) asig.id else "${asig.empleadoId}_${asig.fechaIso}"
+        val obj: dynamic = js("({})")
+        obj.id = id
+        obj.fechaIso = asig.fechaIso
+        obj.empleadoId = asig.empleadoId
+        obj.empleadoNombre = asig.empleadoNombre
+        obj.turnoId = asig.turnoId
+        obj.tipoTurno = asig.tipoTurno
+        obj.horario = asig.horario
+        obj.sucursalId = asig.sucursalId
+        obj.programacionId = asig.programacionId
+        obj.esDescanso = asig.esDescanso
+        obj.estado = asig.estado
+        obj.modificadoTrasPublicar = asig.modificadoTrasPublicar
+        jsItems.push(obj)
+    }
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Lote de asignaciones (${asignaciones.size}) guardado con éxito en Firestore")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar lote de asignaciones en Firestore"
+        println("Error guardando lote en Firestore: $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                var batch = db.batch();
+                for (var i = 0; i < jsItems.length; i++) {
+                    var item = jsItems[i];
+                    var docRef = db.collection("asignaciones").doc(item.id);
+                    batch.set(docRef, item);
+                }
+                console.log("Ejecutando commit de batch en /asignaciones para " + jsItems.length + " registros");
+                batch.commit()
+                    .then(onSuccess)
+                    .catch(function(err) {
+                        console.error("Firestore batch commit fallo:", err);
+                        onError(err);
+                    });
+            } else {
+                var errNoDb = new Error("Firebase Firestore no está disponible en window");
+                console.error(errNoDb);
+                onError(errNoDb);
+            }
+        } catch(e) {
+            console.error("Excepción en guardarAsignacionesBatchFirestore:", e);
+            onError(e);
+        }
+    """)
+}

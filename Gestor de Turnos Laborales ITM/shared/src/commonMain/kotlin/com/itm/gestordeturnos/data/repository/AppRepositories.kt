@@ -182,8 +182,19 @@ object TurnoRepository {
         return res
     }
 
-    suspend fun guardarAsignaciones(lista: List<AsignacionTurno>) {
-        lista.forEach { guardarAsignacion(it) }
+    suspend fun guardarAsignaciones(lista: List<AsignacionTurno>): Result<Unit> {
+        if (lista.isEmpty()) return Result.success(Unit)
+        // Optimistic update
+        val ids = lista.map { it.id }.toSet()
+        val empFechas = lista.map { "${it.empleadoId}_${it.fechaIso}" }.toSet()
+        _asignaciones.update { existentes ->
+            existentes.filterNot { it.id in ids || "${it.empleadoId}_${it.fechaIso}" in empFechas } + lista
+        }
+        val res = FirestoreService.guardarAsignacionesBatch(lista)
+        if (res.isFailure) {
+            println("Error al guardar lote de asignaciones en Firestore: ${res.exceptionOrNull()?.message}")
+        }
+        return res
     }
 
     suspend fun forzarSincronizacionCatalogo(): Result<Unit> {
