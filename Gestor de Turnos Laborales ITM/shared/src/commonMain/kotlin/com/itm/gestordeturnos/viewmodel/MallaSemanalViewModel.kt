@@ -1,4 +1,4 @@
-package com.itm.gestordeturnos.viewmodel
+﻿package com.itm.gestordeturnos.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,28 +18,67 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
+
+private fun obtenerMesCorto(mes: Int): String = when (mes) {
+    1 -> "ene"
+    2 -> "feb"
+    3 -> "mar"
+    4 -> "abr"
+    5 -> "may"
+    6 -> "jun"
+    7 -> "jul"
+    8 -> "ago"
+    9 -> "sep"
+    10 -> "oct"
+    11 -> "nov"
+    12 -> "dic"
+    else -> ""
+}
+
+private fun calcularLunesProximaSemana(): LocalDate {
+    val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
+    val diasDesdeLunes = hoy.dayOfWeek.ordinal
+    val lunesActual = hoy.minus(DatePeriod(days = diasDesdeLunes))
+    return lunesActual.plus(DatePeriod(days = 7))
+}
+
+private fun formatearRangoSemana(lunes: LocalDate): String {
+    val domingo = lunes.plus(DatePeriod(days = 6))
+    return if (lunes.monthNumber == domingo.monthNumber) {
+        "${lunes.dayOfMonth} – ${domingo.dayOfMonth} ${obtenerMesCorto(domingo.monthNumber)} ${domingo.year}"
+    } else {
+        "${lunes.dayOfMonth} ${obtenerMesCorto(lunes.monthNumber)} – ${domingo.dayOfMonth} ${obtenerMesCorto(domingo.monthNumber)} ${domingo.year}"
+    }
+}
+
+private fun generarDiasSemanaIniciales(lunes: LocalDate): List<DiaColumnaMalla> {
+    val nombresDias = listOf("LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM")
+    return (0..6).map { i ->
+        val diaFecha = lunes.plus(DatePeriod(days = i))
+        DiaColumnaMalla(
+            diaSemana = nombresDias[i],
+            numeroDia = "${diaFecha.dayOfMonth}",
+            cubierto = false
+        )
+    }
+}
 
 data class MallaSemanalState(
     val titulo: String = "Malla semanal",
     val subtitulo: String = "Verifica que la jornada de 06:00 a 22:00 queda cubierta antes de publicar. Los vacíos de cobertura se resaltan.",
-    val fechaInicioSemana: LocalDate = LocalDate(2026, 9, 14),
-    val rangoSemana: String = "14 – 20 sep 2026",
+    val fechaInicioSemana: LocalDate = calcularLunesProximaSemana(),
+    val rangoSemana: String = formatearRangoSemana(fechaInicioSemana),
     val sucursal: String = "Centro",
     val opcionesSucursal: List<String> = listOf("Centro", "Norte", "Sur"),
     val estadoMalla: String = "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS",
-    val diasSemana: List<DiaColumnaMalla> = listOf(
-        DiaColumnaMalla("LUN", "14", cubierto = true),
-        DiaColumnaMalla("MAR", "15", cubierto = true),
-        DiaColumnaMalla("MIÉ", "16", cubierto = true),
-        DiaColumnaMalla("JUE", "17", cubierto = true),
-        DiaColumnaMalla("VIE", "18", cubierto = true),
-        DiaColumnaMalla("SÁB", "19", cubierto = false), // SIN CUBRIR
-        DiaColumnaMalla("DOM", "20", cubierto = true)
-    ),
+    val diasSemana: List<DiaColumnaMalla> = generarDiasSemanaIniciales(fechaInicioSemana),
     val filas: List<FilaMalla> = emptyList(),
     val turnosCatalogoActivos: List<TurnoTemplate> = emptyList(),
     val publicado: Boolean = false
@@ -519,13 +558,7 @@ class MallaSemanalViewModel : ViewModel() {
     }
 
     private fun actualizarSemana(lunes: LocalDate) {
-        val domingo = lunes.plus(DatePeriod(days = 6))
-
-        val rangoTexto = if (lunes.monthNumber == domingo.monthNumber) {
-            "${lunes.dayOfMonth} – ${domingo.dayOfMonth} ${obtenerMesCorto(domingo.monthNumber)} ${domingo.year}"
-        } else {
-            "${lunes.dayOfMonth} ${obtenerMesCorto(lunes.monthNumber)} – ${domingo.dayOfMonth} ${obtenerMesCorto(domingo.monthNumber)} ${domingo.year}"
-        }
+        val rangoTexto = formatearRangoSemana(lunes)
 
         _uiState.update {
             it.copy(
@@ -536,21 +569,5 @@ class MallaSemanalViewModel : ViewModel() {
 
         sincronizarAsignacionesSemana()
         actualizarFilasPorSucursal(_uiState.value.sucursal)
-    }
-
-    private fun obtenerMesCorto(mes: Int): String = when (mes) {
-        1 -> "ene"
-        2 -> "feb"
-        3 -> "mar"
-        4 -> "abr"
-        5 -> "may"
-        6 -> "jun"
-        7 -> "jul"
-        8 -> "ago"
-        9 -> "sep"
-        10 -> "oct"
-        11 -> "nov"
-        12 -> "dic"
-        else -> ""
     }
 }
