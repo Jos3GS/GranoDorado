@@ -289,7 +289,7 @@ fun TablaTurnos(
                 CabeceraTabla("DESCANSOS", modifier = Modifier.weight(1f))
                 CabeceraTabla("EFECTIVA", modifier = Modifier.weight(1f))
                 CabeceraTabla("ESTADO", modifier = Modifier.weight(1.1f))
-                CabeceraTabla("EMPLEADOS", modifier = Modifier.weight(1.2f))
+                CabeceraTabla("ASIGNACIONES", modifier = Modifier.weight(1.2f))
                 CabeceraTabla("ACCIONES", modifier = Modifier.weight(1.1f))
             }
             HorizontalDivider(color = CafeBorderColor)
