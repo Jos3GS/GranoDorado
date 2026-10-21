@@ -1,4 +1,4 @@
-﻿package com.itm.gestordeturnos.data.mock
+package com.itm.gestordeturnos.data.mock
 
 import com.itm.gestordeturnos.domain.model.*
 

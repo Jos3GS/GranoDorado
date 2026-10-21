@@ -3,6 +3,7 @@ package com.itm.gestordeturnos.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itm.gestordeturnos.data.repository.EmpleadoRepository
+import com.itm.gestordeturnos.data.repository.TurnoRepository
 import com.itm.gestordeturnos.data.service.AuthService
 import com.itm.gestordeturnos.data.service.FirebaseAuthService
 import com.itm.gestordeturnos.domain.model.Cargo
@@ -16,9 +17,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 import kotlin.time.Clock
-import kotlinx.datetime.todayIn
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
 
 data class EmpleadosState(
     val empleadosOriginales: List<Empleado> = emptyList(),
@@ -132,6 +136,7 @@ class EmpleadosViewModel(
             telefono = "",
             cargo = Cargo.BARISTA,
             sucursal = "CENTRO",
+            sucursalId = "CENTRO",
             fechaIngreso = obtenerFechaActual(),
             estadoLaboral = EstadoEmpleado.DISPONIBLE,
             estado = EstadoUsuario.ACTIVO,
@@ -220,9 +225,34 @@ class EmpleadosViewModel(
             }
         }
 
-        val empleadoFinal = empleadoActualizado.copy(
-            iniciales = calcularIniciales(empleadoActualizado.nombre, empleadoActualizado.apellido)
-        )
+        val empleadoPrevio = if (!estadoActual.esNuevoEmpleado) {
+            estadoActual.empleadosOriginales.find { it.id == empleadoActualizado.id }
+        } else null
+
+        val sucursalCambio = empleadoPrevio != null &&
+            !empleadoPrevio.sucursal.equals(empleadoActualizado.sucursal, ignoreCase = true)
+
+        val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
+        val diasDesdeLunes = hoy.dayOfWeek.ordinal
+        val lunesActual = hoy.minus(DatePeriod(days = diasDesdeLunes))
+        val lunesProximaSemana = lunesActual.plus(DatePeriod(days = 7))
+        val fechaLunesProximaSemanaIso = lunesProximaSemana.toString()
+
+        val empleadoFinal = if (sucursalCambio && empleadoPrevio != null) {
+            // El cambio de sucursal regirá a partir de la próxima semana, conservando registros pasados y actuales
+            empleadoActualizado.copy(
+                sucursal = empleadoActualizado.sucursal,
+                sucursalId = empleadoActualizado.sucursal,
+                sucursalAnterior = empleadoPrevio.sucursal,
+                fechaCambioSucursal = fechaLunesProximaSemanaIso,
+                iniciales = calcularIniciales(empleadoActualizado.nombre, empleadoActualizado.apellido)
+            )
+        } else {
+            empleadoActualizado.copy(
+                sucursalId = empleadoActualizado.sucursal,
+                iniciales = calcularIniciales(empleadoActualizado.nombre, empleadoActualizado.apellido)
+            )
+        }
 
         val esNuevo = estadoActual.esNuevoEmpleado
 
@@ -241,6 +271,28 @@ class EmpleadosViewModel(
                 }
             }
 
+            // Si la sucursal cambió, migramos cualquier asignación futura (semana siguiente en adelante)
+            // del empleado a su nueva sucursal, asegurando que un empleado no tenga sucursales distintas
+            // en una misma semana y que se refleje inmediatamente en la nueva sede.
+            if (sucursalCambio && empleadoPrevio != null) {
+                val todasAsigs = TurnoRepository.asignaciones.value
+                val asigsFuturas = todasAsigs.filter {
+                    it.empleadoId == empleadoFinal.id && it.fechaIso >= fechaLunesProximaSemanaIso
+                }
+                if (asigsFuturas.isNotEmpty()) {
+                    val asigsMigradas = asigsFuturas.map { asig ->
+                        val fechaDia = try { LocalDate.parse(asig.fechaIso) } catch (_: Exception) { null }
+                        val lunesDeAsig = fechaDia?.let { it.minus(DatePeriod(days = it.dayOfWeek.ordinal)) }
+                        val progId = if (lunesDeAsig != null) "${lunesDeAsig}_${empleadoFinal.sucursal}" else asig.programacionId
+                        asig.copy(
+                            sucursalId = empleadoFinal.sucursal,
+                            programacionId = progId
+                        )
+                    }
+                    TurnoRepository.guardarAsignacionesEnBackground(asigsMigradas)
+                }
+            }
+
             EmpleadoRepository.guardarEmpleado(empleadoFinal, esNuevo)
 
             _uiState.update { state ->
@@ -251,6 +303,8 @@ class EmpleadosViewModel(
                     mensajeError = null,
                     mensajeExito = if (esNuevo) {
                         "Empleado registrado con éxito. Se ha enviado un enlace a ${empleadoFinal.correo} para establecer su contraseña."
+                    } else if (sucursalCambio) {
+                        "Empleado actualizado con éxito. El cambio de sede a ${empleadoFinal.sucursal} se aplicará a partir de la próxima semana ($fechaLunesProximaSemanaIso)."
                     } else {
                         "Empleado actualizado con éxito."
                     }

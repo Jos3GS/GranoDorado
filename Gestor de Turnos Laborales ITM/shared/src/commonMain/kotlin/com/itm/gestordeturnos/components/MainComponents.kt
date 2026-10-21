@@ -1,4 +1,4 @@
-﻿package com.itm.gestordeturnos.components
+package com.itm.gestordeturnos.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.draw.drawBehind

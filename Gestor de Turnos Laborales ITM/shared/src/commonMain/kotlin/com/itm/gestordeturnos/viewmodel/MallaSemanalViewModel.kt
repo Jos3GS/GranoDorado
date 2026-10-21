@@ -1,4 +1,4 @@
-﻿package com.itm.gestordeturnos.viewmodel
+package com.itm.gestordeturnos.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -134,6 +134,46 @@ class MallaSemanalViewModel : ViewModel() {
         }
     }
 
+    private fun resolverSucursalEmpleadoParaSemana(
+        emp: Empleado,
+        lunesSemana: LocalDate,
+        todasAsignaciones: List<AsignacionTurno>
+    ): String {
+        // 1. Si el empleado tiene cambio de sucursal con fecha efectiva (a partir de la próxima semana)
+        if (emp.fechaCambioSucursal.isNotBlank() && emp.sucursalAnterior.isNotBlank()) {
+            val fechaEfectiva = try { LocalDate.parse(emp.fechaCambioSucursal) } catch (_: Exception) { null }
+            if (fechaEfectiva != null) {
+                return if (lunesSemana < fechaEfectiva) {
+                    emp.sucursalAnterior
+                } else {
+                    emp.sucursal
+                }
+            }
+        }
+
+        // 2. Si el empleado ya tiene asignaciones en esta semana específica, respetar la sucursal de dichas asignaciones
+        // (En una semana, un empleado no puede tener sucursales diferentes en la misma semana)
+        val fechasSemana = (0..6).map { lunesSemana.plus(DatePeriod(days = it)).toString() }.toSet()
+        val asigsSemana = todasAsignaciones.filter { it.empleadoId == emp.id && it.fechaIso in fechasSemana }
+        val sucDeAsig = asigsSemana.firstOrNull { it.sucursalId.isNotBlank() }?.sucursalId
+        if (sucDeAsig != null) {
+            return sucDeAsig
+        }
+
+        // 3. Por defecto, sucursal actual del empleado
+        return emp.sucursal
+    }
+
+    private fun perteneceASucursalSemana(
+        emp: Empleado,
+        sucursal: String,
+        lunesSemana: LocalDate,
+        todasAsignaciones: List<AsignacionTurno>
+    ): Boolean {
+        val sucEmp = resolverSucursalEmpleadoParaSemana(emp, lunesSemana, todasAsignaciones)
+        return perteneceASucursalNombre(sucEmp, sucursal)
+    }
+
     private fun sincronizarAsignacionesSemana() {
         if (hayCambiosPendientes) {
             // Evitar que respuestas remotas sobreescriban los cambios activos en edición local
@@ -144,8 +184,17 @@ class MallaSemanalViewModel : ViewModel() {
         val sucursalActual = _uiState.value.sucursal
         val fechasSemana = (0..6).map { lunes.plus(DatePeriod(days = it)).toString() }
         val todasAsigs = TurnoRepository.asignaciones.value
-        val asigsSemana = todasAsigs.filter {
-            it.fechaIso in fechasSemana && (it.sucursalId.isBlank() || perteneceASucursalNombre(it.sucursalId, sucursalActual))
+
+        // Identificar los IDs de empleados que pertenecen a esta sucursal en esta semana
+        val empleadosIdsEstaSucursal = todosLosEmpleados.filter { emp ->
+            esEmpleadoActivo(emp) && perteneceASucursalSemana(emp, sucursalActual, lunes, todasAsigs)
+        }.map { it.id }.toSet()
+
+        val asigsSemana = todasAsigs.filter { asig ->
+            asig.fechaIso in fechasSemana && (
+                asig.empleadoId in empleadosIdsEstaSucursal ||
+                perteneceASucursalNombre(asig.sucursalId, sucursalActual)
+            )
         }
 
         // Siempre limpiamos la memoria de celdas para la semana seleccionada
@@ -155,6 +204,11 @@ class MallaSemanalViewModel : ViewModel() {
             var algunaPublicada = false
 
             for (asig in asigsSemana) {
+                // Solo cargar en la malla si el empleado pertenece a esta sucursal en esta semana
+                if (empleadosIdsEstaSucursal.isNotEmpty() && asig.empleadoId !in empleadosIdsEstaSucursal) {
+                    continue
+                }
+
                 val diaIdx = fechasSemana.indexOf(asig.fechaIso)
                 if (diaIdx in 0..6) {
                     val celdas = turnosPorEmpleado.getOrPut(asig.empleadoId) {
@@ -190,8 +244,8 @@ class MallaSemanalViewModel : ViewModel() {
                     estadoMalla = if (algunaPublicada) "PUBLICADA - VISIBLE PARA LOS EMPLEADOS" else "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
                 )
             }
-        } else if (lunes == LocalDate(2026, 9, 14) && todasAsigs.isEmpty()) {
-            // Solo para la semana inicial de demostración si la base de datos está totalmente vacía
+        } else if (lunes == LocalDate(2026, 9, 14) && todasAsigs.isEmpty() && perteneceASucursalNombre(sucursalActual, "Centro")) {
+            // Solo para la semana inicial de demostración si la base de datos está totalmente vacía y es Centro
             MockDataProviders.inicialFilasMalla().forEach { fila ->
                 turnosPorEmpleado[fila.idEmpleado] = fila.turnos.map { it.copy(modificadoTrasPublicar = false) }.toMutableList()
             }
@@ -227,7 +281,15 @@ class MallaSemanalViewModel : ViewModel() {
 
         val asignacionesAGuardar = mutableListOf<AsignacionTurno>()
 
+        // Solo guardar empleados que pertenecen a esta sucursal en esta semana
+        val empleadosIdsEstaSucursal = todosLosEmpleados.filter { emp ->
+            esEmpleadoActivo(emp) && perteneceASucursalSemana(emp, sucursalActual, fechaLunes, TurnoRepository.asignaciones.value)
+        }.map { it.id }.toSet()
+
         turnosPorEmpleado.forEach { (empId, celdas) ->
+            if (empleadosIdsEstaSucursal.isNotEmpty() && empId !in empleadosIdsEstaSucursal) {
+                return@forEach
+            }
             val emp = todosLosEmpleados.find { it.id == empId }
             val empNombre = emp?.let {
                 if (it.apellido.isNotBlank()) "${it.nombre} ${it.apellido}".trim() else it.nombre
@@ -307,9 +369,12 @@ class MallaSemanalViewModel : ViewModel() {
     }
 
     private fun actualizarFilasPorSucursal(sucursal: String) {
-        // Filtrar estrictamente solo empleados ACTIVOS de la base de datos que pertenezcan a la sucursal actual
+        val fechaLunes = _uiState.value.fechaInicioSemana
+        val todasAsigs = TurnoRepository.asignaciones.value
+
+        // Filtrar estrictamente solo empleados ACTIVOS de la base de datos que pertenezcan a la sucursal en esta semana
         val empleadosFiltrados = todosLosEmpleados.filter { emp ->
-            esEmpleadoActivo(emp) && perteneceASucursal(emp, sucursal)
+            esEmpleadoActivo(emp) && perteneceASucursalSemana(emp, sucursal, fechaLunes, todasAsigs)
         }
 
         val nuevasFilas = empleadosFiltrados.map { emp ->
@@ -346,15 +411,6 @@ class MallaSemanalViewModel : ViewModel() {
         return emp.estado == EstadoUsuario.ACTIVO ||
                emp.estado.name.equals("ACTIVO", ignoreCase = true) ||
                emp.estado.displayName.equals("Activo", ignoreCase = true)
-    }
-
-    private fun perteneceASucursal(emp: Empleado, sucursal: String): Boolean {
-        val sucLimpia = sucursal.trim()
-        val empSucursal = emp.sucursal.trim()
-        val empSucursalId = emp.sucursalId.trim()
-        return empSucursal.equals(sucLimpia, ignoreCase = true) ||
-               empSucursalId.equals(sucLimpia, ignoreCase = true) ||
-               empSucursal.replace(" ", "").equals(sucLimpia.replace(" ", ""), ignoreCase = true)
     }
 
     private fun perteneceASucursalNombre(sucursalOrigen: String, sucursalDestino: String): Boolean {

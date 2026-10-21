@@ -198,7 +198,10 @@ private fun parsearEmpleadoJs(d: dynamic): Empleado? {
         val tel = (d.telefono as? String) ?: ""
         val cargoStr = (d.cargo as? String) ?: "BARISTA"
         val cargoEnum = Cargo.entries.find { it.name.equals(cargoStr, ignoreCase = true) || it.displayName.equals(cargoStr, ignoreCase = true) } ?: Cargo.BARISTA
-        val sucursal = (d.sucursal as? String) ?: "CENTRO"
+        val sucursal = (d.sucursal as? String) ?: (d.sucursalId as? String) ?: "CENTRO"
+        val sucursalId = (d.sucursalId as? String) ?: sucursal
+        val sucursalAnterior = (d.sucursalAnterior as? String) ?: ""
+        val fechaCambioSucursal = (d.fechaCambioSucursal as? String) ?: ""
         val fechaIngreso = (d.fechaIngreso as? String) ?: "15/01/2024"
         val estadoStr = (d.estado as? String) ?: "ACTIVO"
         val estadoEnum = EstadoUsuario.entries.find { it.name.equals(estadoStr, ignoreCase = true) || it.displayName.equals(estadoStr, ignoreCase = true) } ?: EstadoUsuario.ACTIVO
@@ -216,6 +219,9 @@ private fun parsearEmpleadoJs(d: dynamic): Empleado? {
             telefono = tel,
             cargo = cargoEnum,
             sucursal = sucursal,
+            sucursalId = sucursalId,
+            sucursalAnterior = sucursalAnterior,
+            fechaCambioSucursal = fechaCambioSucursal,
             fechaIngreso = fechaIngreso,
             estado = estadoEnum,
             estadoLaboral = estadoLabEnum,
@@ -236,6 +242,9 @@ actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = 
     val telefono = empleado.telefono
     val cargo = empleado.cargo.name
     val sucursal = empleado.sucursal
+    val sucursalId = empleado.sucursalId.ifBlank { sucursal }
+    val sucursalAnterior = empleado.sucursalAnterior
+    val fechaCambioSucursal = empleado.fechaCambioSucursal
     val fechaIngreso = empleado.fechaIngreso
     val estado = empleado.estado.name
     val estadoLaboral = empleado.estadoLaboral.name
@@ -274,6 +283,9 @@ actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = 
                     telefono: telefono,
                     cargo: cargo,
                     sucursal: sucursal,
+                    sucursalId: sucursalId,
+                    sucursalAnterior: sucursalAnterior,
+                    fechaCambioSucursal: fechaCambioSucursal,
                     fechaIngreso: fechaIngreso,
                     estado: estado,
                     estadoLaboral: estadoLaboral,

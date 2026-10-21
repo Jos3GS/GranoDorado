@@ -1,4 +1,4 @@
-﻿package com.itm.gestordeturnos.screens
+package com.itm.gestordeturnos.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
