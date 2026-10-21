@@ -54,7 +54,7 @@ class FirebaseAuthService : AuthService {
                 return AuthResult.Error(detalleError)
             }
 
-            AuthResult.Success(resultadoResolucion.getOrThrow())
+            AuthResult.Success(resultadoResolucion.getOrThrow() )
         } catch (e: Exception) {
             val mensaje = when {
                 e.message?.contains("user-not-found", ignoreCase = true) == true ||
@@ -166,6 +166,9 @@ class FirebaseAuthService : AuthService {
             else -> RolUsuario.EMPLEADO
         }
         val usuario = UsuarioActual(
+            id = empleado.id,
+            correo = empleado.correo,
+            sucursal = empleado.sucursal,
             nombre = "${empleado.nombre} ${empleado.apellido}".trim().ifEmpty { empleado.nombre },
             iniciales = empleado.iniciales.ifEmpty { "EM" },
             cargo = empleado.cargo.displayName,
@@ -185,6 +188,9 @@ class FirebaseAuthService : AuthService {
             else -> RolUsuario.EMPLEADO
         }
         return UsuarioActual(
+            id = empleado.id,
+            correo = empleado.correo,
+            sucursal = empleado.sucursal,
             nombre = "${empleado.nombre} ${empleado.apellido}".trim().ifEmpty { empleado.nombre },
             iniciales = empleado.iniciales.ifEmpty { "EM" },
             cargo = empleado.cargo.displayName,
