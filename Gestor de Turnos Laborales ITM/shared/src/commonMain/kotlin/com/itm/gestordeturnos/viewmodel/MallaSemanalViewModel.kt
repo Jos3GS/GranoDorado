@@ -2,8 +2,12 @@ package com.itm.gestordeturnos.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itm.gestordeturnos.data.mock.MockDataProviders
+import com.itm.gestordeturnos.data.repository.EmpleadoRepository
 import com.itm.gestordeturnos.data.repository.TurnoRepository
 import com.itm.gestordeturnos.domain.model.DiaColumnaMalla
+import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import com.itm.gestordeturnos.domain.model.FilaMalla
 import com.itm.gestordeturnos.domain.model.TipoCeldaMalla
 import com.itm.gestordeturnos.domain.model.TurnoCelda
@@ -44,18 +48,31 @@ class MallaSemanalViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(MallaSemanalState())
     val uiState: StateFlow<MallaSemanalState> = _uiState.asStateFlow()
 
+    // Memoria de turnos asignados por empleado (idEmpleado -> lista de 7 celdas)
+    private val turnosPorEmpleado = mutableMapOf<String, MutableList<TurnoCelda>>()
+
+    // Colección de todos los empleados en la base de datos (sincronizados desde Firestore / EmpleadoRepository)
+    private var todosLosEmpleados: List<Empleado> = emptyList()
+
     init {
-        observarFilasMalla()
+        // Cargar en memoria inicial asignaciones previas si existen
+        MockDataProviders.inicialFilasMalla().forEach { fila ->
+            turnosPorEmpleado[fila.idEmpleado] = fila.turnos.toMutableList()
+        }
+
+        // Conectar y sincronizar con Firestore
+        EmpleadoRepository.iniciarSincronizacionFirestore()
+        TurnoRepository.iniciarSincronizacionFirestore()
+
+        observarEmpleadosBackend()
         observarTurnosCatalogo()
     }
 
-    private fun observarFilasMalla() {
+    private fun observarEmpleadosBackend() {
         viewModelScope.launch {
-            TurnoRepository.filasMalla.collect { filas ->
-                _uiState.update { state ->
-                    val nuevosDias = recalcularDiasSemana(state.fechaInicioSemana, filas)
-                    state.copy(filas = filas, diasSemana = nuevosDias)
-                }
+            EmpleadoRepository.empleados.collect { listaEmpleados ->
+                todosLosEmpleados = listaEmpleados
+                actualizarFilasPorSucursal(_uiState.value.sucursal)
             }
         }
     }
@@ -71,6 +88,7 @@ class MallaSemanalViewModel : ViewModel() {
 
     fun onSucursalCambio(nuevaSucursal: String) {
         _uiState.update { it.copy(sucursal = nuevaSucursal) }
+        actualizarFilasPorSucursal(nuevaSucursal)
     }
 
     fun publicarSemana() {
@@ -94,63 +112,100 @@ class MallaSemanalViewModel : ViewModel() {
         actualizarSemana(nueva)
     }
 
+    private fun actualizarFilasPorSucursal(sucursal: String) {
+        // Filtrar estrictamente solo empleados ACTIVOS de la base de datos que pertenezcan a la sucursal actual
+        val empleadosFiltrados = todosLosEmpleados.filter { emp ->
+            esEmpleadoActivo(emp) && perteneceASucursal(emp, sucursal)
+        }
+
+        val nuevasFilas = empleadosFiltrados.map { emp ->
+            val turnosEmpleado = turnosPorEmpleado.getOrPut(emp.id) {
+                MutableList(7) {
+                    TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR)
+                }
+            }
+
+            val nombreCompleto = if (emp.apellido.isNotBlank()) {
+                "${emp.nombre} ${emp.apellido}".trim()
+            } else {
+                emp.nombre
+            }
+
+            val cargoStr = emp.cargo.displayName.uppercase()
+
+            FilaMalla(
+                idEmpleado = emp.id,
+                nombre = nombreCompleto,
+                cargo = cargoStr,
+                turnos = turnosEmpleado.toList(),
+                totalHoras = calcularTotalHoras(turnosEmpleado)
+            )
+        }
+
+        _uiState.update { state ->
+            val nuevosDias = recalcularDiasSemana(state.fechaInicioSemana, nuevasFilas)
+            state.copy(filas = nuevasFilas, diasSemana = nuevosDias)
+        }
+    }
+
+    private fun esEmpleadoActivo(emp: Empleado): Boolean {
+        return emp.estado == EstadoUsuario.ACTIVO ||
+               emp.estado.name.equals("ACTIVO", ignoreCase = true) ||
+               emp.estado.displayName.equals("Activo", ignoreCase = true)
+    }
+
+    private fun perteneceASucursal(emp: Empleado, sucursal: String): Boolean {
+        val sucLimpia = sucursal.trim()
+        val empSucursal = emp.sucursal.trim()
+        val empSucursalId = emp.sucursalId.trim()
+        return empSucursal.equals(sucLimpia, ignoreCase = true) ||
+               empSucursalId.equals(sucLimpia, ignoreCase = true) ||
+               empSucursal.replace(" ", "").equals(sucLimpia.replace(" ", ""), ignoreCase = true)
+    }
+
     fun asignarTurnoAEmpleado(
         idEmpleado: String,
         diaIndex: Int,
         turnoTemplate: TurnoTemplate
     ) {
-        _uiState.update { state ->
-            val horarioFormateado = if (turnoTemplate.horaInicio.isNotBlank() && turnoTemplate.horaFin.isNotBlank()) {
-                "${turnoTemplate.horaInicio}-${turnoTemplate.horaFin}"
-            } else {
-                turnoTemplate.horario.replace("\n", "")
-            }
-
-            val nuevasFilas = state.filas.map { fila ->
-                if (fila.idEmpleado == idEmpleado) {
-                    val nuevosTurnos = fila.turnos.toMutableList()
-                    if (diaIndex in nuevosTurnos.indices) {
-                        nuevosTurnos[diaIndex] = TurnoCelda(
-                            tipo = turnoTemplate.nombre,
-                            horario = horarioFormateado,
-                            tipoCelda = TipoCeldaMalla.TURNO,
-                            modificadoTrasPublicar = state.publicado
-                        )
-                    }
-                    fila.copy(turnos = nuevosTurnos, totalHoras = calcularTotalHoras(nuevosTurnos))
-                } else {
-                    fila
-                }
-            }
-            val nuevosDias = recalcularDiasSemana(state.fechaInicioSemana, nuevasFilas)
-            state.copy(filas = nuevasFilas, diasSemana = nuevosDias)
+        val horarioFormateado = if (turnoTemplate.horaInicio.isNotBlank() && turnoTemplate.horaFin.isNotBlank()) {
+            "${turnoTemplate.horaInicio}-${turnoTemplate.horaFin}"
+        } else {
+            turnoTemplate.horario.replace("\n", "")
         }
+
+        val celdas = turnosPorEmpleado.getOrPut(idEmpleado) {
+            MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
+        }
+        if (diaIndex in celdas.indices) {
+            celdas[diaIndex] = TurnoCelda(
+                tipo = turnoTemplate.nombre,
+                horario = horarioFormateado,
+                tipoCelda = TipoCeldaMalla.TURNO,
+                modificadoTrasPublicar = _uiState.value.publicado
+            )
+        }
+
+        actualizarFilasPorSucursal(_uiState.value.sucursal)
     }
 
     fun asignarDescansoAEmpleado(
         idEmpleado: String,
         diaIndex: Int
     ) {
-        _uiState.update { state ->
-            val nuevasFilas = state.filas.map { fila ->
-                if (fila.idEmpleado == idEmpleado) {
-                    val nuevosTurnos = fila.turnos.toMutableList()
-                    if (diaIndex in nuevosTurnos.indices) {
-                        nuevosTurnos[diaIndex] = TurnoCelda(
-                            tipo = "Descanso",
-                            horario = "-",
-                            tipoCelda = TipoCeldaMalla.DESCANSO,
-                            esDescanso = true
-                        )
-                    }
-                    fila.copy(turnos = nuevosTurnos, totalHoras = calcularTotalHoras(nuevosTurnos))
-                } else {
-                    fila
-                }
-            }
-            val nuevosDias = recalcularDiasSemana(state.fechaInicioSemana, nuevasFilas)
-            state.copy(filas = nuevasFilas, diasSemana = nuevosDias)
+        val celdas = turnosPorEmpleado.getOrPut(idEmpleado) {
+            MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
         }
+        if (diaIndex in celdas.indices) {
+            celdas[diaIndex] = TurnoCelda(
+                tipo = "Descanso",
+                horario = "-",
+                tipoCelda = TipoCeldaMalla.DESCANSO,
+                esDescanso = true
+            )
+        }
+
+        actualizarFilasPorSucursal(_uiState.value.sucursal)
     }
 
     private fun recalcularDiasSemana(
@@ -170,7 +225,6 @@ class MallaSemanalViewModel : ViewModel() {
     }
 
     private fun verificarDiaCubierto(diaIndex: Int, filas: List<FilaMalla>): Boolean {
-        // La jornada completa a cubrir es de 06:00 (360 min) a 22:00 (1320 min)
         val jornadaInicio = 6 * 60
         val jornadaFin = 22 * 60
 
@@ -217,13 +271,11 @@ class MallaSemanalViewModel : ViewModel() {
 
         if (intervalos.isEmpty()) return false
 
-        // Ordenar intervalos por horario de inicio
         val ordenados = intervalos.sortedBy { it.first }
 
         var finAlcanzado = jornadaInicio
         for ((start, end) in ordenados) {
             if (start > finAlcanzado) {
-                // Hueco detectado entre finAlcanzado y el inicio del siguiente turno
                 return false
             }
             finAlcanzado = maxOf(finAlcanzado, end)

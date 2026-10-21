@@ -35,13 +35,15 @@ object FirestoreService {
         return try {
             val existentes = obtenerEmpleadosFirestore()
             if (existentes.isEmpty()) {
-                val adminInicial = MockDataProviders.inicialEmpleados().firstOrNull()
-                if (adminInicial != null) {
-                    guardarEmpleadoFirestore(adminInicial)
-                    true
-                } else {
-                    false
+                val iniciales = MockDataProviders.inicialEmpleados()
+                var algunGuardado = false
+                for (emp in iniciales) {
+                    val res = guardarEmpleadoFirestore(emp)
+                    if (res.isSuccess) {
+                        algunGuardado = true
+                    }
                 }
+                algunGuardado
             } else {
                 false
             }
