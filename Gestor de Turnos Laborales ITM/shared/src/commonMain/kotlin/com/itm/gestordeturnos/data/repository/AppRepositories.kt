@@ -83,6 +83,9 @@ object TurnoRepository {
     private val _turnosCatalogo = MutableStateFlow(MockDataProviders.inicialTurnosCatalogo())
     val turnosCatalogo: StateFlow<List<TurnoTemplate>> = _turnosCatalogo.asStateFlow()
 
+    private val _asignaciones = MutableStateFlow<List<AsignacionTurno>>(emptyList())
+    val asignaciones: StateFlow<List<AsignacionTurno>> = _asignaciones.asStateFlow()
+
     private val _horarioSemana = MutableStateFlow(MockDataProviders.inicialHorarioSemana())
     val horarioSemana: StateFlow<List<TurnoAsignado>> = _horarioSemana.asStateFlow()
 
@@ -120,14 +123,31 @@ object TurnoRepository {
                     }
                 }
 
+                // Cargar asignaciones guardadas de Firestore
+                val asignacionesRemotas = FirestoreService.obtenerAsignaciones()
+                if (asignacionesRemotas.isNotEmpty()) {
+                    _asignaciones.value = asignacionesRemotas
+                }
+
                 // 2. Escuchar en tiempo real los cambios en la colección "turnos"
-                FirestoreService.observarTurnos().collect { listaRemota ->
-                    if (listaRemota.isNotEmpty()) {
-                        _turnosCatalogo.value = listaRemota
+                launch {
+                    FirestoreService.observarTurnos().collect { listaRemota ->
+                        if (listaRemota.isNotEmpty()) {
+                            _turnosCatalogo.value = listaRemota
+                        }
+                    }
+                }
+
+                // Escuchar en tiempo real los cambios en "asignaciones"
+                launch {
+                    FirestoreService.observarAsignaciones().collect { listaAsignaciones ->
+                        if (listaAsignaciones.isNotEmpty()) {
+                            _asignaciones.value = listaAsignaciones
+                        }
                     }
                 }
             } catch (e: Exception) {
-                println("Error en sincronización de turnos con Firestore: ${e.message}")
+                println("Error en sincronización con Firestore: ${e.message}")
             }
         }
     }
@@ -139,10 +159,31 @@ object TurnoRepository {
                 if (remotos.isNotEmpty()) {
                     _turnosCatalogo.value = remotos
                 }
+                val asigs = FirestoreService.obtenerAsignaciones()
+                if (asigs.isNotEmpty()) {
+                    _asignaciones.value = asigs
+                }
             } catch (e: Exception) {
-                println("Error al refrescar turnos desde Firestore: ${e.message}")
+                println("Error al refrescar desde Firestore: ${e.message}")
             }
         }
+    }
+
+    suspend fun guardarAsignacion(asignacion: AsignacionTurno): Result<Unit> {
+        // Optimistic update
+        _asignaciones.update { lista ->
+            val filtrada = lista.filterNot { it.id == asignacion.id || (it.empleadoId == asignacion.empleadoId && it.fechaIso == asignacion.fechaIso) }
+            filtrada + asignacion
+        }
+        val res = FirestoreService.guardarAsignacion(asignacion)
+        if (res.isFailure) {
+            println("Error al guardar asignación en Firestore: ${res.exceptionOrNull()?.message}")
+        }
+        return res
+    }
+
+    suspend fun guardarAsignaciones(lista: List<AsignacionTurno>) {
+        lista.forEach { guardarAsignacion(it) }
     }
 
     suspend fun forzarSincronizacionCatalogo(): Result<Unit> {

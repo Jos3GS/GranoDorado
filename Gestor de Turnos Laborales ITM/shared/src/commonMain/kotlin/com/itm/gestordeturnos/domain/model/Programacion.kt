@@ -15,7 +15,13 @@ data class AsignacionTurno(
     val marcas: List<MarcaAsistencia> = emptyList(),
     val novedades: List<Novedad> = emptyList(),
     val incumplimiento: Incumplimiento? = null,
-    val esDescanso: Boolean = false
+    val esDescanso: Boolean = false,
+    val fechaIso: String = "",
+    val empleadoNombre: String = "",
+    val tipoTurno: String = "",
+    val horario: String = "",
+    val estado: String = "BORRADOR",
+    val modificadoTrasPublicar: Boolean = false
 ) {
     fun validarDisponibilidad(): Boolean {
         return !esDescanso && empleadoId.isNotBlank()

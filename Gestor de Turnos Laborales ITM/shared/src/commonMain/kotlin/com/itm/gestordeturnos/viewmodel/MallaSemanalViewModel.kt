@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.itm.gestordeturnos.data.mock.MockDataProviders
 import com.itm.gestordeturnos.data.repository.EmpleadoRepository
 import com.itm.gestordeturnos.data.repository.TurnoRepository
+import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.DiaColumnaMalla
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
@@ -66,6 +67,7 @@ class MallaSemanalViewModel : ViewModel() {
 
         observarEmpleadosBackend()
         observarTurnosCatalogo()
+        observarAsignacionesBackend()
     }
 
     private fun observarEmpleadosBackend() {
@@ -86,6 +88,68 @@ class MallaSemanalViewModel : ViewModel() {
         }
     }
 
+    private fun observarAsignacionesBackend() {
+        viewModelScope.launch {
+            TurnoRepository.asignaciones.collect {
+                sincronizarAsignacionesSemana()
+                actualizarFilasPorSucursal(_uiState.value.sucursal)
+            }
+        }
+    }
+
+    private fun sincronizarAsignacionesSemana() {
+        val lunes = _uiState.value.fechaInicioSemana
+        val fechasSemana = (0..6).map { lunes.plus(DatePeriod(days = it)).toString() }
+        val todasAsigs = TurnoRepository.asignaciones.value
+        val asigsSemana = todasAsigs.filter { it.fechaIso in fechasSemana }
+
+        if (asigsSemana.isNotEmpty()) {
+            turnosPorEmpleado.clear()
+            var algunaPublicada = false
+
+            for (asig in asigsSemana) {
+                val diaIdx = fechasSemana.indexOf(asig.fechaIso)
+                if (diaIdx in 0..6) {
+                    val celdas = turnosPorEmpleado.getOrPut(asig.empleadoId) {
+                        MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
+                    }
+                    if (asig.esDescanso) {
+                        celdas[diaIdx] = TurnoCelda(
+                            tipo = "Descanso",
+                            horario = "-",
+                            tipoCelda = TipoCeldaMalla.DESCANSO,
+                            esDescanso = true,
+                            modificadoTrasPublicar = asig.modificadoTrasPublicar
+                        )
+                    } else if (asig.tipoTurno.isNotBlank()) {
+                        celdas[diaIdx] = TurnoCelda(
+                            tipo = asig.tipoTurno,
+                            horario = asig.horario,
+                            tipoCelda = TipoCeldaMalla.TURNO,
+                            esDescanso = false,
+                            modificadoTrasPublicar = asig.modificadoTrasPublicar
+                        )
+                    }
+
+                    if (asig.estado.equals("PUBLICADA", ignoreCase = true)) {
+                        algunaPublicada = true
+                    }
+                }
+            }
+
+            _uiState.update {
+                it.copy(
+                    publicado = algunaPublicada,
+                    estadoMalla = if (algunaPublicada) "PUBLICADA - VISIBLE PARA LOS EMPLEADOS" else "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
+                )
+            }
+        } else if (lunes == LocalDate(2026, 9, 14) && turnosPorEmpleado.isEmpty()) {
+            MockDataProviders.inicialFilasMalla().forEach { fila ->
+                turnosPorEmpleado[fila.idEmpleado] = fila.turnos.toMutableList()
+            }
+        }
+    }
+
     fun onSucursalCambio(nuevaSucursal: String) {
         _uiState.update { it.copy(sucursal = nuevaSucursal) }
         actualizarFilasPorSucursal(nuevaSucursal)
@@ -98,6 +162,45 @@ class MallaSemanalViewModel : ViewModel() {
                 estadoMalla = "PUBLICADA - VISIBLE PARA LOS EMPLEADOS"
             )
         }
+
+        val fechaLunes = _uiState.value.fechaInicioSemana
+        val listaParaPublicar = mutableListOf<AsignacionTurno>()
+
+        turnosPorEmpleado.forEach { (empId, celdas) ->
+            val emp = todosLosEmpleados.find { it.id == empId }
+            val empNombre = emp?.let {
+                if (it.apellido.isNotBlank()) "${it.nombre} ${it.apellido}".trim() else it.nombre
+            } ?: empId
+
+            celdas.forEachIndexed { idx, celda ->
+                if (celda.tipoCelda == TipoCeldaMalla.TURNO || celda.tipoCelda == TipoCeldaMalla.DESCANSO) {
+                    val fechaDia = fechaLunes.plus(DatePeriod(days = idx)).toString()
+                    listaParaPublicar.add(
+                        AsignacionTurno(
+                            id = "${empId}_${fechaDia}",
+                            fechaIso = fechaDia,
+                            empleadoId = empId,
+                            empleadoNombre = empNombre,
+                            turnoId = "",
+                            tipoTurno = celda.tipo,
+                            horario = celda.horario,
+                            sucursalId = _uiState.value.sucursal,
+                            esDescanso = celda.esDescanso,
+                            estado = "PUBLICADA",
+                            modificadoTrasPublicar = false
+                        )
+                    )
+                }
+            }
+        }
+
+        if (listaParaPublicar.isNotEmpty()) {
+            viewModelScope.launch {
+                TurnoRepository.guardarAsignaciones(listaParaPublicar)
+            }
+        }
+
+        actualizarFilasPorSucursal(_uiState.value.sucursal)
     }
 
     fun seleccionarFechaSemana(fecha: LocalDate) {
@@ -186,6 +289,75 @@ class MallaSemanalViewModel : ViewModel() {
             )
         }
 
+        // Garantizar 2 días de descanso:
+        // Cuando se le programe un 5to día de trabajo, los días restantes sin asignar se asignan como descansos
+        val descansosAutoIndices = mutableListOf<Int>()
+        val turnosDeTrabajo = celdas.count { it.tipoCelda == TipoCeldaMalla.TURNO }
+        if (turnosDeTrabajo >= 5) {
+            for (i in 0..6) {
+                if (celdas[i].tipoCelda == TipoCeldaMalla.SIN_ASIGNAR) {
+                    celdas[i] = TurnoCelda(
+                        tipo = "Descanso",
+                        horario = "-",
+                        tipoCelda = TipoCeldaMalla.DESCANSO,
+                        esDescanso = true,
+                        modificadoTrasPublicar = _uiState.value.publicado
+                    )
+                    descansosAutoIndices.add(i)
+                }
+            }
+        }
+
+        // Persistir individualmente en Firestore cada día asignado (un registro por día)
+        val emp = todosLosEmpleados.find { it.id == idEmpleado }
+        val empNombre = emp?.let {
+            if (it.apellido.isNotBlank()) "${it.nombre} ${it.apellido}".trim() else it.nombre
+        } ?: idEmpleado
+        val fechaLunes = _uiState.value.fechaInicioSemana
+        val estadoActual = if (_uiState.value.publicado) "PUBLICADA" else "BORRADOR"
+
+        val fechaAsig = fechaLunes.plus(DatePeriod(days = diaIndex)).toString()
+        val asignacionesAGuardar = mutableListOf<AsignacionTurno>()
+
+        asignacionesAGuardar.add(
+            AsignacionTurno(
+                id = "${idEmpleado}_${fechaAsig}",
+                fechaIso = fechaAsig,
+                empleadoId = idEmpleado,
+                empleadoNombre = empNombre,
+                turnoId = turnoTemplate.id,
+                tipoTurno = turnoTemplate.nombre,
+                horario = horarioFormateado,
+                sucursalId = _uiState.value.sucursal,
+                esDescanso = false,
+                estado = estadoActual,
+                modificadoTrasPublicar = _uiState.value.publicado
+            )
+        )
+
+        for (autoIdx in descansosAutoIndices) {
+            val fechaDesc = fechaLunes.plus(DatePeriod(days = autoIdx)).toString()
+            asignacionesAGuardar.add(
+                AsignacionTurno(
+                    id = "${idEmpleado}_${fechaDesc}",
+                    fechaIso = fechaDesc,
+                    empleadoId = idEmpleado,
+                    empleadoNombre = empNombre,
+                    turnoId = "",
+                    tipoTurno = "Descanso",
+                    horario = "-",
+                    sucursalId = _uiState.value.sucursal,
+                    esDescanso = true,
+                    estado = estadoActual,
+                    modificadoTrasPublicar = _uiState.value.publicado
+                )
+            )
+        }
+
+        viewModelScope.launch {
+            TurnoRepository.guardarAsignaciones(asignacionesAGuardar)
+        }
+
         actualizarFilasPorSucursal(_uiState.value.sucursal)
     }
 
@@ -201,8 +373,35 @@ class MallaSemanalViewModel : ViewModel() {
                 tipo = "Descanso",
                 horario = "-",
                 tipoCelda = TipoCeldaMalla.DESCANSO,
-                esDescanso = true
+                esDescanso = true,
+                modificadoTrasPublicar = _uiState.value.publicado
             )
+        }
+
+        val emp = todosLosEmpleados.find { it.id == idEmpleado }
+        val empNombre = emp?.let {
+            if (it.apellido.isNotBlank()) "${it.nombre} ${it.apellido}".trim() else it.nombre
+        } ?: idEmpleado
+        val fechaLunes = _uiState.value.fechaInicioSemana
+        val estadoActual = if (_uiState.value.publicado) "PUBLICADA" else "BORRADOR"
+        val fechaDesc = fechaLunes.plus(DatePeriod(days = diaIndex)).toString()
+
+        val asignacionDescanso = AsignacionTurno(
+            id = "${idEmpleado}_${fechaDesc}",
+            fechaIso = fechaDesc,
+            empleadoId = idEmpleado,
+            empleadoNombre = empNombre,
+            turnoId = "",
+            tipoTurno = "Descanso",
+            horario = "-",
+            sucursalId = _uiState.value.sucursal,
+            esDescanso = true,
+            estado = estadoActual,
+            modificadoTrasPublicar = _uiState.value.publicado
+        )
+
+        viewModelScope.launch {
+            TurnoRepository.guardarAsignacion(asignacionDescanso)
         }
 
         actualizarFilasPorSucursal(_uiState.value.sucursal)
@@ -330,7 +529,6 @@ class MallaSemanalViewModel : ViewModel() {
 
     private fun actualizarSemana(lunes: LocalDate) {
         val domingo = lunes.plus(DatePeriod(days = 6))
-        val nuevosDias = recalcularDiasSemana(lunes, _uiState.value.filas)
 
         val rangoTexto = if (lunes.monthNumber == domingo.monthNumber) {
             "${lunes.dayOfMonth} – ${domingo.dayOfMonth} ${obtenerMesCorto(domingo.monthNumber)} ${domingo.year}"
@@ -341,10 +539,12 @@ class MallaSemanalViewModel : ViewModel() {
         _uiState.update {
             it.copy(
                 fechaInicioSemana = lunes,
-                rangoSemana = rangoTexto,
-                diasSemana = nuevosDias
+                rangoSemana = rangoTexto
             )
         }
+
+        sincronizarAsignacionesSemana()
+        actualizarFilasPorSucursal(_uiState.value.sucursal)
     }
 
     private fun obtenerMesCorto(mes: Int): String = when (mes) {
