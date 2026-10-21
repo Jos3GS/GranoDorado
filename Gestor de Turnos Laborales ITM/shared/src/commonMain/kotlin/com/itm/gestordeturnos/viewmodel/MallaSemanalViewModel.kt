@@ -161,6 +161,7 @@ class MallaSemanalViewModel : ViewModel() {
     /**
      * Guarda en Firestore todas las asignaciones individuales de la semana actual
      * en una sola operación batch, optimizando las peticiones web.
+     * Utiliza el repositoryScope global para que no se cancele al navegar fuera de la pantalla.
      */
     fun guardarCambiosSiHayPendientes(forzarPublicada: Boolean = false) {
         if (!hayCambiosPendientes && !forzarPublicada) return
@@ -168,6 +169,7 @@ class MallaSemanalViewModel : ViewModel() {
         val fechaLunes = _uiState.value.fechaInicioSemana
         val sucursalActual = _uiState.value.sucursal
         val estadoActual = if (forzarPublicada || _uiState.value.publicado) "PUBLICADA" else "BORRADOR"
+        val programacionId = "${fechaLunes}_${sucursalActual}"
 
         val asignacionesAGuardar = mutableListOf<AsignacionTurno>()
 
@@ -191,9 +193,10 @@ class MallaSemanalViewModel : ViewModel() {
                             tipoTurno = celda.tipo,
                             horario = celda.horario,
                             sucursalId = sucursalActual,
+                            programacionId = programacionId,
                             esDescanso = celda.esDescanso,
                             estado = estadoActual,
-                            modificadoTrasPublicar = _uiState.value.publicado
+                            modificadoTrasPublicar = celda.modificadoTrasPublicar
                         )
                     )
                 }
@@ -203,9 +206,7 @@ class MallaSemanalViewModel : ViewModel() {
         hayCambiosPendientes = false
 
         if (asignacionesAGuardar.isNotEmpty()) {
-            viewModelScope.launch {
-                TurnoRepository.guardarAsignaciones(asignacionesAGuardar)
-            }
+            TurnoRepository.guardarAsignacionesEnBackground(asignacionesAGuardar)
         }
     }
 

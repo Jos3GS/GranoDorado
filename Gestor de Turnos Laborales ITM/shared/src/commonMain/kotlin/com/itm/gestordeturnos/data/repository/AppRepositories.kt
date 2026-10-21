@@ -197,6 +197,13 @@ object TurnoRepository {
         return res
     }
 
+    fun guardarAsignacionesEnBackground(lista: List<AsignacionTurno>) {
+        if (lista.isEmpty()) return
+        repositoryScope.launch {
+            guardarAsignaciones(lista)
+        }
+    }
+
     suspend fun forzarSincronizacionCatalogo(): Result<Unit> {
         return try {
             val remotos = FirestoreService.obtenerTurnos()
