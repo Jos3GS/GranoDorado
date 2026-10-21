@@ -1,4 +1,4 @@
-﻿package com.itm.gestordeturnos.components
+package com.itm.gestordeturnos.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.draw.drawBehind
@@ -415,13 +415,158 @@ fun MallaHeaderRow(
 }
 
 // Sobrecarga de compatibilidad para listas de String
+
+@Composable
+fun MallaHeaderRow(
+    dias: List<DiaColumnaMalla>,
+    colEmpleadoWidth: Dp = 180.dp,
+    colDiaWidth: Dp = 120.dp,
+    colTotalWidth: Dp = 100.dp,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .background(Color.White)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Columna 1: EMPLEADO (Alineado a la izquierda, texto gris)
+        Box(
+            modifier = Modifier
+                .width(colEmpleadoWidth)
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Text(
+                text = "EMPLEADO",
+                color = Color(0xFF6B7280),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+        }
+
+        // Divisor vertical
+        Box(
+            modifier = Modifier
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(Color(0xFFE5E7EB))
+        )
+
+        // Columnas 2-8 (Días de la semana)
+        dias.forEachIndexed { index, dia ->
+            Box(
+                modifier = Modifier
+                    .width(colDiaWidth)
+                    .padding(horizontal = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    // Día abreviado (ej. LUN)
+                    Text(
+                        text = dia.diaSemana.uppercase(),
+                        color = Color(0xFF6B7280),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    // Número del día (ej. 14 en negrita oscura)
+                    Text(
+                        text = dia.numeroDia,
+                        color = CafeDarkBrown,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    // Indicador de cobertura
+                    if (dia.cubierto) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(Color(0xFF16A34A), shape = CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "CUBIERTO",
+                                color = Color(0xFF6B7280),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Canvas(modifier = Modifier.size(7.dp)) {
+                                val path = Path().apply {
+                                    moveTo(size.width / 2f, 0f)
+                                    lineTo(size.width, size.height)
+                                    lineTo(0f, size.height)
+                                    close()
+                                }
+                                drawPath(path, color = Color(0xFFDC2626))
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "SIN CUBRIR",
+                                color = Color(0xFFDC2626),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Divisor vertical entre días
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .fillMaxHeight()
+                    .background(Color(0xFFE5E7EB))
+            )
+        }
+
+        // Columna 9: TOTAL (Alineado al centro, texto gris)
+        Box(
+            modifier = Modifier
+                .width(colTotalWidth)
+                .padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "TOTAL",
+                color = Color(0xFF6B7280),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+// Sobrecarga de compatibilidad para listas de String
 @Composable
 fun MallaHeaderRow(
     diasNombres: List<String>,
     modifier: Modifier = Modifier
 ) {
     val dias = diasNombres.mapIndexed { idx, d ->
-        DiaColumnaMalla(diaSemana = d, numeroDia = "", cubierto = d != "SÃB" && d != "SAB")
+        DiaColumnaMalla(diaSemana = d, numeroDia = "${14 + idx}", cubierto = d != "SÁB" && d != "SAB")
     }
     MallaHeaderRow(dias = dias, modifier = modifier)
 }
@@ -429,60 +574,90 @@ fun MallaHeaderRow(
 @Composable
 fun MallaEmployeeRow(
     fila: FilaMalla,
+    colEmpleadoWidth: Dp = 180.dp,
+    colDiaWidth: Dp = 120.dp,
+    colTotalWidth: Dp = 100.dp,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .height(IntrinsicSize.Min)
             .background(Color.White)
-            .padding(vertical = 8.dp, horizontal = 16.dp),
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Columna 1: Empleado (Nombre en negrita oscura y rol en mayÃºsculas y gris)
-        Column(
-            modifier = Modifier.width(170.dp),
-            verticalArrangement = Arrangement.Center
+        // Columna 1: Empleado (Nombre en negrita oscura y rol en mayúsculas y gris)
+        Box(
+            modifier = Modifier
+                .width(colEmpleadoWidth)
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart
         ) {
-            Text(
-                text = fila.nombre,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = CafeDarkBrown,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = fila.cargo.uppercase(),
-                fontSize = 10.sp,
-                color = Color(0xFF6B7280),
-                letterSpacing = 0.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Column(verticalArrangement = Arrangement.Center) {
+                Text(
+                    text = fila.nombre,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CafeDarkBrown,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = fila.cargo.uppercase(),
+                    fontSize = 10.sp,
+                    color = Color(0xFF6B7280),
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
+        // Divisor vertical
+        Box(
+            modifier = Modifier
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(Color(0xFFE5E7EB))
+        )
+
         // Columnas 2-8: Celdas de turnos diarios
-        fila.turnos.forEach { turno ->
+        fila.turnos.forEachIndexed { index, turno ->
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 4.dp),
+                    .width(colDiaWidth)
+                    .padding(horizontal = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
                 MallaCeldaTurno(turno = turno)
             }
+
+            // Divisor vertical entre días
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .fillMaxHeight()
+                    .background(Color(0xFFE5E7EB))
+            )
         }
 
         // Columna 9: Totales (Suma de horas en color ocre/naranja)
-        Text(
-            text = fila.totalHoras,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFFD97706),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(90.dp)
-        )
+        Box(
+            modifier = Modifier
+                .width(colTotalWidth)
+                .padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = fila.totalHoras,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFD97706),
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -526,7 +701,7 @@ fun MallaCeldaTurno(
                     )
                 }
 
-                // PequeÃ±o punto naranja en la esquina superior derecha: Modificado tras publicar
+                // Pequeño punto naranja en la esquina superior derecha: Modificado tras publicar
                 if (turno.modificadoTrasPublicar) {
                     Box(
                         modifier = Modifier
@@ -626,7 +801,7 @@ fun MallaLeyenda(modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // Cuadrado marrÃ³n oscuro: Turno asignado
+        // Cuadrado marrón oscuro: Turno asignado
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
@@ -715,7 +890,7 @@ fun MallaEstadoSucursalBadge(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            "SUCURSAL ",
+            "SUCURSAL $sucursal",
             color = CafeTextSecondary,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
@@ -740,6 +915,7 @@ fun MallaEstadoSucursalBadge(
         }
     }
 }
+
 
 @Composable
 fun BuscadorEmpleados(
