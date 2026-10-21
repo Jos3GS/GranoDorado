@@ -571,12 +571,14 @@ fun MallaHeaderRow(
     MallaHeaderRow(dias = dias, modifier = modifier)
 }
 
+
 @Composable
 fun MallaEmployeeRow(
     fila: FilaMalla,
     colEmpleadoWidth: Dp = 180.dp,
     colDiaWidth: Dp = 120.dp,
     colTotalWidth: Dp = 100.dp,
+    onCeldaClick: ((fila: FilaMalla, diaIndex: Int, turno: TurnoCelda) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -631,7 +633,12 @@ fun MallaEmployeeRow(
                     .padding(horizontal = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
-                MallaCeldaTurno(turno = turno)
+                MallaCeldaTurno(
+                    turno = turno,
+                    onClick = if (turno.tipoCelda != TipoCeldaMalla.VACACIONES) {
+                        { onCeldaClick?.invoke(fila, index, turno) }
+                    } else null
+                )
             }
 
             // Divisor vertical entre días
@@ -664,9 +671,11 @@ fun MallaEmployeeRow(
 @Composable
 fun MallaCeldaTurno(
     turno: TurnoCelda,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val cellShape = RoundedCornerShape(6.dp)
+    val esClickeable = turno.tipoCelda != TipoCeldaMalla.VACACIONES && onClick != null
 
     when (turno.tipoCelda) {
         TipoCeldaMalla.TURNO -> {
@@ -675,6 +684,7 @@ fun MallaCeldaTurno(
                     .fillMaxWidth()
                     .height(52.dp)
                     .background(CafeDarkBrown, shape = cellShape)
+                    .then(if (esClickeable) Modifier.clickable { onClick?.invoke() } else Modifier)
                     .padding(horizontal = 6.dp, vertical = 6.dp)
             ) {
                 Column(
@@ -719,7 +729,8 @@ fun MallaCeldaTurno(
                 modifier = modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .background(Color(0xFFF3F4F6), shape = cellShape),
+                    .background(Color(0xFFF3F4F6), shape = cellShape)
+                    .then(if (esClickeable) Modifier.clickable { onClick?.invoke() } else Modifier),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -732,6 +743,7 @@ fun MallaCeldaTurno(
         }
 
         TipoCeldaMalla.VACACIONES -> {
+            // Vacaciones NO es clickeable
             Box(
                 modifier = modifier
                     .fillMaxWidth()
@@ -753,7 +765,8 @@ fun MallaCeldaTurno(
                 modifier = modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .background(Color(0xFFFDE8E8), shape = cellShape),
+                    .background(Color(0xFFFDE8E8), shape = cellShape)
+                    .then(if (esClickeable) Modifier.clickable { onClick?.invoke() } else Modifier),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -780,7 +793,8 @@ fun MallaCeldaTurno(
                             style = stroke,
                             cornerRadius = CornerRadius(6.dp.toPx())
                         )
-                    },
+                    }
+                    .then(if (esClickeable) Modifier.clickable { onClick?.invoke() } else Modifier),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -793,6 +807,7 @@ fun MallaCeldaTurno(
         }
     }
 }
+
 
 @Composable
 fun MallaLeyenda(modifier: Modifier = Modifier) {
