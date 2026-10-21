@@ -59,11 +59,6 @@ class MallaSemanalViewModel : ViewModel() {
     private var todosLosEmpleados: List<Empleado> = emptyList()
 
     init {
-        // Cargar en memoria inicial asignaciones previas si existen
-        MockDataProviders.inicialFilasMalla().forEach { fila ->
-            turnosPorEmpleado[fila.idEmpleado] = fila.turnos.toMutableList()
-        }
-
         // Conectar y sincronizar con Firestore
         EmpleadoRepository.iniciarSincronizacionFirestore()
         TurnoRepository.iniciarSincronizacionFirestore()
@@ -107,12 +102,17 @@ class MallaSemanalViewModel : ViewModel() {
         }
 
         val lunes = _uiState.value.fechaInicioSemana
+        val sucursalActual = _uiState.value.sucursal
         val fechasSemana = (0..6).map { lunes.plus(DatePeriod(days = it)).toString() }
         val todasAsigs = TurnoRepository.asignaciones.value
-        val asigsSemana = todasAsigs.filter { it.fechaIso in fechasSemana }
+        val asigsSemana = todasAsigs.filter {
+            it.fechaIso in fechasSemana && (it.sucursalId.isBlank() || perteneceASucursalNombre(it.sucursalId, sucursalActual))
+        }
+
+        // Siempre limpiamos la memoria de celdas para la semana seleccionada
+        turnosPorEmpleado.clear()
 
         if (asigsSemana.isNotEmpty()) {
-            turnosPorEmpleado.clear()
             var algunaPublicada = false
 
             for (asig in asigsSemana) {
@@ -151,9 +151,24 @@ class MallaSemanalViewModel : ViewModel() {
                     estadoMalla = if (algunaPublicada) "PUBLICADA - VISIBLE PARA LOS EMPLEADOS" else "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
                 )
             }
-        } else if (lunes == LocalDate(2026, 9, 14) && turnosPorEmpleado.isEmpty()) {
+        } else if (lunes == LocalDate(2026, 9, 14) && todasAsigs.isEmpty()) {
+            // Solo para la semana inicial de demostración si la base de datos está totalmente vacía
             MockDataProviders.inicialFilasMalla().forEach { fila ->
-                turnosPorEmpleado[fila.idEmpleado] = fila.turnos.toMutableList()
+                turnosPorEmpleado[fila.idEmpleado] = fila.turnos.map { it.copy(modificadoTrasPublicar = false) }.toMutableList()
+            }
+            _uiState.update {
+                it.copy(
+                    publicado = false,
+                    estadoMalla = "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
+                )
+            }
+        } else {
+            // Semana limpia sin asignaciones previas: inicia en estado BORRADOR
+            _uiState.update {
+                it.copy(
+                    publicado = false,
+                    estadoMalla = "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
+                )
             }
         }
     }
@@ -214,10 +229,20 @@ class MallaSemanalViewModel : ViewModel() {
         if (nuevaSucursal == _uiState.value.sucursal) return
         guardarCambiosSiHayPendientes()
         _uiState.update { it.copy(sucursal = nuevaSucursal) }
+        sincronizarAsignacionesSemana()
         actualizarFilasPorSucursal(nuevaSucursal)
     }
 
     fun publicarSemana() {
+        // Al publicar la semana oficial inicial, se limpia el indicador de modificado en los turnos de la semana
+        turnosPorEmpleado.values.forEach { listaCeldas ->
+            listaCeldas.forEachIndexed { i, celda ->
+                if (celda.modificadoTrasPublicar) {
+                    listaCeldas[i] = celda.copy(modificadoTrasPublicar = false)
+                }
+            }
+        }
+
         _uiState.update {
             it.copy(
                 publicado = true,
@@ -291,6 +316,12 @@ class MallaSemanalViewModel : ViewModel() {
         return empSucursal.equals(sucLimpia, ignoreCase = true) ||
                empSucursalId.equals(sucLimpia, ignoreCase = true) ||
                empSucursal.replace(" ", "").equals(sucLimpia.replace(" ", ""), ignoreCase = true)
+    }
+
+    private fun perteneceASucursalNombre(sucursalOrigen: String, sucursalDestino: String): Boolean {
+        val s1 = sucursalOrigen.trim().replace(" ", "")
+        val s2 = sucursalDestino.trim().replace(" ", "")
+        return s1.equals(s2, ignoreCase = true)
     }
 
     fun asignarTurnoAEmpleado(

@@ -246,7 +246,7 @@ object MockDataProviders {
                     TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
                     TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
                     TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true),
-                    TurnoCelda(tipo = "Cierre", horario = "14:00- 22:00", tipoCelda = TipoCeldaMalla.TURNO, modificadoTrasPublicar = true),
+                    TurnoCelda(tipo = "Cierre", horario = "14:00- 22:00", tipoCelda = TipoCeldaMalla.TURNO, modificadoTrasPublicar = false),
                     TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
                     TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
                     TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true)
