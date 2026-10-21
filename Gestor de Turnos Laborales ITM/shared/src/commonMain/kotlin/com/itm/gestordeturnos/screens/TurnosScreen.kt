@@ -289,7 +289,7 @@ fun TablaTurnos(
                 CabeceraTabla("DESCANSOS", modifier = Modifier.weight(1f))
                 CabeceraTabla("EFECTIVA", modifier = Modifier.weight(1f))
                 CabeceraTabla("ESTADO", modifier = Modifier.weight(1.1f))
-                CabeceraTabla("ASIGNACIONES", modifier = Modifier.weight(1.2f))
+                CabeceraTabla("EMPLEADOS", modifier = Modifier.weight(1.2f))
                 CabeceraTabla("ACCIONES", modifier = Modifier.weight(1.1f))
             }
             HorizontalDivider(color = CafeBorderColor)
@@ -369,7 +369,7 @@ fun FilaTurno(
         }
 
         Text(
-            "${turno.asignaciones} asignaciones",
+            "${turno.asignaciones} ${if (turno.asignaciones == 1) "empleado" else "empleados"}",
             modifier = Modifier.weight(1.2f),
             color = CafeTextPrimary,
             fontSize = 12.sp,
