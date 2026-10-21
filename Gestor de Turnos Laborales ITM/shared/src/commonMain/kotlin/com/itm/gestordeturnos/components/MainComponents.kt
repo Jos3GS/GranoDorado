@@ -1,4 +1,13 @@
-package com.itm.gestordeturnos.components
+﻿package com.itm.gestordeturnos.components
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.itm.gestordeturnos.domain.model.DiaColumnaMalla
+import com.itm.gestordeturnos.domain.model.TipoCeldaMalla
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
@@ -299,113 +308,397 @@ fun TurnoCard(turno: TurnoAsignado) {
 }
 
 @Composable
-fun MallaHeaderRow(dias: List<String>) {
+fun MallaHeaderRow(
+    dias: List<DiaColumnaMalla>,
+    modifier: Modifier = Modifier
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(CafeDarkBrown)
-            .padding(vertical = 12.dp, horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "EMPLEADO",
-            color = CafeAccentYellow,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(150.dp)
-        )
-
-        dias.forEach { dia ->
-            Text(
-                text = dia.uppercase(),
-                color = Color.White,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Text(
-            text = "TOTAL",
-            color = CafeAccentYellow,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.End,
-            modifier = Modifier.width(60.dp)
-        )
-    }
-}
-
-@Composable
-fun MallaEmployeeRow(fila: FilaMalla) {
-    Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(Color.White)
-            .border(width = 1.dp, color = CafeBorderColor)
             .padding(vertical = 12.dp, horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.width(150.dp)) {
-            Text(
-                text = fila.nombre,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = CafeTextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = fila.cargo,
-                fontSize = 10.sp,
-                color = CafeTextSecondary,
-                letterSpacing = 1.sp
-            )
-        }
+        // Columna 1: EMPLEADO (Alineado a la izquierda, texto gris)
+        Text(
+            text = "EMPLEADO",
+            color = Color(0xFF6B7280),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
+            modifier = Modifier.width(170.dp)
+        )
 
-        fila.turnos.forEach { turno ->
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.Center
+        // Columnas 2-8 (DÃ­as de la semana)
+        dias.forEach { dia ->
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                MallaCeldaTurno(turno)
+                // DÃ­a abreviado (ej. LUN)
+                Text(
+                    text = dia.diaSemana.uppercase(),
+                    color = Color(0xFF6B7280),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                // NÃºmero del dÃ­a (ej. 14 en negrita oscura)
+                Text(
+                    text = dia.numeroDia,
+                    color = CafeDarkBrown,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                // Indicador de cobertura
+                if (dia.cubierto) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(Color(0xFF16A34A), shape = CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "CUBIERTO",
+                            color = Color(0xFF6B7280),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Canvas(modifier = Modifier.size(7.dp)) {
+                            val path = Path().apply {
+                                moveTo(size.width / 2f, 0f)
+                                lineTo(size.width, size.height)
+                                lineTo(0f, size.height)
+                                close()
+                            }
+                            drawPath(path, color = Color(0xFFDC2626))
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "SIN CUBRIR",
+                            color = Color(0xFFDC2626),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
             }
         }
 
+        // Columna 9: TOTAL (Alineado al centro, texto gris)
+        Text(
+            text = "TOTAL",
+            color = Color(0xFF6B7280),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(90.dp)
+        )
+    }
+}
+
+// Sobrecarga de compatibilidad para listas de String
+@Composable
+fun MallaHeaderRow(
+    diasNombres: List<String>,
+    modifier: Modifier = Modifier
+) {
+    val dias = diasNombres.mapIndexed { idx, d ->
+        DiaColumnaMalla(diaSemana = d, numeroDia = "", cubierto = d != "SÃB" && d != "SAB")
+    }
+    MallaHeaderRow(dias = dias, modifier = modifier)
+}
+
+@Composable
+fun MallaEmployeeRow(
+    fila: FilaMalla,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(vertical = 8.dp, horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Columna 1: Empleado (Nombre en negrita oscura y rol en mayÃºsculas y gris)
+        Column(
+            modifier = Modifier.width(170.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = fila.nombre,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = CafeDarkBrown,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = fila.cargo.uppercase(),
+                fontSize = 10.sp,
+                color = Color(0xFF6B7280),
+                letterSpacing = 0.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        // Columnas 2-8: Celdas de turnos diarios
+        fila.turnos.forEach { turno ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                MallaCeldaTurno(turno = turno)
+            }
+        }
+
+        // Columna 9: Totales (Suma de horas en color ocre/naranja)
         Text(
             text = fila.totalHoras,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            color = CafeDarkBrown,
-            textAlign = TextAlign.End,
-            modifier = Modifier.width(60.dp)
+            color = Color(0xFFD97706),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(90.dp)
         )
     }
 }
 
 @Composable
-fun MallaCeldaTurno(turno: TurnoCelda) {
-    if (turno.esDescanso) {
-        Box(
-            modifier = Modifier
-                .background(Color(0xFFF0F0F0))
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-        ) {
-            Text("DESC", fontSize = 10.sp, color = CafeTextSecondary)
+fun MallaCeldaTurno(
+    turno: TurnoCelda,
+    modifier: Modifier = Modifier
+) {
+    val cellShape = RoundedCornerShape(6.dp)
+
+    when (turno.tipoCelda) {
+        TipoCeldaMalla.TURNO -> {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .background(CafeDarkBrown, shape = cellShape)
+                    .padding(horizontal = 6.dp, vertical = 6.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = turno.tipo,
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = turno.horario,
+                        color = Color(0xFFE5E7EB),
+                        fontSize = 10.sp,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                }
+
+                // PequeÃ±o punto naranja en la esquina superior derecha: Modificado tras publicar
+                if (turno.modificadoTrasPublicar) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(2.dp)
+                            .size(6.dp)
+                            .background(Color(0xFFF97316), shape = CircleShape)
+                    )
+                }
+            }
         }
-    } else {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = turno.tipo,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = CafeTextPrimary
+
+        TipoCeldaMalla.DESCANSO -> {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .background(Color(0xFFF3F4F6), shape = cellShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Descanso",
+                    color = Color(0xFF4B5563),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        TipoCeldaMalla.VACACIONES -> {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .background(Color(0xFFE0EDFB), shape = cellShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Vacaciones",
+                    color = Color(0xFF1E40AF),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        TipoCeldaMalla.INCAPACIDAD -> {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .background(Color(0xFFFDE8E8), shape = cellShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Incapacidad",
+                    color = Color(0xFF991B1B),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        TipoCeldaMalla.SIN_ASIGNAR -> {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .drawBehind {
+                        val stroke = Stroke(
+                            width = 1.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                        )
+                        drawRoundRect(
+                            color = Color(0xFFD1D5DB),
+                            style = stroke,
+                            cornerRadius = CornerRadius(6.dp.toPx())
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "+ Asignar",
+                    color = Color(0xFF9CA3AF),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MallaLeyenda(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        // Cuadrado marrÃ³n oscuro: Turno asignado
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(CafeDarkBrown, RoundedCornerShape(2.dp))
             )
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = turno.horario,
-                fontSize = 10.sp,
-                color = CafeTextSecondary
+                text = "Turno asignado",
+                fontSize = 11.sp,
+                color = Color(0xFF4B5563)
+            )
+        }
+
+        // Cuadrado gris claro: Descanso
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(Color(0xFFF3F4F6), RoundedCornerShape(2.dp))
+                    .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(2.dp))
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Descanso",
+                fontSize = 11.sp,
+                color = Color(0xFF4B5563)
+            )
+        }
+
+        // Cuadrado azul pastel: Vacaciones
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(Color(0xFFE0EDFB), RoundedCornerShape(2.dp))
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Vacaciones",
+                fontSize = 11.sp,
+                color = Color(0xFF4B5563)
+            )
+        }
+
+        // Cuadrado rosa pastel: Incapacidad
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(Color(0xFFFDE8E8), RoundedCornerShape(2.dp))
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Incapacidad",
+                fontSize = 11.sp,
+                color = Color(0xFF4B5563)
+            )
+        }
+
+        // Punto naranja: Modificado tras publicar
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(Color(0xFFF97316), shape = CircleShape)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Modificado tras publicar",
+                fontSize = 11.sp,
+                color = Color(0xFF4B5563)
             )
         }
     }
@@ -422,27 +715,27 @@ fun MallaEstadoSucursalBadge(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            "SUCURSAL $sucursal",
+            "SUCURSAL ",
             color = CafeTextSecondary,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.width(16.dp))
 
-        val colorFondo = if (estadoMalla == "BORRADOR") CafeAccentYellow else CafeDarkBrown
-        val colorText = if (estadoMalla == "BORRADOR") CafeDarkBrown else Color.White
+        val colorFondo = if (estadoMalla.contains("BORRADOR", ignoreCase = true)) Color(0xFFFEF3C7) else CafeDarkBrown
+        val colorText = if (estadoMalla.contains("BORRADOR", ignoreCase = true)) Color(0xFFB45309) else Color.White
 
         Box(
             modifier = Modifier
-                .background(colorFondo)
+                .background(colorFondo, RoundedCornerShape(4.dp))
                 .padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
             Text(
                 text = estadoMalla,
                 color = colorText,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
+                letterSpacing = 0.5.sp
             )
         }
     }

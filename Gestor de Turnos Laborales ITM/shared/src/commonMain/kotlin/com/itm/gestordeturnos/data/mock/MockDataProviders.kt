@@ -83,18 +83,96 @@ object MockDataProviders {
     )
 
     fun inicialFilasMalla(): List<FilaMalla> {
-        val apertura = TurnoCelda("Apertura", "06 - 14")
-        val medio = TurnoCelda("Medio", "10 - 18")
-        val cierre = TurnoCelda("Cierre", "14 - 22")
-        val descanso = TurnoCelda("Descanso", "-", esDescanso = true)
-
         return listOf(
             FilaMalla(
-                idEmpleado = "admin_1",
-                nombre = "Administrador General",
-                cargo = "ADMINISTRADOR GENERAL",
-                turnos = listOf(apertura, apertura, descanso, cierre, apertura, medio, descanso),
-                totalHoras = "37.5 h"
+                idEmpleado = "emp_1",
+                nombre = "Ana Pérez",
+                cargo = "BARISTA",
+                turnos = listOf(
+                    TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true),
+                    TurnoCelda(tipo = "Cierre", horario = "14:00- 22:00", tipoCelda = TipoCeldaMalla.TURNO, modificadoTrasPublicar = true),
+                    TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true)
+                ),
+                totalHoras = "37 h 30 min"
+            ),
+            FilaMalla(
+                idEmpleado = "emp_2",
+                nombre = "Carlos Ruiz",
+                cargo = "COCINERO",
+                turnos = listOf(
+                    TurnoCelda(tipo = "Intermedio", horario = "10:00- 18:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Intermedio", horario = "10:00- 18:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Intermedio", horario = "10:00- 18:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true),
+                    TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true),
+                    TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR),
+                    TurnoCelda(tipo = "Cierre", horario = "14:00- 22:00", tipoCelda = TipoCeldaMalla.TURNO)
+                ),
+                totalHoras = "30 h 00 min"
+            ),
+            FilaMalla(
+                idEmpleado = "emp_3",
+                nombre = "Marta León",
+                cargo = "BARISTA",
+                turnos = listOf(
+                    TurnoCelda(tipo = "Vacaciones", horario = "-", tipoCelda = TipoCeldaMalla.VACACIONES),
+                    TurnoCelda(tipo = "Vacaciones", horario = "-", tipoCelda = TipoCeldaMalla.VACACIONES),
+                    TurnoCelda(tipo = "Vacaciones", horario = "-", tipoCelda = TipoCeldaMalla.VACACIONES),
+                    TurnoCelda(tipo = "Vacaciones", horario = "-", tipoCelda = TipoCeldaMalla.VACACIONES),
+                    TurnoCelda(tipo = "Vacaciones", horario = "-", tipoCelda = TipoCeldaMalla.VACACIONES),
+                    TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true),
+                    TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true)
+                ),
+                totalHoras = "0 h"
+            ),
+            FilaMalla(
+                idEmpleado = "emp_4",
+                nombre = "Julián Vera",
+                cargo = "CAJERO",
+                turnos = listOf(
+                    TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Cierre", horario = "14:00- 22:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Cierre", horario = "14:00- 22:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Incapacidad", horario = "-", tipoCelda = TipoCeldaMalla.INCAPACIDAD),
+                    TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR),
+                    TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true)
+                ),
+                totalHoras = "30 h 00 min"
+            ),
+            FilaMalla(
+                idEmpleado = "emp_5",
+                nombre = "Diego Salas",
+                cargo = "COCINERO",
+                turnos = listOf(
+                    TurnoCelda(tipo = "Cierre", horario = "14:00- 22:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Cierre", horario = "14:00- 22:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true),
+                    TurnoCelda(tipo = "Intermedio", horario = "10:00- 18:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR),
+                    TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO)
+                ),
+                totalHoras = "37 h 30 min"
+            ),
+            FilaMalla(
+                idEmpleado = "emp_6",
+                nombre = "Sofía Ramos",
+                cargo = "BARISTA",
+                turnos = listOf(
+                    TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true),
+                    TurnoCelda(tipo = "Intermedio", horario = "10:00- 18:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "Cierre", horario = "14:00- 22:00", tipoCelda = TipoCeldaMalla.TURNO),
+                    TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR),
+                    TurnoCelda(tipo = "Cierre", horario = "14:00- 22:00", tipoCelda = TipoCeldaMalla.TURNO)
+                ),
+                totalHoras = "37 h 30 min"
             )
         )
     }
