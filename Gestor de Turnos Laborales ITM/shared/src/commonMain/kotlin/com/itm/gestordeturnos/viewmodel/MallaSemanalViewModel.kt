@@ -52,7 +52,10 @@ class MallaSemanalViewModel : ViewModel() {
     private fun observarFilasMalla() {
         viewModelScope.launch {
             TurnoRepository.filasMalla.collect { filas ->
-                _uiState.update { it.copy(filas = filas) }
+                _uiState.update { state ->
+                    val nuevosDias = recalcularDiasSemana(state.fechaInicioSemana, filas)
+                    state.copy(filas = filas, diasSemana = nuevosDias)
+                }
             }
         }
     }
@@ -119,7 +122,8 @@ class MallaSemanalViewModel : ViewModel() {
                     fila
                 }
             }
-            state.copy(filas = nuevasFilas)
+            val nuevosDias = recalcularDiasSemana(state.fechaInicioSemana, nuevasFilas)
+            state.copy(filas = nuevasFilas, diasSemana = nuevosDias)
         }
     }
 
@@ -144,8 +148,102 @@ class MallaSemanalViewModel : ViewModel() {
                     fila
                 }
             }
-            state.copy(filas = nuevasFilas)
+            val nuevosDias = recalcularDiasSemana(state.fechaInicioSemana, nuevasFilas)
+            state.copy(filas = nuevasFilas, diasSemana = nuevosDias)
         }
+    }
+
+    private fun recalcularDiasSemana(
+        lunes: LocalDate,
+        filas: List<FilaMalla>
+    ): List<DiaColumnaMalla> {
+        val nombresDias = listOf("LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM")
+        return (0..6).map { i ->
+            val diaFecha = lunes.plus(DatePeriod(days = i))
+            val estaCubierto = verificarDiaCubierto(diaIndex = i, filas = filas)
+            DiaColumnaMalla(
+                diaSemana = nombresDias[i],
+                numeroDia = "${diaFecha.dayOfMonth}",
+                cubierto = estaCubierto
+            )
+        }
+    }
+
+    private fun verificarDiaCubierto(diaIndex: Int, filas: List<FilaMalla>): Boolean {
+        // La jornada completa a cubrir es de 06:00 (360 min) a 22:00 (1320 min)
+        val jornadaInicio = 6 * 60
+        val jornadaFin = 22 * 60
+
+        val intervalos = mutableListOf<Pair<Int, Int>>()
+
+        for (fila in filas) {
+            if (diaIndex in fila.turnos.indices) {
+                val turno = fila.turnos[diaIndex]
+                if (turno.tipoCelda == TipoCeldaMalla.TURNO) {
+                    var ini: Int? = null
+                    var fin: Int? = null
+
+                    val partes = turno.horario.split("-")
+                    if (partes.size == 2) {
+                        ini = parsearMinutos(partes[0])
+                        fin = parsearMinutos(partes[1])
+                    }
+
+                    if (ini == null || fin == null) {
+                        when (turno.tipo.lowercase().trim()) {
+                            "apertura" -> { ini = 6 * 60; fin = 14 * 60 }
+                            "intermedio" -> { ini = 10 * 60; fin = 18 * 60 }
+                            "cierre" -> { ini = 14 * 60; fin = 22 * 60 }
+                        }
+                    }
+
+                    if (ini != null && fin != null) {
+                        if (fin > ini) {
+                            val s = maxOf(jornadaInicio, ini)
+                            val e = minOf(jornadaFin, fin)
+                            if (e > s) intervalos.add(s to e)
+                        } else {
+                            val s1 = maxOf(jornadaInicio, ini)
+                            val e1 = minOf(jornadaFin, 1440)
+                            if (e1 > s1) intervalos.add(s1 to e1)
+                            val s2 = maxOf(jornadaInicio, 0)
+                            val e2 = minOf(jornadaFin, fin)
+                            if (e2 > s2) intervalos.add(s2 to e2)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (intervalos.isEmpty()) return false
+
+        // Ordenar intervalos por horario de inicio
+        val ordenados = intervalos.sortedBy { it.first }
+
+        var finAlcanzado = jornadaInicio
+        for ((start, end) in ordenados) {
+            if (start > finAlcanzado) {
+                // Hueco detectado entre finAlcanzado y el inicio del siguiente turno
+                return false
+            }
+            finAlcanzado = maxOf(finAlcanzado, end)
+            if (finAlcanzado >= jornadaFin) {
+                return true
+            }
+        }
+
+        return finAlcanzado >= jornadaFin
+    }
+
+    private fun parsearMinutos(horaStr: String): Int? {
+        val limpia = horaStr.trim()
+        val partes = limpia.split(":")
+        if (partes.size == 2) {
+            val h = partes[0].toIntOrNull() ?: return null
+            val m = partes[1].toIntOrNull() ?: return null
+            return h * 60 + m
+        }
+        return null
     }
 
     private fun calcularTotalHoras(turnos: List<TurnoCelda>): String {
@@ -154,18 +252,14 @@ class MallaSemanalViewModel : ViewModel() {
             if (t.tipoCelda == TipoCeldaMalla.TURNO) {
                 val partes = t.horario.split("-")
                 if (partes.size == 2) {
-                    try {
-                        val pIni = partes[0].trim().split(":")
-                        val pFin = partes[1].trim().split(":")
-                        val hIni = pIni[0].toInt()
-                        val mIni = pIni[1].toInt()
-                        val hFin = pFin[0].toInt()
-                        val mFin = pFin[1].toInt()
-                        var duracionMin = (hFin * 60 + mFin) - (hIni * 60 + mIni)
+                    val ini = parsearMinutos(partes[0])
+                    val fin = parsearMinutos(partes[1])
+                    if (ini != null && fin != null) {
+                        var duracionMin = fin - ini
                         if (duracionMin < 0) duracionMin += 24 * 60
                         val duracionEfectiva = if (duracionMin >= 240) duracionMin - 30 else duracionMin
                         minutosTotales += duracionEfectiva
-                    } catch (e: Exception) {
+                    } else {
                         minutosTotales += 450
                     }
                 } else {
@@ -184,17 +278,7 @@ class MallaSemanalViewModel : ViewModel() {
 
     private fun actualizarSemana(lunes: LocalDate) {
         val domingo = lunes.plus(DatePeriod(days = 6))
-        val nombresDias = listOf("LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM")
-
-        val nuevosDias = (0..6).map { i ->
-            val diaFecha = lunes.plus(DatePeriod(days = i))
-            val esSabado = i == 5
-            DiaColumnaMalla(
-                diaSemana = nombresDias[i],
-                numeroDia = "${diaFecha.dayOfMonth}",
-                cubierto = if (_uiState.value.publicado) true else !esSabado
-            )
-        }
+        val nuevosDias = recalcularDiasSemana(lunes, _uiState.value.filas)
 
         val rangoTexto = if (lunes.monthNumber == domingo.monthNumber) {
             "${lunes.dayOfMonth} – ${domingo.dayOfMonth} ${obtenerMesCorto(domingo.monthNumber)} ${domingo.year}"
