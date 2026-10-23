@@ -3,19 +3,23 @@ package com.itm.gestordeturnos.data.service
 import com.itm.gestordeturnos.data.mock.MockDataProviders
 import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import com.itm.gestordeturnos.guardarAsignacionFirestore
 import com.itm.gestordeturnos.guardarAsignacionesBatchFirestore
 import com.itm.gestordeturnos.guardarEmpleadoFirestore
+import com.itm.gestordeturnos.guardarNovedadFirestore
 import com.itm.gestordeturnos.guardarRegistroAsistenciaFirestore
 import com.itm.gestordeturnos.guardarTurnoFirestore
 import com.itm.gestordeturnos.observarAsignacionesFirestore
 import com.itm.gestordeturnos.observarEmpleadosFirestore
+import com.itm.gestordeturnos.observarNovedadesFirestore
 import com.itm.gestordeturnos.observarRegistrosAsistenciaFirestore
 import com.itm.gestordeturnos.observarTurnosFirestore
 import com.itm.gestordeturnos.obtenerAsignacionesFirestore
 import com.itm.gestordeturnos.obtenerEmpleadosFirestore
+import com.itm.gestordeturnos.obtenerNovedadesFirestore
 import com.itm.gestordeturnos.obtenerRegistrosAsistenciaFirestore
 import com.itm.gestordeturnos.obtenerTurnosFirestore
 import kotlinx.coroutines.channels.awaitClose
@@ -141,5 +145,42 @@ object FirestoreService {
 
     suspend fun guardarAsistencia(registro: RegistroAsistencia): Result<Unit> {
         return guardarRegistroAsistenciaFirestore(registro)
+    }
+
+    // --- Novedades ---
+    fun observarNovedades(): Flow<List<Novedad>> = callbackFlow {
+        observarNovedadesFirestore { lista ->
+            trySend(lista)
+        }
+        awaitClose { }
+    }
+
+    suspend fun obtenerNovedades(): List<Novedad> {
+        return obtenerNovedadesFirestore()
+    }
+
+    suspend fun guardarNovedad(novedad: Novedad): Result<Unit> {
+        return guardarNovedadFirestore(novedad)
+    }
+
+    suspend fun inicializarNovedadesSiEstaVacio(): Boolean {
+        return try {
+            val existentes = obtenerNovedadesFirestore()
+            if (existentes.isEmpty()) {
+                val iniciales = MockDataProviders.inicialNovedades()
+                var algunGuardado = false
+                for (n in iniciales) {
+                    val res = guardarNovedadFirestore(n)
+                    if (res.isSuccess) {
+                        algunGuardado = true
+                    }
+                }
+                algunGuardado
+            } else {
+                false
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 }

@@ -19,7 +19,9 @@ data class Novedad(
     val colorBorde: String = "GRIS",
     val colorVorde: String = "GRIS",
     val empleadoId: String = "",
-    val asignacionTurnoId: String = ""
+    val asignacionTurnoId: String = "",
+    val fechaReferencia: String = "",
+    val fechaCreacionIso: String = ""
 ) {
     fun registrar(): Novedad = copy(estado = EstadoNovedad.REPORTADA)
     fun revisar(): Novedad = copy(estado = EstadoNovedad.REVISADA)

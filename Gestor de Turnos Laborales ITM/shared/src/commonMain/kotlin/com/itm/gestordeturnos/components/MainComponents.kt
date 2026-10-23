@@ -1,4 +1,4 @@
-package com.itm.gestordeturnos.components
+﻿package com.itm.gestordeturnos.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.draw.drawBehind
@@ -1638,7 +1638,10 @@ fun EncabezadoPantalla(
 }
 
 @Composable
-fun NovedadCard(novedad: Novedad) {
+fun NovedadCard(
+    novedad: Novedad,
+    onMarcarRevisada: (() -> Unit)? = null
+) {
     val colorBarra = when (novedad.colorBorde.ifBlank { novedad.colorVorde }.uppercase()) {
         "ROJO" -> Color(0xFFAC3927)
         "VERDE", "VERDE_OSCURO" -> Color(0xFF437637)
@@ -1690,7 +1693,7 @@ fun NovedadCard(novedad: Novedad) {
                                     )
                                     if (novedad.empleado.isNotBlank()) {
                                         Text(
-                                            text = " \u00B7 " + novedad.empleado,
+                                            text = " · " + novedad.empleado,
                                             color = CafeTextPrimary,
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Normal
@@ -1716,7 +1719,7 @@ fun NovedadCard(novedad: Novedad) {
                                     )
                                     if (novedad.empleado.isNotBlank()) {
                                         Text(
-                                            text = " \u00B7 " + novedad.empleado,
+                                            text = " · " + novedad.empleado,
                                             color = CafeTextPrimary,
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Normal
@@ -1754,13 +1757,45 @@ fun NovedadCard(novedad: Novedad) {
 
                         if (isCompact) {
                             Spacer(modifier = Modifier.height(12.dp))
-                            NovedadEstadoBadge(estado = novedad.estado)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                NovedadEstadoBadge(estado = novedad.estado)
+                                if (onMarcarRevisada != null && novedad.estado == com.itm.gestordeturnos.domain.model.EstadoNovedad.REPORTADA) {
+                                    Button(
+                                        onClick = onMarcarRevisada,
+                                        colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                                        shape = RoundedCornerShape(2.dp),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text("Revisar", fontSize = 11.sp, color = Color.White)
+                                    }
+                                }
+                            }
                         }
                     }
 
                     if (!isCompact) {
                         Spacer(modifier = Modifier.width(16.dp))
-                        NovedadEstadoBadge(estado = novedad.estado)
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            NovedadEstadoBadge(estado = novedad.estado)
+                            if (onMarcarRevisada != null && novedad.estado == com.itm.gestordeturnos.domain.model.EstadoNovedad.REPORTADA) {
+                                Button(
+                                    onClick = onMarcarRevisada,
+                                    colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                                    shape = RoundedCornerShape(2.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text("Marcar revisada", fontSize = 11.sp, color = Color.White)
+                                }
+                            }
+                        }
                     }
                 }
             }

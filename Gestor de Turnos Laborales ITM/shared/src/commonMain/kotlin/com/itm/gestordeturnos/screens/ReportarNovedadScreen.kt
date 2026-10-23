@@ -57,35 +57,30 @@ fun ReportarNovedadScreen(viewModel: ReportarNovedadViewModel) {
                 Column(modifier = Modifier.padding(24.dp)) {
 
                     // A. Turno de referencia
-                    val permiteCambiarFecha = state.tipoNovedad == "Incapacidad médica" || state.tipoNovedad == "Permiso especial"
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text("TURNO DE REFERENCIA", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(state.turnoReferencia, color = CafeTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
 
-                        // Si permite cambiar fecha, lo volvemos un botón clickeable con icono
-                        if (permiteCambiarFecha) {
-                            Row(
-                                modifier = Modifier
-                                    .clickable { viewModel.toggleDatePicker(true) }
-                                    .border(1.dp, CafeDarkBrown, RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(state.fechaReferencia, color = CafeDarkBrown, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Icon(Icons.Default.DateRange, contentDescription = "Cambiar fecha", tint = CafeDarkBrown, modifier = Modifier.size(16.dp))
-                            }
-                        } else {
-                            // Si no, se queda como texto estático
-                            Text(state.fechaReferencia, color = CafeTextSecondary, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        // Selector de fecha de referencia
+                        Row(
+                            modifier = Modifier
+                                .clickable { viewModel.toggleDatePicker(true) }
+                                .border(1.dp, CafeBorderLight, RoundedCornerShape(4.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(state.fechaReferencia, color = CafeDarkBrown, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(Icons.Default.DateRange, contentDescription = "Cambiar fecha", tint = CafeDarkBrown, modifier = Modifier.size(16.dp))
                         }
                     }
 

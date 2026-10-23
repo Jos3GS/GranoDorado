@@ -8,7 +8,9 @@ import com.itm.gestordeturnos.domain.model.RangoDescanso
 import com.itm.gestordeturnos.domain.model.Cargo
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.EstadoEmpleado
+import com.itm.gestordeturnos.domain.model.EstadoNovedad
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
+import com.itm.gestordeturnos.domain.model.Novedad
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.FirebaseOptions
 import dev.gitlive.firebase.initialize
@@ -156,8 +158,7 @@ actual suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Uni
                             // Si el correo ya existía en Firebase Auth, enviamos el correo de restablecimiento directamente
                             if (firebase.auth) {
                                 firebase.auth().sendPasswordResetEmail(correo)
-                                    .then(function() { onSuccess(null); })
-                                    .catch(onError);
+                                    .then(function() { onSuccess(null); })\n                                    .catch(onError);
                             } else {
                                 onSuccess(null);
                             }
@@ -397,7 +398,6 @@ actual fun observarEmpleadosFirestore(onUpdate: (List<Empleado>) -> Unit) {
     """)
 }
 
-
 private fun parsearTurnoJs(d: dynamic): TurnoTemplate? {
     if (d == null || d == js("undefined")) return null
     return try {
@@ -495,8 +495,7 @@ actual suspend fun guardarTurnoFirestore(turno: TurnoTemplate): Result<Unit> = s
                     id: String(id || ''),
                     nombre: String(nombre || ''),
                     horario: String(horario || ''),
-                    descansos: String(descansos || '-'),
-                    horasEfectivas: String(horasEfectivas || ''),
+                    descansos: String(descansos || '-'),\n                    horasEfectivas: String(horasEfectivas || ''),
                     estado: String(estado || 'ACTIVO'),
                     asignaciones: Number(asignacionesNum || 0),
                     horaInicio: String(horaInicio || ''),
@@ -624,6 +623,7 @@ actual fun observarTurnosFirestore(onUpdate: (List<TurnoTemplate>) -> Unit) {
         }
     """)
 }
+
 private fun parsearAsignacionJs(d: dynamic): AsignacionTurno? {
     if (d == null || d == js("undefined")) return null
     return try {
@@ -832,6 +832,7 @@ actual fun observarAsignacionesFirestore(onUpdate: (List<AsignacionTurno>) -> Un
         }
     """)
 }
+
 actual suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<AsignacionTurno>): Result<Unit> = suspendCancellableCoroutine { continuation ->
     if (asignaciones.isEmpty()) {
         continuation.resume(Result.success(Unit))
@@ -904,7 +905,6 @@ actual suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<Asignaci
         }
     """)
 }
-
 
 private fun parsearRegistroAsistenciaJs(d: dynamic): RegistroAsistencia? {
     if (d == null || d == js("undefined")) return null
@@ -1118,6 +1118,205 @@ actual fun observarRegistrosAsistenciaFirestore(onUpdate: (List<RegistroAsistenc
             }
         } catch(e) {
             console.error("Error suscribiendo a Firestore /asistencia:", e);
+        }
+    """)
+}
+
+private fun parsearNovedadJs(d: dynamic): Novedad? {
+    if (d == null || d == js("undefined")) return null
+    return try {
+        val id = (d.id as? String) ?: ""
+        val tipo = (d.tipo as? String) ?: ""
+        val descripcion = (d.descripcion as? String) ?: ""
+        val estadoStr = (d.estado as? String) ?: "REPORTADA"
+        val estadoEnum = try { EstadoNovedad.valueOf(estadoStr) } catch (_: Throwable) { EstadoNovedad.REPORTADA }
+        val empleado = (d.empleado as? String) ?: ""
+        val sucursal = (d.sucursal as? String) ?: "CENTRO"
+        val detalleTurno = (d.detalleTurno as? String) ?: ""
+        val diferencia = (d.diferencia as? String) ?: ""
+        val colorBorde = (d.colorBorde as? String) ?: "GRIS"
+        val colorVorde = (d.colorVorde as? String) ?: colorBorde
+        val empleadoId = (d.empleadoId as? String) ?: ""
+        val asignacionTurnoId = (d.asignacionTurnoId as? String) ?: ""
+        val fechaReferencia = (d.fechaReferencia as? String) ?: ""
+        val fechaCreacionIso = (d.fechaCreacionIso as? String) ?: ""
+
+        Novedad(
+            id = id,
+            tipo = tipo,
+            descripcion = descripcion,
+            estado = estadoEnum,
+            empleado = empleado,
+            sucursal = sucursal,
+            detalleTurno = detalleTurno,
+            diferencia = diferencia,
+            colorBorde = colorBorde,
+            colorVorde = colorVorde,
+            empleadoId = empleadoId,
+            asignacionTurnoId = asignacionTurnoId,
+            fechaReferencia = fechaReferencia,
+            fechaCreacionIso = fechaCreacionIso
+        )
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+actual suspend fun guardarNovedadFirestore(novedad: Novedad): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val id = if (novedad.id.isNotBlank()) novedad.id else "nov_${kotlin.random.Random.nextInt(100000, 999999)}"
+    val tipo = novedad.tipo
+    val descripcion = novedad.descripcion
+    val estado = novedad.estado.name
+    val empleado = novedad.empleado
+    val sucursal = novedad.sucursal
+    val detalleTurno = novedad.detalleTurno
+    val diferencia = novedad.diferencia
+    val colorBorde = novedad.colorBorde
+    val colorVorde = novedad.colorVorde
+    val empleadoId = novedad.empleadoId
+    val asignacionTurnoId = novedad.asignacionTurnoId
+    val fechaReferencia = novedad.fechaReferencia
+    val fechaCreacionIso = novedad.fechaCreacionIso
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Novedad guardada con éxito en Firestore: $id")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar novedad en Firestore"
+        println("Error guardando novedad en Firestore ($id): $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                var data = {
+                    id: String(id || ''),
+                    tipo: String(tipo || ''),
+                    descripcion: String(descripcion || ''),
+                    estado: String(estado || 'REPORTADA'),
+                    empleado: String(empleado || ''),
+                    sucursal: String(sucursal || 'CENTRO'),
+                    detalleTurno: String(detalleTurno || ''),
+                    diferencia: String(diferencia || ''),
+                    colorBorde: String(colorBorde || 'GRIS'),
+                    colorVorde: String(colorVorde || 'GRIS'),
+                    empleadoId: String(empleadoId || ''),
+                    asignacionTurnoId: String(asignacionTurnoId || ''),
+                    fechaReferencia: String(fechaReferencia || ''),
+                    fechaCreacionIso: String(fechaCreacionIso || ''),
+                    timestamp: Date.now()
+                };
+                console.log("Enviando novedad a Firestore /novedades/" + id, data);
+                db.collection("novedades").doc(id).set(data)
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onError(new Error("Firebase Firestore no está disponible en window"));
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual suspend fun obtenerNovedadesFirestore(): List<Novedad> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<Novedad>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val n = parsearNovedadJs(data)
+                    if (n != null) {
+                        lista.add(n)
+                    }
+                }
+            }
+        }
+        println("Novedades obtenidas de Firestore: " + lista.size)
+        continuation.resume(lista)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        println("Error obteniendo novedades de Firestore: " + error)
+        continuation.resume(emptyList())
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("novedades").get()
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onSuccess({ docs: [] });
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual fun observarNovedadesFirestore(onUpdate: (List<Novedad>) -> Unit) {
+    val callback: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<Novedad>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val n = parsearNovedadJs(data)
+                    if (n != null) {
+                        lista.add(n)
+                    }
+                }
+            }
+        }
+        println("Cambio en tiempo real de Firestore /novedades, total: " + lista.size)
+        onUpdate(lista)
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("novedades").onSnapshot(callback, function(err) {
+                    console.error("Error en onSnapshot /novedades de Firestore:", err);
+                });
+            }
+        } catch(e) {
+            console.error("Error suscribiendo a Firestore /novedades:", e);
         }
     """)
 }

@@ -31,6 +31,7 @@ class NovedadesViewModel : ViewModel() {
     val uiState: StateFlow<NovedadesState> = _uiState.asStateFlow()
 
     init {
+        NovedadRepository.iniciarSincronizacionFirestore()
         observarNovedades()
     }
 
@@ -44,5 +45,11 @@ class NovedadesViewModel : ViewModel() {
 
     fun cambiarFiltro(nuevoFiltro: String){
         _uiState.update{ it.copy(filtroActual = nuevoFiltro)}
+    }
+
+    fun marcarComoRevisada(idNovedad: String) {
+        viewModelScope.launch {
+            NovedadRepository.cambiarEstadoNovedad(idNovedad, EstadoNovedad.REVISADA)
+        }
     }
 }

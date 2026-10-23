@@ -67,7 +67,10 @@ fun NovedadesScreen(viewModel: NovedadesViewModel) {
 
             LazyColumn(modifier = Modifier.fillMaxSize().padding(bottom = 32.dp)) {
                 items(state.novedadesFiltradas, key = { it.id }) { novedad ->
-                    NovedadCard(novedad = novedad)
+                    NovedadCard(
+                        novedad = novedad,
+                        onMarcarRevisada = { viewModel.marcarComoRevisada(novedad.id) }
+                    )
                 }
             }
         }

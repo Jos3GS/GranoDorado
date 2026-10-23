@@ -2,6 +2,7 @@ package com.itm.gestordeturnos
 
 import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 
@@ -51,4 +52,11 @@ actual suspend fun guardarRegistroAsistenciaFirestore(registro: RegistroAsistenc
 actual suspend fun obtenerRegistrosAsistenciaFirestore(): List<RegistroAsistencia> = emptyList()
 
 actual fun observarRegistrosAsistenciaFirestore(onUpdate: (List<RegistroAsistencia>) -> Unit) {
+}
+
+actual suspend fun guardarNovedadFirestore(novedad: Novedad): Result<Unit> = Result.success(Unit)
+
+actual suspend fun obtenerNovedadesFirestore(): List<Novedad> = emptyList()
+
+actual fun observarNovedadesFirestore(onUpdate: (List<Novedad>) -> Unit) {
 }

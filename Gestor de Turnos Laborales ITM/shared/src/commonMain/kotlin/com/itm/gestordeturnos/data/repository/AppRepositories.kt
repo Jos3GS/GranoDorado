@@ -268,11 +268,69 @@ object TurnoRepository {
 }
 
 object NovedadRepository {
+    private val repositoryScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val _novedades = MutableStateFlow(MockDataProviders.inicialNovedades())
     val novedades: StateFlow<List<Novedad>> = _novedades.asStateFlow()
 
+    private var jobSincronizacion: Job? = null
+
+    init {
+        iniciarSincronizacionFirestore()
+    }
+
+    fun iniciarSincronizacionFirestore() {
+        jobSincronizacion?.cancel()
+        jobSincronizacion = repositoryScope.launch {
+            try {
+                // 1. Cargar desde Firestore o inicializar si está vacío
+                val remotos = FirestoreService.obtenerNovedades()
+                if (remotos.isNotEmpty()) {
+                    _novedades.value = remotos
+                } else {
+                    FirestoreService.inicializarNovedadesSiEstaVacio()
+                    val cargados = FirestoreService.obtenerNovedades()
+                    if (cargados.isNotEmpty()) {
+                        _novedades.value = cargados
+                    }
+                }
+
+                // 2. Escuchar en tiempo real cambios en /novedades
+                FirestoreService.observarNovedades().collect { listaRemota ->
+                    if (listaRemota.isNotEmpty()) {
+                        _novedades.value = listaRemota
+                    }
+                }
+            } catch (e: Exception) {
+                println("Error en sincronización de Novedades: ${e.message}")
+            }
+        }
+    }
+
+    suspend fun guardarNovedad(novedad: Novedad): Result<Unit> {
+        // Optimistic update
+        _novedades.update { lista ->
+            val sinDuplicado = lista.filterNot { it.id == novedad.id }
+            listOf(novedad) + sinDuplicado
+        }
+        val res = FirestoreService.guardarNovedad(novedad)
+        if (res.isFailure) {
+            println("Error al guardar novedad en Firestore: ${res.exceptionOrNull()?.message}")
+        }
+        return res
+    }
+
     fun reportarNovedad(novedad: Novedad) {
-        _novedades.update { it + novedad }
+        repositoryScope.launch {
+            guardarNovedad(novedad)
+        }
+    }
+
+    fun cambiarEstadoNovedad(idNovedad: String, nuevoEstado: EstadoNovedad) {
+        val novedadActual = _novedades.value.find { it.id == idNovedad } ?: return
+        val novedadActualizada = novedadActual.copy(estado = nuevoEstado)
+        repositoryScope.launch {
+            guardarNovedad(novedadActualizada)
+        }
     }
 }
 
