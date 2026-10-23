@@ -286,13 +286,70 @@ object CambiosTurnoRepository {
 }
 
 object AsistenciaRepository {
+    private val repositoryScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val _notificaciones = MutableStateFlow(MockDataProviders.inicialIncumplimientos())
     val notificaciones: StateFlow<List<NotificacionIncumplimiento>> = _notificaciones.asStateFlow()
 
     private val _registrosDiarios = MutableStateFlow(MockDataProviders.inicialRegistrosAsistencia())
     val registrosDiarios: StateFlow<List<RegistroAsistencia>> = _registrosDiarios.asStateFlow()
 
+    private var jobSincronizacion: Job? = null
+
+    init {
+        iniciarSincronizacionFirestore()
+    }
+
+    fun iniciarSincronizacionFirestore() {
+        jobSincronizacion?.cancel()
+        jobSincronizacion = repositoryScope.launch {
+            try {
+                // 1. Cargar registros iniciales de asistencia
+                val remotos = FirestoreService.obtenerAsistencia()
+                if (remotos.isNotEmpty()) {
+                    _registrosDiarios.value = remotos
+                }
+
+                // 2. Escuchar en tiempo real los cambios en /asistencia
+                FirestoreService.observarAsistencia().collect { listaRemota ->
+                    if (listaRemota.isNotEmpty()) {
+                        _registrosDiarios.value = listaRemota
+                    }
+                }
+            } catch (e: Exception) {
+                println("Error en sincronización de Asistencia: ${e.message}")
+            }
+        }
+    }
+
+    suspend fun guardarRegistroAsistencia(registro: RegistroAsistencia): Result<Unit> {
+        // Optimistic update local
+        _registrosDiarios.update { existentes ->
+            val filtrados = existentes.filterNot {
+                it.id == registro.id || (it.empleadoId == registro.empleadoId && it.fechaIso == registro.fechaIso)
+            }
+            filtrados + registro
+        }
+        val res = FirestoreService.guardarAsistencia(registro)
+        if (res.isFailure) {
+            println("Error al guardar registro de asistencia en Firestore: ${res.exceptionOrNull()?.message}")
+        }
+        return res
+    }
+
+    fun guardarRegistroAsistenciaEnBackground(registro: RegistroAsistencia) {
+        repositoryScope.launch {
+            guardarRegistroAsistencia(registro)
+        }
+    }
+
     fun registrarIncumplimiento(notif: NotificacionIncumplimiento) {
-        _notificaciones.update { it + notif }
+        _notificaciones.update { existentes ->
+            val sinDuplicado = existentes.filterNot { it.id == notif.id }
+            sinDuplicado + notif
+        }
+    }
+
+    fun actualizarNotificaciones(lista: List<NotificacionIncumplimiento>) {
+        _notificaciones.value = lista
     }
 }

@@ -42,7 +42,7 @@ fun AsistenciaScreen(viewModel: AsistenciaViewModel) {
         // 1. ENCABEZADO
         EncabezadoPantalla(
             titulo = "Control de asistencia",
-            subtitulo = "Estado de las marcaciones del día y notificaciones de incumplimientos."
+            subtitulo = if (state.fechaHoyTexto.isNotBlank()) "Jornada: ${state.fechaHoyTexto} · Estado en tiempo real." else "Estado de las marcaciones del día y notificaciones de incumplimientos."
         )
 
         // 2. PANEL DE INCUMPLIMIENTOS (Borde izquierdo rojo oscuro)
@@ -61,7 +61,7 @@ fun AsistenciaScreen(viewModel: AsistenciaViewModel) {
                         .background(Color(0xFF9E3422))
                 )
 
-                Column(modifier = Modifier.padding(24.dp)) {
+                Column(modifier = Modifier.padding(24.dp).fillMaxWidth()) {
                     Text(
                         "NOTIFICACIONES DE INCUMPLIMIENTO",
                         color = CafeTextSecondary,
@@ -71,27 +71,34 @@ fun AsistenciaScreen(viewModel: AsistenciaViewModel) {
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    state.notificaciones.forEach { notificacion ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        ) {
-                            Box(modifier = Modifier.size(6.dp).background(CafeAccentYellow, CircleShape))
-                            Spacer(modifier = Modifier.width(8.dp))
+                    if (state.notificaciones.isEmpty()) {
+                        Text(
+                            text = "No se registran incumplimientos en la jornada de hoy.",
+                            color = CafeTextSecondary,
+                            fontSize = 14.sp
+                        )
+                    } else {
+                        state.notificaciones.forEach { notificacion ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                Box(modifier = Modifier.size(6.dp).background(CafeAccentYellow, CircleShape))
+                                Spacer(modifier = Modifier.width(8.dp))
 
-                            // Texto compuesto: Empleado (Bold) + Tipo (Normal) + Hora
-                            Text(
-                                text = notificacion.empleado,
-                                fontWeight = FontWeight.Bold,
-                                color = CafeTextPrimary,
-                                fontSize = 14.sp
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "${notificacion.tipo} ${notificacion.detalleHora}".trim(),
-                                color = CafeTextSecondary,
-                                fontSize = 14.sp
-                            )
+                                Text(
+                                    text = notificacion.empleado,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CafeTextPrimary,
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "${notificacion.tipo} ${notificacion.detalleHora}".trim(),
+                                    color = CafeTextSecondary,
+                                    fontSize = 14.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -103,13 +110,11 @@ fun AsistenciaScreen(viewModel: AsistenciaViewModel) {
             val isDesktop = maxWidth > 800.dp
 
             if (isDesktop) {
-                // VERSIÓN ESCRITORIO: Ocupa todo el ancho sin scroll horizontal
                 TablaAsistencia(
                     registros = state.registrosDiarios,
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
-                // VERSIÓN MÓVIL: Usa scroll horizontal y un ancho fijo de 800.dp para respirar
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -149,9 +154,22 @@ private fun TablaAsistencia(registros: List<RegistroAsistencia>, modifier: Modif
             HorizontalDivider(color = CafeBorderLight)
 
             // Filas
-            registros.forEach { registro ->
-                FilaAsistencia(registro)
-                HorizontalDivider(color = CafeBorderLight)
+            if (registros.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "No hay registros de asistencia para la jornada de hoy.",
+                        color = CafeTextSecondary,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                registros.forEach { registro ->
+                    FilaAsistencia(registro)
+                    HorizontalDivider(color = CafeBorderLight)
+                }
             }
         }
     }
@@ -194,11 +212,17 @@ private fun FilaAsistencia(registro: RegistroAsistencia) {
             val bgEstado = when (registro.estado) {
                 "PRESENTE" -> CafeStatusSuccessBg
                 "TARDE" -> CafeStatusWarningBg
+                "EN DESCANSO" -> CafeStatusInfoBg
+                "FINALIZADO" -> Color(0xFFF0F0F0)
+                "PENDIENTE" -> Color(0xFFF5F5F5)
                 else -> CafeStatusErrorBg
             }
             val textEstado = when (registro.estado) {
                 "PRESENTE" -> CafeStatusSuccessText
                 "TARDE" -> CafeStatusWarningText
+                "EN DESCANSO" -> CafeStatusInfoText
+                "FINALIZADO" -> CafeTextSecondary
+                "PENDIENTE" -> CafeTextSecondary
                 else -> CafeStatusErrorText
             }
 

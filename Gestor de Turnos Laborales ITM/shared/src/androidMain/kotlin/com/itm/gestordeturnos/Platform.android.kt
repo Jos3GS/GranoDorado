@@ -1,6 +1,8 @@
 package com.itm.gestordeturnos
 
+import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.RegistroAsistencia
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 
 class AndroidPlatform : Platform {
@@ -54,4 +56,30 @@ actual suspend fun obtenerTurnosFirestore(): List<TurnoTemplate> {
 }
 
 actual fun observarTurnosFirestore(onUpdate: (List<TurnoTemplate>) -> Unit) {
+}
+
+actual suspend fun guardarAsignacionFirestore(asignacion: AsignacionTurno): Result<Unit> {
+    return Result.success(Unit)
+}
+
+actual suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<AsignacionTurno>): Result<Unit> {
+    return Result.success(Unit)
+}
+
+actual suspend fun obtenerAsignacionesFirestore(): List<AsignacionTurno> {
+    return emptyList()
+}
+
+actual fun observarAsignacionesFirestore(onUpdate: (List<AsignacionTurno>) -> Unit) {
+}
+
+actual suspend fun guardarRegistroAsistenciaFirestore(registro: RegistroAsistencia): Result<Unit> {
+    return Result.success(Unit)
+}
+
+actual suspend fun obtenerRegistrosAsistenciaFirestore(): List<RegistroAsistencia> {
+    return emptyList()
+}
+
+actual fun observarRegistrosAsistenciaFirestore(onUpdate: (List<RegistroAsistencia>) -> Unit) {
 }

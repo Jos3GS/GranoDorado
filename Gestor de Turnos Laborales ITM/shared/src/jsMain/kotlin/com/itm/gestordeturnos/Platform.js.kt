@@ -1,6 +1,8 @@
 package com.itm.gestordeturnos
 
 import com.itm.gestordeturnos.domain.model.AsignacionTurno
+import com.itm.gestordeturnos.domain.model.RegistroAsistencia
+import com.itm.gestordeturnos.domain.model.EstadoAsistencia
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import com.itm.gestordeturnos.domain.model.RangoDescanso
 import com.itm.gestordeturnos.domain.model.Cargo
@@ -899,6 +901,223 @@ actual suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<Asignaci
         } catch(e) {
             console.error("Excepción en guardarAsignacionesBatchFirestore:", e);
             onError(e);
+        }
+    """)
+}
+
+
+private fun parsearRegistroAsistenciaJs(d: dynamic): RegistroAsistencia? {
+    if (d == null || d == js("undefined")) return null
+    return try {
+        val id = (d.id as? String) ?: ""
+        val empId = (d.empleadoId as? String) ?: ""
+        val empNombre = (d.empleado as? String) ?: (d.empleadoNombre as? String) ?: ""
+        val sucursal = (d.sucursal as? String) ?: "CENTRO"
+        val fechaIso = (d.fechaIso as? String) ?: ""
+        val tipoTurno = (d.tipoTurno as? String) ?: ""
+        val horarioProgramado = (d.horarioProgramado as? String) ?: ""
+        val horaEntrada = (d.horaEntrada as? String) ?: "-"
+        val horaSalida = (d.horaSalida as? String) ?: "-"
+        val inicioDescanso = (d.inicioDescanso as? String) ?: "-"
+        val finDescanso = (d.finDescanso as? String) ?: "-"
+        val estado = (d.estado as? String) ?: "PENDIENTE"
+        val estadoAsisStr = (d.estadoAsistencia as? String) ?: "SIN_INICIAR"
+        val estadoAsisEnum = try { EstadoAsistencia.valueOf(estadoAsisStr) } catch (_: Throwable) { EstadoAsistencia.SIN_INICIAR }
+        val tiempoEfectivo = when (val t = d.tiempoEfectivoMinutos) {
+            is Number -> t.toInt()
+            is String -> t.toIntOrNull() ?: 0
+            else -> 0
+        }
+        val minsTarde = when (val m = d.minutosTarde) {
+            is Number -> m.toInt()
+            is String -> m.toIntOrNull() ?: 0
+            else -> 0
+        }
+        val esDescanso = (d.esDescanso as? Boolean) ?: false
+
+        RegistroAsistencia(
+            id = id,
+            empleadoId = empId,
+            empleado = empNombre,
+            sucursal = sucursal,
+            fechaIso = fechaIso,
+            tipoTurno = tipoTurno,
+            horarioProgramado = horarioProgramado,
+            horaEntrada = horaEntrada,
+            horaSalida = horaSalida,
+            inicioDescanso = inicioDescanso,
+            finDescanso = finDescanso,
+            estado = estado,
+            estadoAsistencia = estadoAsisEnum,
+            tiempoEfectivoMinutos = tiempoEfectivo,
+            minutosTarde = minsTarde,
+            esDescanso = esDescanso
+        )
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+actual suspend fun guardarRegistroAsistenciaFirestore(registro: RegistroAsistencia): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val id = if (registro.id.isNotBlank()) registro.id else "${registro.empleadoId}_${registro.fechaIso}"
+    val empId = registro.empleadoId
+    val empNombre = registro.empleado
+    val sucursal = registro.sucursal
+    val fechaIso = registro.fechaIso
+    val tipoTurno = registro.tipoTurno
+    val horarioProgramado = registro.horarioProgramado
+    val horaEntrada = registro.horaEntrada
+    val horaSalida = registro.horaSalida
+    val inicioDescanso = registro.inicioDescanso
+    val finDescanso = registro.finDescanso
+    val estado = registro.estado
+    val estadoAsistencia = registro.estadoAsistencia.name
+    val tiempoEfectivoMinutos = registro.tiempoEfectivoMinutos
+    val minutosTarde = registro.minutosTarde
+    val esDescanso = registro.esDescanso
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Registro de asistencia guardado con éxito en Firestore: $id")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar registro de asistencia en Firestore"
+        println("Error guardando asistencia en Firestore ($id): $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                var data = {
+                    id: id,
+                    empleadoId: empId,
+                    empleado: empNombre,
+                    empleadoNombre: empNombre,
+                    sucursal: sucursal,
+                    fechaIso: fechaIso,
+                    tipoTurno: tipoTurno,
+                    horarioProgramado: horarioProgramado,
+                    horaEntrada: horaEntrada,
+                    horaSalida: horaSalida,
+                    inicioDescanso: inicioDescanso,
+                    finDescanso: finDescanso,
+                    estado: estado,
+                    estadoAsistencia: estadoAsistencia,
+                    tiempoEfectivoMinutos: tiempoEfectivoMinutos,
+                    minutosTarde: minutosTarde,
+                    esDescanso: esDescanso,
+                    timestampActualizacion: Date.now()
+                };
+                console.log("Enviando a Firestore /asistencia/" + id, data);
+                db.collection("asistencia").doc(id).set(data)
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onError(new Error("Firebase Firestore no está disponible en window"));
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual suspend fun obtenerRegistrosAsistenciaFirestore(): List<RegistroAsistencia> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<RegistroAsistencia>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val r = parsearRegistroAsistenciaJs(data)
+                    if (r != null) {
+                        lista.add(r)
+                    }
+                }
+            }
+        }
+        println("Registros de asistencia obtenidos de Firestore: " + lista.size)
+        continuation.resume(lista)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        println("Error obteniendo asistencia de Firestore: " + error)
+        continuation.resume(emptyList())
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("asistencia").get()
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onSuccess({ docs: [] });
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual fun observarRegistrosAsistenciaFirestore(onUpdate: (List<RegistroAsistencia>) -> Unit) {
+    val callback: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<RegistroAsistencia>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val r = parsearRegistroAsistenciaJs(data)
+                    if (r != null) {
+                        lista.add(r)
+                    }
+                }
+            }
+        }
+        println("Cambio en tiempo real de Firestore /asistencia, total: " + lista.size)
+        onUpdate(lista)
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("asistencia").onSnapshot(callback, function(err) {
+                    console.error("Error en onSnapshot /asistencia de Firestore:", err);
+                });
+            }
+        } catch(e) {
+            console.error("Error suscribiendo a Firestore /asistencia:", e);
         }
     """)
 }

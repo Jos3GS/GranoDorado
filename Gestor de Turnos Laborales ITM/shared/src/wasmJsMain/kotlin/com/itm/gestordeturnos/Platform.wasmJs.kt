@@ -2,6 +2,7 @@ package com.itm.gestordeturnos
 
 import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.RegistroAsistencia
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 
 class WasmPlatform: Platform {
@@ -43,4 +44,11 @@ actual suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<Asignaci
 actual suspend fun obtenerAsignacionesFirestore(): List<AsignacionTurno> = emptyList()
 
 actual fun observarAsignacionesFirestore(onUpdate: (List<AsignacionTurno>) -> Unit) {
+}
+
+actual suspend fun guardarRegistroAsistenciaFirestore(registro: RegistroAsistencia): Result<Unit> = Result.success(Unit)
+
+actual suspend fun obtenerRegistrosAsistenciaFirestore(): List<RegistroAsistencia> = emptyList()
+
+actual fun observarRegistrosAsistenciaFirestore(onUpdate: (List<RegistroAsistencia>) -> Unit) {
 }
