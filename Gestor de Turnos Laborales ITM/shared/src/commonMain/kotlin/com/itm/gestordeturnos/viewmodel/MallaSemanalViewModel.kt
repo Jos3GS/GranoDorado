@@ -214,7 +214,15 @@ class MallaSemanalViewModel : ViewModel() {
                     val celdas = turnosPorEmpleado.getOrPut(asig.empleadoId) {
                         MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
                     }
-                    if (asig.esDescanso) {
+                    if (asig.tipoTurno.equals("Incapacidad", ignoreCase = true)) {
+                        celdas[diaIdx] = TurnoCelda(
+                            tipo = "Incapacidad",
+                            horario = "-",
+                            tipoCelda = TipoCeldaMalla.INCAPACIDAD,
+                            esDescanso = false,
+                            modificadoTrasPublicar = asig.modificadoTrasPublicar
+                        )
+                    } else if (asig.esDescanso) {
                         celdas[diaIdx] = TurnoCelda(
                             tipo = "Descanso",
                             horario = "-",
@@ -296,9 +304,9 @@ class MallaSemanalViewModel : ViewModel() {
             } ?: empId
 
             celdas.forEachIndexed { idx, celda ->
-                if (celda.tipoCelda == TipoCeldaMalla.TURNO || celda.tipoCelda == TipoCeldaMalla.DESCANSO) {
+                if (celda.tipoCelda == TipoCeldaMalla.TURNO || celda.tipoCelda == TipoCeldaMalla.DESCANSO || celda.tipoCelda == TipoCeldaMalla.INCAPACIDAD) {
                     val fechaDia = fechaLunes.plus(DatePeriod(days = idx)).toString()
-                    val turnoId = if (celda.esDescanso) "" else (_uiState.value.turnosCatalogoActivos.find { it.nombre.equals(celda.tipo, ignoreCase = true) }?.id ?: "")
+                    val turnoId = if (celda.esDescanso || celda.tipoCelda == TipoCeldaMalla.INCAPACIDAD) "" else (_uiState.value.turnosCatalogoActivos.find { it.nombre.equals(celda.tipo, ignoreCase = true) }?.id ?: "")
                     asignacionesAGuardar.add(
                         AsignacionTurno(
                             id = "${empId}_${fechaDia}",
@@ -434,6 +442,7 @@ class MallaSemanalViewModel : ViewModel() {
             MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
         }
         if (diaIndex in celdas.indices) {
+            if (celdas[diaIndex].tipoCelda == TipoCeldaMalla.INCAPACIDAD) return
             celdas[diaIndex] = TurnoCelda(
                 tipo = turnoTemplate.nombre,
                 horario = horarioFormateado,
@@ -473,6 +482,7 @@ class MallaSemanalViewModel : ViewModel() {
             MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
         }
         if (diaIndex in celdas.indices) {
+            if (celdas[diaIndex].tipoCelda == TipoCeldaMalla.INCAPACIDAD) return
             celdas[diaIndex] = TurnoCelda(
                 tipo = "Descanso",
                 horario = "-",

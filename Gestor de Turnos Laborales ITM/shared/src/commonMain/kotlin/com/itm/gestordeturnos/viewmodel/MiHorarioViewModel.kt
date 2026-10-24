@@ -181,6 +181,18 @@ class MiHorarioViewModel : ViewModel() {
                     duracion = null,
                     sinAsignar = true
                 )
+            } else if (asig.tipoTurno.equals("Incapacidad", ignoreCase = true)) {
+                TurnoAsignado(
+                    id = asig.id.ifEmpty { "inc_${fechaIso}" },
+                    diaSemana = diaSem,
+                    numeroDia = numDia,
+                    tipoTurno = "Incapacidad",
+                    horario = "-",
+                    sucursal = asig.sucursalId.ifEmpty { empSucursal },
+                    duracion = "-",
+                    esDescanso = false,
+                    sinAsignar = false
+                )
             } else if (asig.esDescanso) {
                 TurnoAsignado(
                     id = asig.id.ifEmpty { "desc_${fechaIso}" },

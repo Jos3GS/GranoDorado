@@ -1,4 +1,4 @@
-﻿package com.itm.gestordeturnos.components
+package com.itm.gestordeturnos.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.draw.drawBehind
@@ -183,11 +183,16 @@ fun UserProfileInfo(
 
 @Composable
 fun TurnoCard(turno: TurnoAsignado) {
-    val colorBorde = if (turno.esDescanso) CafeAccentYellow else CafeBorderColor
+    val esIncapacidad = turno.tipoTurno?.contains("incapacidad", ignoreCase = true) == true
+    val colorBorde = when {
+        esIncapacidad -> Color(0xFFFCA5A5)
+        turno.esDescanso -> CafeAccentYellow
+        else -> CafeBorderColor
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = if (esIncapacidad) Color(0xFFFEF2F2) else Color.White),
         border = BorderStroke(1.dp, colorBorde),
         shape = RoundedCornerShape(2.dp)
     ) {
@@ -212,7 +217,7 @@ fun TurnoCard(turno: TurnoAsignado) {
                 )
                 Text(
                     text = turno.numeroDia,
-                    color = CafeTextPrimary,
+                    color = if (esIncapacidad) Color(0xFF991B1B) else CafeTextPrimary,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -224,13 +229,45 @@ fun TurnoCard(turno: TurnoAsignado) {
                 modifier = Modifier
                     .width(1.dp)
                     .fillMaxHeight()
-                    .background(CafeBorderColor)
+                    .background(if (esIncapacidad) Color(0xFFFCA5A5) else CafeBorderColor)
             )
             Spacer(modifier = Modifier.width(16.dp))
 
             // 3. Columna Central: Apertura / Cierre / Descanso
             Column(modifier = Modifier.weight(1f)) {
                 when {
+                    esIncapacidad -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFFFEE2E2), RoundedCornerShape(2.dp))
+                                    .border(1.dp, Color(0xFFFCA5A5), RoundedCornerShape(2.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "INCAPACIDAD MÉDICA",
+                                    color = Color(0xFF991B1B),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFFE5E7EB), RoundedCornerShape(2.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "NO MODIFICABLE",
+                                    color = Color(0xFF4B5563),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+                    }
                     turno.esDescanso -> {
                         Box(
                             modifier = Modifier
@@ -290,7 +327,7 @@ fun TurnoCard(turno: TurnoAsignado) {
             }
 
             // 4. Columna Derecha: Sucursal y Total Horas
-            if (!turno.esDescanso && !turno.sinAsignar) {
+            if (!turno.esDescanso && !turno.sinAsignar && !esIncapacidad) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SucursalChip(
                         sucursal = turno.sucursal ?: "",
@@ -303,6 +340,20 @@ fun TurnoCard(turno: TurnoAsignado) {
                         color = CafeTextPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
+                    )
+                }
+            } else if (esIncapacidad) {
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFFFEE2E2), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "JUSTIFICADA",
+                        color = Color(0xFF991B1B),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
                     )
                 }
             }
@@ -638,7 +689,7 @@ fun MallaEmployeeRow(
             ) {
                 MallaCeldaTurno(
                     turno = turno,
-                    onClick = if (turno.tipoCelda != TipoCeldaMalla.VACACIONES) {
+                    onClick = if (turno.tipoCelda != TipoCeldaMalla.VACACIONES && turno.tipoCelda != TipoCeldaMalla.INCAPACIDAD) {
                         { onCeldaClick?.invoke(fila, index, turno) }
                     } else null
                 )
@@ -678,7 +729,7 @@ fun MallaCeldaTurno(
     modifier: Modifier = Modifier
 ) {
     val cellShape = RoundedCornerShape(6.dp)
-    val esClickeable = turno.tipoCelda != TipoCeldaMalla.VACACIONES && onClick != null
+    val esClickeable = turno.tipoCelda != TipoCeldaMalla.VACACIONES && turno.tipoCelda != TipoCeldaMalla.INCAPACIDAD && onClick != null
 
     when (turno.tipoCelda) {
         TipoCeldaMalla.TURNO -> {
@@ -769,15 +820,31 @@ fun MallaCeldaTurno(
                     .fillMaxWidth()
                     .height(52.dp)
                     .background(Color(0xFFFDE8E8), shape = cellShape)
-                    .then(if (esClickeable) Modifier.clickable { onClick?.invoke() } else Modifier),
+                    .border(1.dp, Color(0xFFFCA5A5), shape = cellShape)
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Incapacidad",
-                    color = Color(0xFF991B1B),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Incapacidad",
+                        color = Color(0xFF991B1B),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Bloqueado",
+                        color = Color(0xFFDC2626),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.5.sp
+                    )
+                }
             }
         }
 
@@ -1763,14 +1830,16 @@ fun NovedadCard(
                             ) {
                                 NovedadEstadoBadge(estado = novedad.estado)
                                 if (onMarcarRevisada != null && novedad.estado == com.itm.gestordeturnos.domain.model.EstadoNovedad.REPORTADA) {
+                                    val isIncapacidad = novedad.tipo.contains("incapacidad", ignoreCase = true)
+                                    val textoBoton = if (isIncapacidad) "Aprobar" else "Revisar"
                                     Button(
                                         onClick = onMarcarRevisada,
-                                        colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (isIncapacidad) Color(0xFF991B1B) else CafeDarkBrown),
                                         shape = RoundedCornerShape(2.dp),
                                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                         modifier = Modifier.height(28.dp)
                                     ) {
-                                        Text("Revisar", fontSize = 11.sp, color = Color.White)
+                                        Text(textoBoton, fontSize = 11.sp, color = Color.White)
                                     }
                                 }
                             }
@@ -1785,14 +1854,16 @@ fun NovedadCard(
                         ) {
                             NovedadEstadoBadge(estado = novedad.estado)
                             if (onMarcarRevisada != null && novedad.estado == com.itm.gestordeturnos.domain.model.EstadoNovedad.REPORTADA) {
+                                val isIncapacidad = novedad.tipo.contains("incapacidad", ignoreCase = true)
+                                val textoBoton = if (isIncapacidad) "Aprobar" else "Marcar revisada"
                                 Button(
                                     onClick = onMarcarRevisada,
-                                    colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (isIncapacidad) Color(0xFF991B1B) else CafeDarkBrown),
                                     shape = RoundedCornerShape(2.dp),
                                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                                     modifier = Modifier.height(28.dp)
                                 ) {
-                                    Text("Marcar revisada", fontSize = 11.sp, color = Color.White)
+                                    Text(textoBoton, fontSize = 11.sp, color = Color.White)
                                 }
                             }
                         }
@@ -2324,4 +2395,3 @@ fun textFieldColorsGestor() = OutlinedTextFieldDefaults.colors(
     unfocusedTextColor = CafeTextPrimary,
     focusedTextColor = CafeTextPrimary
 )
-
