@@ -252,20 +252,6 @@ fun TurnoCard(turno: TurnoAsignado) {
                                     letterSpacing = 1.sp
                                 )
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .background(Color(0xFFE5E7EB), RoundedCornerShape(2.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "NO MODIFICABLE",
-                                    color = Color(0xFF4B5563),
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
-                                )
-                            }
                         }
                     }
                     turno.esDescanso -> {
