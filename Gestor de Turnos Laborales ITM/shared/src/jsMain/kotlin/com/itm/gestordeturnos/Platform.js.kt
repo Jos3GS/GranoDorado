@@ -158,7 +158,8 @@ actual suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Uni
                             // Si el correo ya existía en Firebase Auth, enviamos el correo de restablecimiento directamente
                             if (firebase.auth) {
                                 firebase.auth().sendPasswordResetEmail(correo)
-                                    .then(function() { onSuccess(null); })\n                                    .catch(onError);
+                                    .then(function() { onSuccess(null); })
+                                    .catch(onError);
                             } else {
                                 onSuccess(null);
                             }
@@ -495,7 +496,8 @@ actual suspend fun guardarTurnoFirestore(turno: TurnoTemplate): Result<Unit> = s
                     id: String(id || ''),
                     nombre: String(nombre || ''),
                     horario: String(horario || ''),
-                    descansos: String(descansos || '-'),\n                    horasEfectivas: String(horasEfectivas || ''),
+                    descansos: String(descansos || '-'),
+                    horasEfectivas: String(horasEfectivas || ''),
                     estado: String(estado || 'ACTIVO'),
                     asignaciones: Number(asignacionesNum || 0),
                     horaInicio: String(horaInicio || ''),
