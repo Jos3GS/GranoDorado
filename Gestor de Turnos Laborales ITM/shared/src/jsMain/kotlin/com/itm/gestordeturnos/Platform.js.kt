@@ -1571,6 +1571,11 @@ private fun parsearNovedadJs(d: dynamic): Novedad? {
         val asignacionTurnoId = (d.asignacionTurnoId as? String) ?: ""
         val fechaReferencia = (d.fechaReferencia as? String) ?: ""
         val fechaCreacionIso = (d.fechaCreacionIso as? String) ?: ""
+        val horaReal = (d.horaReal as? String) ?: ""
+        val comentarioRevision = (d.comentarioRevision as? String) ?: ""
+        val revisadoPor = (d.revisadoPor as? String) ?: ""
+        val fechaRevision = (d.fechaRevision as? String) ?: ""
+        val reportadoPorSupervisor = (d.reportadoPorSupervisor as? Boolean) ?: false
 
         Novedad(
             id = id,
@@ -1586,7 +1591,12 @@ private fun parsearNovedadJs(d: dynamic): Novedad? {
             empleadoId = empleadoId,
             asignacionTurnoId = asignacionTurnoId,
             fechaReferencia = fechaReferencia,
-            fechaCreacionIso = fechaCreacionIso
+            fechaCreacionIso = fechaCreacionIso,
+            horaReal = horaReal,
+            comentarioRevision = comentarioRevision,
+            revisadoPor = revisadoPor,
+            fechaRevision = fechaRevision,
+            reportadoPorSupervisor = reportadoPorSupervisor
         )
     } catch (_: Throwable) {
         null
@@ -1608,6 +1618,11 @@ actual suspend fun guardarNovedadFirestore(novedad: Novedad): Result<Unit> = sus
     val asignacionTurnoId = novedad.asignacionTurnoId
     val fechaReferencia = novedad.fechaReferencia
     val fechaCreacionIso = novedad.fechaCreacionIso
+    val horaReal = novedad.horaReal
+    val comentarioRevision = novedad.comentarioRevision
+    val revisadoPor = novedad.revisadoPor
+    val fechaRevision = novedad.fechaRevision
+    val reportadoPorSupervisor = novedad.reportadoPorSupervisor
 
     val onSuccess: (dynamic) -> Unit = {
         println("Novedad guardada con éxito en Firestore: $id")
@@ -1647,6 +1662,11 @@ actual suspend fun guardarNovedadFirestore(novedad: Novedad): Result<Unit> = sus
                     asignacionTurnoId: String(asignacionTurnoId || ''),
                     fechaReferencia: String(fechaReferencia || ''),
                     fechaCreacionIso: String(fechaCreacionIso || ''),
+                    horaReal: String(horaReal || ''),
+                    comentarioRevision: String(comentarioRevision || ''),
+                    revisadoPor: String(revisadoPor || ''),
+                    fechaRevision: String(fechaRevision || ''),
+                    reportadoPorSupervisor: Boolean(reportadoPorSupervisor),
                     timestamp: Date.now()
                 };
                 console.log("Enviando novedad a Firestore /novedades/" + id, data);

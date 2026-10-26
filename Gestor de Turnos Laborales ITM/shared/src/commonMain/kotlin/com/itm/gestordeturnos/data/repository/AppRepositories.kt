@@ -325,6 +325,21 @@ object NovedadRepository {
         }
     }
 
+    fun revisarNovedad(idNovedad: String, comentario: String, revisor: String, fecha: String) {
+        val novedadActual = _novedades.value.find { it.id == idNovedad } ?: return
+        val novedadActualizada = novedadActual.revisar(
+            comentario = comentario,
+            revisor = revisor,
+            fecha = fecha
+        )
+        repositoryScope.launch {
+            guardarNovedad(novedadActualizada)
+            if (novedadActualizada.tipo.contains("incapacidad", ignoreCase = true)) {
+                aplicarIncapacidadEnTurno(novedadActualizada)
+            }
+        }
+    }
+
     fun cambiarEstadoNovedad(idNovedad: String, nuevoEstado: EstadoNovedad) {
         val novedadActual = _novedades.value.find { it.id == idNovedad } ?: return
         val novedadActualizada = novedadActual.copy(estado = nuevoEstado)

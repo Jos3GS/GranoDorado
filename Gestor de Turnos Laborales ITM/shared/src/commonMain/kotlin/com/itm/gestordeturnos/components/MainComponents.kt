@@ -1829,6 +1829,14 @@ fun NovedadCard(
                                     Spacer(modifier = Modifier.height(4.dp))
                                     SucursalChip(sucursal = novedad.sucursal)
                                 }
+                                if (novedad.reportadoPorSupervisor) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Box(
+                                        modifier = Modifier.background(CafeAccentYellow.copy(alpha = 0.2f), RoundedCornerShape(2.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Por supervisor", color = CafeDarkBrown, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
                         } else {
                             Row(
@@ -1854,6 +1862,32 @@ fun NovedadCard(
                                 if (novedad.sucursal.isNotBlank()) {
                                     SucursalChip(sucursal = novedad.sucursal)
                                 }
+                                if (novedad.reportadoPorSupervisor) {
+                                    Box(
+                                        modifier = Modifier.background(CafeAccentYellow.copy(alpha = 0.2f), RoundedCornerShape(2.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Por supervisor", color = CafeDarkBrown, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        if (novedad.descripcion.isNotBlank() && novedad.descripcion != novedad.diferencia) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Descripci\u00F3n: " + novedad.descripcion,
+                                color = CafeTextSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        if (novedad.comentarioRevision.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            val textoRevisor = listOf(novedad.revisadoPor, novedad.fechaRevision).filter { it.isNotBlank() }.joinToString(" \u00B7 ")
+                            Box(
+                                modifier = Modifier.background(Color(0xFFE8F5E9), RoundedCornerShape(2.dp)).padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text("Revisi\u00F3n (" + (if (textoRevisor.isNotBlank()) textoRevisor else "Admin") + "): " + novedad.comentarioRevision, color = Color(0xFF2E7D32), fontSize = 11.sp, fontWeight = FontWeight.Medium)
                             }
                         }
 
@@ -1871,9 +1905,16 @@ fun NovedadCard(
                         Spacer(modifier = Modifier.height(4.dp))
 
                         // Subtitulo 2: Diferencia horaria (Gris oscuro, fuente monoespaciada)
-                        if (novedad.diferencia.isNotBlank()) {
+                        val textoDiferencia = when {
+                            novedad.horaReal.isNotBlank() && novedad.diferencia.isNotBlank() ->
+                                "Hora real: " + novedad.horaReal + " \u00B7 " + novedad.diferencia
+                            novedad.horaReal.isNotBlank() ->
+                                "Hora real: " + novedad.horaReal
+                            else -> novedad.diferencia
+                        }
+                        if (textoDiferencia.isNotBlank()) {
                             Text(
-                                text = novedad.diferencia,
+                                text = textoDiferencia,
                                 color = Color(0xFF333333),
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace
