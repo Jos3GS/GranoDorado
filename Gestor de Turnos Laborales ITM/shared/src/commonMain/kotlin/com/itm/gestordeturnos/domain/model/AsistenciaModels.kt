@@ -12,12 +12,18 @@ enum class EstadoAsistencia {
 @Serializable
 data class NotificacionIncumplimiento(
     val id: String = "",
+    val empleadoId: String = "",
     val empleado: String = "",
     val tipo: String = "",
     val detalleHora: String = "",
     val fechaIso: String = "",
-    val sucursal: String = ""
-)
+    val sucursal: String = "",
+    val atendida: Boolean = false,
+    val motivoAtencion: String = "",
+    val horaAtencion: String = ""
+) {
+    val empleadoNombre: String get() = empleado
+}
 
 @Serializable
 data class RegistroAsistencia(
@@ -36,5 +42,7 @@ data class RegistroAsistencia(
     val estadoAsistencia: EstadoAsistencia = EstadoAsistencia.SIN_INICIAR,
     val tiempoEfectivoMinutos: Int = 0,
     val minutosTarde: Int = 0,
-    val esDescanso: Boolean = false
+    val esDescanso: Boolean = false,
+    val registradoPorSupervisor: Boolean = false,
+    val motivoSupervisor: String = ""
 )

@@ -145,7 +145,12 @@ class MarcarAsistenciaViewModel : ViewModel() {
                     empleadoNombre = empNombre,
                     fechaIso = hoyIso,
                     mensajeAviso = when (registroHoy.estadoAsistencia) {
-                        EstadoAsistencia.EN_TURNO -> "Marcaste entrada a las ${registroHoy.horaEntrada}"
+                        EstadoAsistencia.EN_TURNO -> {
+                            if (registroHoy.minutosTarde > 0) {
+                                val horaProgIni = registroHoy.horarioProgramado.split("-").firstOrNull()?.trim() ?: "--:--"
+                                "Marcaste a las ${registroHoy.horaEntrada} con ${registroHoy.minutosTarde} min de retraso sobre la hora programada ($horaProgIni)"
+                            } else "Marcaste entrada a las ${registroHoy.horaEntrada}"
+                        }
                         EstadoAsistencia.EN_DESCANSO -> "En pausa de descanso desde las ${registroHoy.inicioDescanso}"
                         EstadoAsistencia.FINALIZADO -> "Jornada completada (${registroHoy.horaEntrada} - ${registroHoy.horaSalida})"
                         EstadoAsistencia.SIN_INICIAR -> null
@@ -185,7 +190,13 @@ class MarcarAsistenciaViewModel : ViewModel() {
         // Calcular minutos de retraso si corresponde
         val horarioProg = estadoActual.horario
         val minutosTarde = calcularRetraso(horarioProg, horaActual)
-        val estadoRegistro = if (minutosTarde > 10) "TARDE" else "PRESENTE"
+        val estadoRegistro = if (minutosTarde > 0) "TARDE" else "PRESENTE"
+        val horaProgInicio = horarioProg.split("-").firstOrNull()?.trim() ?: "--:--"
+        val mensajeAvisoTexto = if (minutosTarde > 0) {
+            "Marcaste a las $horaActual con $minutosTarde min de retraso sobre la hora programada ($horaProgInicio)"
+        } else {
+            "Entrada registrada a las $horaActual a tiempo"
+        }
 
         val nuevoRegistro = RegistroAsistencia(
             id = registroActualId.ifBlank { "${empId}_${hoyIso}" },
@@ -210,11 +221,16 @@ class MarcarAsistenciaViewModel : ViewModel() {
             it.copy(
                 estadoActual = EstadoAsistencia.EN_TURNO,
                 horaEntrada = horaActual,
-                mensajeAviso = "Entrada registrada a las $horaActual ($estadoRegistro)"
+                mensajeAviso = mensajeAvisoTexto
             )
         }
 
         AsistenciaRepository.guardarRegistroAsistenciaEnBackground(nuevoRegistro)
+        if (minutosTarde > 0) {
+            viewModelScope.launch {
+                AsistenciaRepository.resolverIncumplimientoPorLlegada(empId, hoyIso)
+            }
+        }
     }
 
     fun iniciarDescanso() {

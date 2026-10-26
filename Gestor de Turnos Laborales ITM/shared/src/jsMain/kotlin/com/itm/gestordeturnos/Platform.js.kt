@@ -12,6 +12,7 @@ import com.itm.gestordeturnos.domain.model.EstadoNovedad
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import com.itm.gestordeturnos.domain.model.EstadoSolicitudCambio
 import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
+import com.itm.gestordeturnos.domain.model.NotificacionIncumplimiento
 import com.itm.gestordeturnos.domain.model.Novedad
 import kotlinx.datetime.LocalDate
 import dev.gitlive.firebase.Firebase
@@ -101,6 +102,189 @@ actual suspend fun iniciarSesionGooglePlataforma(): GoogleUserData? = suspendCan
             }
         } catch (e) {
             onError(e);
+        }
+    """)
+}
+
+private fun parsearIncumplimientoJs(d: dynamic): NotificacionIncumplimiento? {
+    if (d == null || d == js("undefined")) return null
+    return try {
+        val id = (d.id as? String) ?: ""
+        val empId = (d.empleadoId as? String) ?: ""
+        val empNombre = (d.empleadoNombre as? String) ?: (d.empleado as? String) ?: ""
+        val tipo = (d.tipo as? String) ?: ""
+        val detalleHora = (d.detalleHora as? String) ?: ""
+        val fechaIso = (d.fechaIso as? String) ?: ""
+        val sucursal = (d.sucursal as? String) ?: "CENTRO"
+        val atendida = (d.atendida as? Boolean) ?: false
+        val motivoAtencion = (d.motivoAtencion as? String) ?: ""
+        val horaAtencion = (d.horaAtencion as? String) ?: ""
+
+        NotificacionIncumplimiento(
+            id = id,
+            empleadoId = empId,
+            empleado = empNombre,
+            tipo = tipo,
+            detalleHora = detalleHora,
+            fechaIso = fechaIso,
+            sucursal = sucursal,
+            atendida = atendida,
+            motivoAtencion = motivoAtencion,
+            horaAtencion = horaAtencion
+        )
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+actual suspend fun guardarIncumplimientoFirestore(notificacion: NotificacionIncumplimiento): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val id = if (notificacion.id.isNotBlank()) notificacion.id else "${notificacion.empleadoId}_${notificacion.fechaIso}_${notificacion.tipo}"
+    val empId = notificacion.empleadoId
+    val empNombre = notificacion.empleado
+    val tipo = notificacion.tipo
+    val detalleHora = notificacion.detalleHora
+    val fechaIso = notificacion.fechaIso
+    val sucursal = notificacion.sucursal
+    val atendida = notificacion.atendida
+    val motivoAtencion = notificacion.motivoAtencion
+    val horaAtencion = notificacion.horaAtencion
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Incumplimiento guardado con éxito en Firestore: $id")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar incumplimiento en Firestore"
+        println("Error guardando incumplimiento en Firestore ($id): $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                var data = {
+                    id: String(id || ''),
+                    empleadoId: String(empId || ''),
+                    empleadoNombre: String(empNombre || ''),
+                    empleado: String(empNombre || ''),
+                    tipo: String(tipo || ''),
+                    detalleHora: String(detalleHora || ''),
+                    fechaIso: String(fechaIso || ''),
+                    sucursal: String(sucursal || 'CENTRO'),
+                    atendida: Boolean(atendida),
+                    motivoAtencion: String(motivoAtencion || ''),
+                    horaAtencion: String(horaAtencion || ''),
+                    timestamp: Date.now()
+                };
+                console.log("Enviando incumplimiento a Firestore /incumplimientos/" + id, data);
+                db.collection("incumplimientos").doc(id).set(data)
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onError(new Error("Firebase Firestore no está disponible en window"));
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual suspend fun obtenerIncumplimientosFirestore(): List<NotificacionIncumplimiento> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<NotificacionIncumplimiento>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val inc = parsearIncumplimientoJs(data)
+                    if (inc != null) {
+                        lista.add(inc)
+                    }
+                }
+            }
+        }
+        println("Incumplimientos obtenidos de Firestore: " + lista.size)
+        continuation.resume(lista)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        println("Error obteniendo incumplimientos de Firestore: " + error)
+        continuation.resume(emptyList())
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("incumplimientos").get()
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onSuccess({ docs: [] });
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual fun observarIncumplimientosFirestore(onUpdate: (List<NotificacionIncumplimiento>) -> Unit) {
+    val callback: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<NotificacionIncumplimiento>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val inc = parsearIncumplimientoJs(data)
+                    if (inc != null) {
+                        lista.add(inc)
+                    }
+                }
+            }
+        }
+        println("Cambio en tiempo real de Firestore /incumplimientos, total: " + lista.size)
+        onUpdate(lista)
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("incumplimientos").onSnapshot(callback, function(err) {
+                    console.error("Error en onSnapshot /incumplimientos de Firestore:", err);
+                });
+            }
+        } catch(e) {
+            console.error("Error suscribiendo a Firestore /incumplimientos:", e);
         }
     """)
 }
@@ -1173,6 +1357,8 @@ private fun parsearRegistroAsistenciaJs(d: dynamic): RegistroAsistencia? {
             else -> 0
         }
         val esDescanso = (d.esDescanso as? Boolean) ?: false
+        val registradoPorSupervisor = (d.registradoPorSupervisor as? Boolean) ?: false
+        val motivoSupervisor = (d.motivoSupervisor as? String) ?: ""
 
         RegistroAsistencia(
             id = id,
@@ -1190,7 +1376,9 @@ private fun parsearRegistroAsistenciaJs(d: dynamic): RegistroAsistencia? {
             estadoAsistencia = estadoAsisEnum,
             tiempoEfectivoMinutos = tiempoEfectivo,
             minutosTarde = minsTarde,
-            esDescanso = esDescanso
+            esDescanso = esDescanso,
+            registradoPorSupervisor = registradoPorSupervisor,
+            motivoSupervisor = motivoSupervisor
         )
     } catch (_: Throwable) {
         null
@@ -1214,6 +1402,8 @@ actual suspend fun guardarRegistroAsistenciaFirestore(registro: RegistroAsistenc
     val tiempoEfectivoMinutos = registro.tiempoEfectivoMinutos
     val minutosTarde = registro.minutosTarde
     val esDescanso = registro.esDescanso
+    val registradoPorSupervisor = registro.registradoPorSupervisor
+    val motivoSupervisor = registro.motivoSupervisor
 
     val onSuccess: (dynamic) -> Unit = {
         println("Registro de asistencia guardado con éxito en Firestore: $id")
@@ -1256,6 +1446,8 @@ actual suspend fun guardarRegistroAsistenciaFirestore(registro: RegistroAsistenc
                     tiempoEfectivoMinutos: tiempoEfectivoMinutos,
                     minutosTarde: minutosTarde,
                     esDescanso: esDescanso,
+                    registradoPorSupervisor: Boolean(registradoPorSupervisor),
+                    motivoSupervisor: String(motivoSupervisor || ''),
                     timestampActualizacion: Date.now()
                 };
                 console.log("Enviando a Firestore /asistencia/" + id, data);

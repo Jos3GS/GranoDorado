@@ -3,6 +3,7 @@ package com.itm.gestordeturnos
 import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.Novedad
+import com.itm.gestordeturnos.domain.model.NotificacionIncumplimiento
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
 import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
@@ -66,3 +67,9 @@ expect suspend fun guardarSolicitudCambioFirestore(solicitud: SolicitudCambioTur
 expect suspend fun obtenerSolicitudesCambioFirestore(): List<SolicitudCambioTurno>
 
 expect fun observarSolicitudesCambioFirestore(onUpdate: (List<SolicitudCambioTurno>) -> Unit)
+
+expect suspend fun guardarIncumplimientoFirestore(notificacion: NotificacionIncumplimiento): Result<Unit>
+
+expect suspend fun obtenerIncumplimientosFirestore(): List<NotificacionIncumplimiento>
+
+expect fun observarIncumplimientosFirestore(onUpdate: (List<NotificacionIncumplimiento>) -> Unit)

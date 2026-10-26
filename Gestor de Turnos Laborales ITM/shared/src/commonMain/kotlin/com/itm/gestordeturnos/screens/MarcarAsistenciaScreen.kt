@@ -169,18 +169,19 @@ fun MarcarAsistenciaScreen(viewModel: MarcarAsistenciaViewModel) {
                                 shape = RoundedCornerShape(2.dp),
                                 modifier = Modifier.fillMaxWidth().height(48.dp)
                             ) {
-                                Text("Día libre programado", color = CafeTextSecondary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Día de descanso programado", color = CafeTextSecondary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                         }
 
-                        !state.tieneTurnoAsignado && state.estadoActual == EstadoAsistencia.SIN_INICIAR -> {
+                        !state.tieneTurnoAsignado -> {
                             Button(
-                                onClick = { viewModel.marcarEntrada() },
-                                colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                                onClick = { },
+                                enabled = false,
+                                colors = ButtonDefaults.buttonColors(disabledContainerColor = CafeBorderLight),
                                 shape = RoundedCornerShape(2.dp),
                                 modifier = Modifier.fillMaxWidth().height(48.dp)
                             ) {
-                                Text("Marcar entrada", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Sin turno programado para hoy", color = CafeTextSecondary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                         }
 
