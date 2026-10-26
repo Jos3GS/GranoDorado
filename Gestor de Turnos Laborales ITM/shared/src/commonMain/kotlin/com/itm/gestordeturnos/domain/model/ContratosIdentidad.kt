@@ -51,7 +51,9 @@ data class Empleado(
     val sucursalId: String = "CENTRO",
     val sucursal: String = "CENTRO",
     val fechaIngreso: String = "15/01/2024",
-    val iniciales: String = ""
+    val iniciales: String = "",
+    val sucursalAnterior: String = "",
+    val fechaCambioSucursal: String = ""
 ) : Usuario() {
 
     fun consultarTurnos(asignaciones: List<AsignacionTurno> = emptyList()): List<AsignacionTurno> {

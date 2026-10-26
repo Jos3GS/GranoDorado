@@ -67,12 +67,19 @@ data class FilaMalla(
 data class TurnoSeleccionable(
     val id: String,
     val descripcion: String,
-    val horario: String
+    val horario: String,
+    val fechaIso: String = "",
+    val tipoTurno: String = "",
+    val asignacionId: String = ""
 )
 
 data class TurnoCompaneroSeleccionable(
     val id: String,
     val nombre: String,
     val descripcion: String,
-    val horario: String
+    val horario: String,
+    val empleadoId: String = "",
+    val fechaIso: String = "",
+    val tipoTurno: String = "",
+    val asignacionId: String = ""
 )

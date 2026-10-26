@@ -2,6 +2,7 @@ package com.itm.gestordeturnos.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,10 +19,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,21 +41,34 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.itm.gestordeturnos.CafeAccentYellow
+import com.itm.gestordeturnos.CafeBackgroundLight
 import com.itm.gestordeturnos.CafeBorderColor
 import com.itm.gestordeturnos.CafeDarkBrown
+import com.itm.gestordeturnos.CafeStatusErrorBg
+import com.itm.gestordeturnos.CafeStatusErrorText
+import com.itm.gestordeturnos.CafeStatusInfoBg
+import com.itm.gestordeturnos.CafeStatusInfoText
+import com.itm.gestordeturnos.CafeStatusSuccessBg
+import com.itm.gestordeturnos.CafeStatusSuccessText
+import com.itm.gestordeturnos.CafeStatusWarningBg
 import com.itm.gestordeturnos.CafeTextPrimary
 import com.itm.gestordeturnos.CafeTextSecondary
 import com.itm.gestordeturnos.components.PrimarySolidButton
+import com.itm.gestordeturnos.components.SucursalChip
 import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.UsuarioActual
+import com.itm.gestordeturnos.viewmodel.PanelState
 import com.itm.gestordeturnos.viewmodel.PanelViewModel
+import com.itm.gestordeturnos.viewmodel.ResumenAsistenciaHoy
+import com.itm.gestordeturnos.viewmodel.SucursalMetrica
+import com.itm.gestordeturnos.viewmodel.TareaRonda
 
 @Composable
 fun PanelScreen(
     usuario: UsuarioActual,
     viewModel: PanelViewModel = viewModel { PanelViewModel() },
     onNavigate: (String) -> Unit
-){
+) {
     LaunchedEffect(usuario) {
         viewModel.cargarDatos(usuario)
     }
@@ -62,148 +80,327 @@ fun PanelScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(bottom = 32.dp)
-    ){
+    ) {
         val isCompact = maxWidth < 800.dp
-        val statCardWidth = if (isCompact) (maxWidth / 2) - 8.dp else 200.dp
+        val statCardWidth = if (isCompact) (maxWidth / 2) - 10.dp else 190.dp
 
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ){
+        Column(modifier = Modifier.fillMaxWidth()) {
             GreetingHeader(
                 saludo = state.saludo,
                 nombre = usuario.nombre,
                 rol = usuario.cargo,
-                scope = if (usuario.rol == RolUsuario.ADMINISTRADOR_GENERAL) "VISTA DE LAS 3 SUCURSALES" else "CENTRO",
+                scope = if (usuario.rol == RolUsuario.ADMINISTRADOR_GENERAL) "VISTA CONSOLIDADA (3 SUCURSALES)" else "SUCURSAL ${usuario.sucursal.ifBlank { "CENTRO" }}",
+                fechaHoy = state.fechaHoyTexto,
+                horaActual = state.horaActualTexto,
                 isCompact = isCompact
             )
-            Spacer(modifier = Modifier.height(32.dp))
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Selector de Sucursales para Administrador General
+            if (state.esAdminGeneral) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "FILTRAR SUCURSAL:",
+                        color = CafeTextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    state.sucursalesDisponibles.forEach { suc ->
+                        val isSelected = state.sucursalSeleccionada.equals(suc, ignoreCase = true)
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    if (isSelected) CafeDarkBrown else Color.White,
+                                    RoundedCornerShape(14.dp)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isSelected) CafeDarkBrown else CafeBorderColor,
+                                    RoundedCornerShape(14.dp)
+                                )
+                                .clickable { viewModel.cambiarFiltroSucursal(suc) }
+                                .padding(horizontal = 14.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = suc,
+                                color = if (isSelected) Color.White else CafeTextPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+            }
+
+            // StatCards Grid (Métricas en Tiempo Real)
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ){
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 StatCard(
                     numero = state.empleadosActivos.toString(),
                     etiqueta = "EMPLEADOS ACTIVOS",
-                    modifier = Modifier.width(statCardWidth)
+                    modifier = Modifier.width(statCardWidth),
+                    onClick = { onNavigate("empleados") }
                 )
-                if(usuario.rol == RolUsuario.ADMINISTRADOR_GENERAL){
-                    StatCard(
-                        numero = state.turnosCatalogo.toString(),
-                        etiqueta = "TURNOS EN CATÁLOGO",
-                        modifier = Modifier.width(statCardWidth)
-                    )
-                }
+                StatCard(
+                    numero = state.enTurnoAhoraTotal.toString(),
+                    etiqueta = "EN TURNO AHORA",
+                    subetiqueta = "De ${state.turnosHoyTotal} turnos hoy",
+                    badge = "EN VIVO",
+                    badgeColor = Color(0xFF16A34A),
+                    modifier = Modifier.width(statCardWidth),
+                    onClick = { onNavigate("asistencia") }
+                )
                 StatCard(
                     numero = state.novedadesPendientes.toString(),
                     etiqueta = "NOVEDADES PENDIENTES",
-                    modifier = Modifier.width(statCardWidth)
+                    subetiqueta = if (state.novedadesPendientes > 0) "Esperan revisión" else "Al día",
+                    colorNumero = if (state.novedadesPendientes > 0) Color(0xFFB45309) else Color(0xFFA04E35),
+                    modifier = Modifier.width(statCardWidth),
+                    onClick = { onNavigate("novedades") }
                 )
                 StatCard(
                     numero = state.cambiosPorAprobar.toString(),
                     etiqueta = "CAMBIOS POR APROBAR",
-                    modifier = Modifier.width(statCardWidth)
+                    subetiqueta = if (state.cambiosPorAprobar > 0) "Por decidir" else "Sin pendientes",
+                    colorNumero = if (state.cambiosPorAprobar > 0) Color(0xFF2563EB) else Color(0xFFA04E35),
+                    modifier = Modifier.width(statCardWidth),
+                    onClick = { onNavigate("cambios") }
+                )
+                if (state.esAdminGeneral) {
+                    StatCard(
+                        numero = state.turnosCatalogo.toString(),
+                        etiqueta = "TURNOS EN CATÁLOGO",
+                        subetiqueta = "Plantillas activas",
+                        modifier = Modifier.width(statCardWidth),
+                        onClick = { onNavigate("turnos") }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Banner Malla Semanal Dinámica y Ronda del Día
+            if (isCompact) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    ActionBanner(
+                        semanaTexto = state.semanaEnCurso,
+                        estadoMallaTexto = state.estadoMalla,
+                        esMallaPublicada = state.esMallaPublicada,
+                        modifier = Modifier.fillMaxWidth(),
+                        isCompact = isCompact,
+                        onActionClick = { onNavigate("malla") }
+                    )
+                    DailyTaskCard(
+                        tareas = state.rondaDelDia,
+                        modifier = Modifier.fillMaxWidth(),
+                        onNavigate = onNavigate
+                    )
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    ActionBanner(
+                        semanaTexto = state.semanaEnCurso,
+                        estadoMallaTexto = state.estadoMalla,
+                        esMallaPublicada = state.esMallaPublicada,
+                        modifier = Modifier.weight(0.58f),
+                        isCompact = isCompact,
+                        onActionClick = { onNavigate("malla") }
+                    )
+                    DailyTaskCard(
+                        tareas = state.rondaDelDia,
+                        modifier = Modifier.weight(0.42f),
+                        onNavigate = onNavigate
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Resumen Operativo de Asistencia Hoy
+            ResumenAsistenciaCard(
+                resumen = state.asistenciaHoy,
+                horaActual = state.horaActualTexto,
+                isCompact = isCompact,
+                onVerAsistencia = { onNavigate("asistencia") }
+            )
+
+            // Comparativa por Sucursales (Solo Administrador General)
+            if (state.esAdminGeneral && state.metricasPorSucursal.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(28.dp))
+                SucursalesComparativaCard(
+                    metricas = state.metricasPorSucursal,
+                    sucursalSeleccionada = state.sucursalSeleccionada,
+                    isCompact = isCompact,
+                    onSeleccionarSucursal = { viewModel.cambiarFiltroSucursal(it) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun GreetingHeader(
+    saludo: String,
+    nombre: String,
+    rol: String,
+    scope: String,
+    fechaHoy: String,
+    horaActual: String,
+    isCompact: Boolean = false
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                saludo.uppercase(),
+                color = CafeTextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier.size(8.dp).background(Color(0xFF16A34A), shape = CircleShape)
+                )
+                Text(
+                    text = "TIEMPO REAL · $horaActual",
+                    color = Color(0xFF16A34A),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        Text(
+            nombre,
+            fontSize = if (isCompact) 26.sp else 32.sp,
+            fontWeight = FontWeight.Bold,
+            color = CafeTextPrimary
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier.background(CafeDarkBrown, RoundedCornerShape(2.dp)).padding(horizontal = 10.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    rol.uppercase(),
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Text(
+                scope.uppercase(),
+                color = CafeTextSecondary,
+                fontSize = 11.sp,
+                letterSpacing = 0.5.sp
+            )
 
-            if (isCompact){
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ){
-                    ActionBanner(
-                        semanaTexto = state.semanaEnCurso,
-                        estadoMallaTexto = state.estadoMalla,
-                        modifier = Modifier.fillMaxWidth(),
-                        isCompact = isCompact,
-                        onActionClick = { onNavigate("malla") }
-                    )
-                    DailyTask(
-                        tareas = state.rondaDelDia,
-                        modifier = Modifier.fillMaxWidth(),
-                        onNavigate = onNavigate
-                    )
-                }
-            }else{
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ){
-                    ActionBanner(
-                        semanaTexto = state.semanaEnCurso,
-                        estadoMallaTexto = state.estadoMalla,
-                        modifier = Modifier.weight(0.6f),
-                        isCompact = isCompact,
-                        onActionClick = { onNavigate("malla") }
-                    )
-                    DailyTask(
-                        tareas = state.rondaDelDia,
-                        modifier = Modifier.weight(0.4f),
-                        onNavigate = onNavigate
-                    )
-                }
+            if (fechaHoy.isNotBlank()) {
+                Text(
+                    "· $fechaHoy",
+                    color = CafeTextSecondary,
+                    fontSize = 11.sp
+                )
             }
         }
     }
 }
 
 @Composable
-fun DailyTask(
-    tareas: List<String>,
-    modifier: Modifier,
-    onNavigate: (String) -> Unit
+fun StatCard(
+    numero: String,
+    etiqueta: String,
+    subetiqueta: String? = null,
+    badge: String? = null,
+    badgeColor: Color? = null,
+    colorNumero: Color = Color(0xFFA04E35),
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
     Card(
-        modifier = modifier.height(220.dp),
+        modifier = modifier
+            .height(130.dp)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = MaterialTheme.shapes.extraSmall,
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, CafeBorderColor)
-    ){
+    ) {
         Column(
-            modifier = Modifier.padding(24.dp).fillMaxSize()
-        ){
-            Text(
-                "RONDA DEL DIA",
-                color = CafeTextSecondary,
-                fontSize = 10.sp,
-                letterSpacing = 1.sp,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            if (tareas.isNotEmpty()) {
-                TaskItem(tareas.getOrElse(0) { "" }, onClick = { onNavigate("novedades") })
-                TaskItem(tareas.getOrElse(1) { "" }, onClick = { onNavigate("cambios") })
-                TaskItem(tareas.getOrElse(2) { "" }, onClick = { onNavigate("malla") })
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    numero,
+                    fontSize = 42.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colorNumero
+                )
+                if (badge != null) {
+                    Box(
+                        modifier = Modifier
+                            .background((badgeColor ?: Color(0xFF16A34A)).copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            badge,
+                            color = badgeColor ?: Color(0xFF16A34A),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
+            }
+
+            Column {
+                Text(
+                    etiqueta,
+                    fontSize = 10.sp,
+                    color = CafeTextSecondary,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+                if (subetiqueta != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        subetiqueta,
+                        fontSize = 11.sp,
+                        color = CafeTextSecondary
+                    )
+                }
             }
         }
-    }
-}
-
-@Composable
-fun TaskItem(texto: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ){
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ){
-            Box(
-                modifier = Modifier.size(6.dp)
-                    .background(CafeAccentYellow, RoundedCornerShape(50))
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                texto,
-                fontSize = 12.sp,
-                color = CafeTextPrimary
-            )
-        }
-        Text("->", color = CafeTextSecondary)
     }
 }
 
@@ -211,116 +408,440 @@ fun TaskItem(texto: String, onClick: () -> Unit) {
 fun ActionBanner(
     semanaTexto: String,
     estadoMallaTexto: String,
+    esMallaPublicada: Boolean,
     modifier: Modifier,
     isCompact: Boolean = false,
     onActionClick: () -> Unit
 ) {
     Box(
         modifier = modifier
-            .height(240.dp)
-            .background(Color(0xFFEBE6E0))
+            .background(Color(0xFFEBE6E0), RoundedCornerShape(4.dp))
+            .border(1.dp, CafeBorderColor, RoundedCornerShape(4.dp))
             .padding(24.dp)
-    ){
+    ) {
         Column(
-            modifier = Modifier.fillMaxHeight(),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ){
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
             Column {
-                Text(
-                    semanaTexto,
-                    color = CafeTextSecondary,
-                    fontSize = 10.sp,
-                    letterSpacing = 1.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        semanaTexto,
+                        color = CafeTextSecondary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                if (esMallaPublicada) CafeStatusSuccessBg else CafeStatusWarningBg,
+                                RoundedCornerShape(2.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            if (esMallaPublicada) "PUBLICADA" else "EN BORRADOR",
+                            color = if (esMallaPublicada) CafeStatusSuccessText else CafeDarkBrown,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
                 Text(
                     estadoMallaTexto,
-                    fontSize = if (isCompact) 20.sp else 24.sp,
+                    fontSize = if (isCompact) 20.sp else 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = CafeTextPrimary
                 )
+
                 Spacer(modifier = Modifier.height(8.dp))
+
                 Text(
-                    "Verifica que la franja 06:00 - 22:00 queda cubierta en cada sucursal antes de publicar el horario para los empleados.",
-                    fontSize = 14.sp,
-                    color = CafeTextSecondary
+                    if (esMallaPublicada) {
+                        "El horario de la semana está publicado y activo para los empleados. Cualquier ajuste posterior quedará registrado automáticamente."
+                    } else {
+                        "Verifica que la franja 06:00 - 22:00 quede cubierta y los descansos legales asignados antes de publicar el horario semanal."
+                    },
+                    fontSize = 13.sp,
+                    color = CafeTextSecondary,
+                    lineHeight = 18.sp
                 )
             }
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             PrimarySolidButton(
                 text = "Abrir malla semanal ->",
                 onClick = onActionClick,
-                modifier = if (isCompact) Modifier.fillMaxWidth() else Modifier.width(250.dp)
+                modifier = if (isCompact) Modifier.fillMaxWidth() else Modifier.width(240.dp)
             )
         }
     }
 }
 
 @Composable
-fun StatCard(numero: String, etiqueta: String, modifier: Modifier = Modifier) {
+fun DailyTaskCard(
+    tareas: List<TareaRonda>,
+    modifier: Modifier,
+    onNavigate: (String) -> Unit
+) {
     Card(
-        modifier = modifier.height(120.dp),
+        modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = MaterialTheme.shapes.extraSmall,
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, CafeBorderColor)
-    ){
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center
-        ){
-            Text(
-                numero,
-                fontSize = 48.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFA04E35)
+    ) {
+        Column(modifier = Modifier.padding(20.dp).fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "RONDA DEL DÍA · ACCIONES PRIORITARIAS",
+                    color = CafeTextSecondary,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    "${tareas.size} ÍTEMS",
+                    color = CafeDarkBrown,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (tareas.isEmpty()) {
+                Text("No hay tareas pendientes en este momento.", color = CafeTextSecondary, fontSize = 13.sp)
+            } else {
+                tareas.forEach { tarea ->
+                    ItemTareaRonda(
+                        tarea = tarea,
+                        onClick = { onNavigate(tarea.ruta) }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ItemTareaRonda(tarea: TareaRonda, onClick: () -> Unit) {
+    val (dotColor, badgeBg, badgeText) = when (tarea.tipo) {
+        "URGENTE" -> Triple(Color(0xFFDC2626), CafeStatusErrorBg, CafeStatusErrorText)
+        "PENDIENTE" -> Triple(CafeAccentYellow, CafeStatusWarningBg, CafeDarkBrown)
+        else -> Triple(Color(0xFF16A34A), CafeStatusSuccessBg, CafeStatusSuccessText)
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CafeBackgroundLight, RoundedCornerShape(4.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(8.dp).background(dotColor, shape = CircleShape)
             )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                tarea.texto,
+                fontSize = 12.sp,
+                color = CafeTextPrimary,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Box(
+            modifier = Modifier
+                .background(badgeBg, RoundedCornerShape(2.dp))
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        ) {
+            Text(
+                tarea.tipo,
+                color = badgeText,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun ResumenAsistenciaCard(
+    resumen: ResumenAsistenciaHoy,
+    horaActual: String,
+    isCompact: Boolean,
+    onVerAsistencia: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(4.dp),
+        border = BorderStroke(1.dp, CafeBorderColor)
+    ) {
+        Column(modifier = Modifier.padding(20.dp).fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        "OPERACIÓN DE ASISTENCIA EN TIEMPO REAL",
+                        color = CafeDarkBrown,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        "Monitoreo de asistencia y puntualidad de la jornada ($horaActual)",
+                        color = CafeTextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clickable { onVerAsistencia() }
+                        .background(CafeBackgroundLight, RoundedCornerShape(4.dp))
+                        .border(1.dp, CafeBorderColor, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Ver control de asistencia", color = CafeDarkBrown, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(Icons.Default.ArrowForward, contentDescription = null, tint = CafeDarkBrown, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Indicadores de Asistencia
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                IndicadorAsistenciaMini(
+                    modifier = Modifier.weight(1f),
+                    valor = resumen.turnosProgramados.toString(),
+                    etiqueta = "PROGRAMADOS HOY",
+                    color = CafeTextPrimary
+                )
+                IndicadorAsistenciaMini(
+                    modifier = Modifier.weight(1f),
+                    valor = resumen.enTurnoAhora.toString(),
+                    etiqueta = "EN TURNO AHORA",
+                    color = Color(0xFF16A34A)
+                )
+                IndicadorAsistenciaMini(
+                    modifier = Modifier.weight(1f),
+                    valor = resumen.aTiempo.toString(),
+                    etiqueta = "A TIEMPO",
+                    color = Color(0xFF2563EB)
+                )
+                IndicadorAsistenciaMini(
+                    modifier = Modifier.weight(1f),
+                    valor = resumen.conRetraso.toString(),
+                    etiqueta = "CON RETRASO",
+                    color = if (resumen.conRetraso > 0) Color(0xFFDC2626) else CafeTextSecondary
+                )
+                IndicadorAsistenciaMini(
+                    modifier = Modifier.weight(1f),
+                    valor = resumen.novedadesHoy.toString(),
+                    etiqueta = "NOVEDADES HOY",
+                    color = if (resumen.novedadesHoy > 0) Color(0xFFB45309) else CafeTextSecondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun IndicadorAsistenciaMini(
+    valor: String,
+    etiqueta: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(CafeBackgroundLight, RoundedCornerShape(4.dp))
+            .border(1.dp, CafeBorderColor.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 10.dp, vertical = 12.dp)
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Text(valor, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = color)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 etiqueta,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
                 color = CafeTextSecondary,
-                letterSpacing = 1.sp
+                letterSpacing = 0.5.sp
             )
         }
     }
 }
 
 @Composable
-fun GreetingHeader(saludo: String, nombre: String, rol: String, scope: String, isCompact: Boolean = false) {
-    Column{
-        Text(
-            saludo.uppercase(),
-            color = CafeTextSecondary,
-            fontSize = 12.sp,
-            letterSpacing = 1.sp
-        )
-        Text(
-            nombre,
-            fontSize = if (isCompact) 26.sp else 32.sp,
-            fontWeight = FontWeight.Bold,
-            color = CafeTextPrimary
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ){
-            Box(
-                modifier = Modifier.background(CafeDarkBrown).padding(horizontal = 12.dp, vertical = 4.dp)
-            ){
+fun SucursalesComparativaCard(
+    metricas: List<SucursalMetrica>,
+    sucursalSeleccionada: String,
+    isCompact: Boolean,
+    onSeleccionarSucursal: (String) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(4.dp),
+        border = BorderStroke(1.dp, CafeBorderColor)
+    ) {
+        Column(modifier = Modifier.padding(20.dp).fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    rol.uppercase(),
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    letterSpacing = 1.sp
+                    "DESEMPEÑO Y COBERTURA POR SUCURSAL",
+                    color = CafeDarkBrown,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "Haz clic para filtrar",
+                    color = CafeTextSecondary,
+                    fontSize = 11.sp
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                scope.uppercase(),
-                color = CafeTextSecondary,
-                fontSize = 10.sp,
-                letterSpacing = 1.sp
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (isCompact) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    metricas.forEach { suc ->
+                        SucursalFilaComparativa(
+                            suc = suc,
+                            isSelected = sucursalSeleccionada.equals(suc.nombre, ignoreCase = true),
+                            onClick = { onSeleccionarSucursal(suc.nombre) }
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    metricas.forEach { suc ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            SucursalFilaComparativa(
+                                suc = suc,
+                                isSelected = sucursalSeleccionada.equals(suc.nombre, ignoreCase = true),
+                                onClick = { onSeleccionarSucursal(suc.nombre) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SucursalFilaComparativa(
+    suc: SucursalMetrica,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val esMallaPub = suc.estadoMalla.equals("PUBLICADA", ignoreCase = true)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (isSelected) CafeDarkBrown.copy(alpha = 0.05f) else Color.White,
+                RoundedCornerShape(4.dp)
             )
+            .border(
+                width = if (isSelected) 2.dp else 1.dp,
+                color = if (isSelected) CafeDarkBrown else CafeBorderColor,
+                shape = RoundedCornerShape(4.dp)
+            )
+            .clickable { onClick() }
+            .padding(14.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SucursalChip(sucursal = suc.nombre)
+
+                Box(
+                    modifier = Modifier
+                        .background(if (esMallaPub) CafeStatusSuccessBg else CafeStatusWarningBg, RoundedCornerShape(2.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        suc.estadoMalla,
+                        color = if (esMallaPub) CafeStatusSuccessText else CafeDarkBrown,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Empleados", color = CafeTextSecondary, fontSize = 10.sp)
+                    Text("${suc.empleadosActivos} activos", color = CafeTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                Column {
+                    Text("Turnos hoy", color = CafeTextSecondary, fontSize = 10.sp)
+                    Text("${suc.enTurnoAhora} / ${suc.turnosHoy}", color = CafeTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                Column {
+                    Text("Novedades", color = CafeTextSecondary, fontSize = 10.sp)
+                    Text(
+                        "${suc.novedadesPendientes} pend.",
+                        color = if (suc.novedadesPendientes > 0) Color(0xFFB45309) else CafeTextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }

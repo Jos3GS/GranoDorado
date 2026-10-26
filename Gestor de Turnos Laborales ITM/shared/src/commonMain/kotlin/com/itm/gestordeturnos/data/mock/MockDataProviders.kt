@@ -1,4 +1,4 @@
-﻿package com.itm.gestordeturnos.data.mock
+package com.itm.gestordeturnos.data.mock
 
 import com.itm.gestordeturnos.domain.model.*
 
@@ -23,7 +23,7 @@ object MockDataProviders {
         Empleado(
             id = "emp_1",
             nombre = "Ana",
-            apellido = "PÃ©rez",
+            apellido = "Pérez",
             documento = 1017200001L,
             correo = "ana.perez@granodorado.com",
             telefono = "3104567890",
@@ -53,7 +53,7 @@ object MockDataProviders {
         Empleado(
             id = "emp_3",
             nombre = "Marta",
-            apellido = "LeÃ³n",
+            apellido = "León",
             documento = 1017200003L,
             correo = "marta.leon@granodorado.com",
             telefono = "3104567892",
@@ -67,7 +67,7 @@ object MockDataProviders {
         ),
         Empleado(
             id = "emp_4",
-            nombre = "JuliÃ¡n",
+            nombre = "Julián",
             apellido = "Vera",
             documento = 1017200004L,
             correo = "julian.vera@granodorado.com",
@@ -97,7 +97,7 @@ object MockDataProviders {
         ),
         Empleado(
             id = "emp_6",
-            nombre = "SofÃ­a",
+            nombre = "Sofía",
             apellido = "Ramos",
             documento = 1017200006L,
             correo = "sofia.ramos@granodorado.com",
@@ -128,8 +128,8 @@ object MockDataProviders {
         ),
         Empleado(
             id = "emp_8",
-            nombre = "AndrÃ©s",
-            apellido = "GÃ³mez",
+            nombre = "Andrés",
+            apellido = "Gómez",
             documento = 1017200008L,
             correo = "andres.gomez@granodorado.com",
             telefono = "3104567897",
@@ -229,10 +229,10 @@ object MockDataProviders {
     fun inicialHorarioSemana(): List<TurnoAsignado> = listOf(
         TurnoAsignado("1", "LUN", "14", "Apertura", "06:00 - 14:00", "CENTRO", "7 h 30 min"),
         TurnoAsignado("2", "MAR", "15", "Apertura", "06:00 - 14:00", "CENTRO", "7 h 30 min"),
-        TurnoAsignado("3", "MIÃ‰", "16", null, null, null, null, esDescanso = true),
+        TurnoAsignado("3", "MI\u00C9", "16", null, null, null, null, esDescanso = true),
         TurnoAsignado("4", "JUE", "17", "Cierre", "14:00 - 22:00", "CENTRO", "7 h 30 min", etiquetaModificado = "MODIFICADO 09/09/2026 11:15"),
         TurnoAsignado("5", "VIE", "18", "Apertura", "06:00 - 14:00", "CENTRO", "7 h 30 min"),
-        TurnoAsignado("6", "SÃB", "19", "Apertura", "06:00 - 14:00", "CENTRO", "7 h 30 min"),
+        TurnoAsignado("6", "S\u00C1B", "19", "Apertura", "06:00 - 14:00", "CENTRO", "7 h 30 min"),
         TurnoAsignado("7", "DOM", "20", null, null, null, null, sinAsignar = true)
     )
 
@@ -240,7 +240,7 @@ object MockDataProviders {
         return listOf(
             FilaMalla(
                 idEmpleado = "emp_1",
-                nombre = "Ana PÃ©rez",
+                nombre = "Ana Pérez",
                 cargo = "BARISTA",
                 turnos = listOf(
                     TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
@@ -270,7 +270,7 @@ object MockDataProviders {
             ),
             FilaMalla(
                 idEmpleado = "emp_3",
-                nombre = "Marta LeÃ³n",
+                nombre = "Marta León",
                 cargo = "BARISTA",
                 turnos = listOf(
                     TurnoCelda(tipo = "Vacaciones", horario = "-", tipoCelda = TipoCeldaMalla.VACACIONES),
@@ -285,7 +285,7 @@ object MockDataProviders {
             ),
             FilaMalla(
                 idEmpleado = "emp_4",
-                nombre = "JuliÃ¡n Vera",
+                nombre = "Julián Vera",
                 cargo = "CAJERO",
                 turnos = listOf(
                     TurnoCelda(tipo = "Apertura", horario = "06:00- 14:00", tipoCelda = TipoCeldaMalla.TURNO),
@@ -315,7 +315,7 @@ object MockDataProviders {
             ),
             FilaMalla(
                 idEmpleado = "emp_6",
-                nombre = "SofÃ­a Ramos",
+                nombre = "Sofía Ramos",
                 cargo = "BARISTA",
                 turnos = listOf(
                     TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true),
@@ -339,9 +339,9 @@ object MockDataProviders {
             horaInicioReal = null,
             horaFinReal = null,
             estado = EstadoNovedad.REPORTADA,
-            empleado = "Ana PÃ©rez",
+            empleado = "Ana Pérez",
             sucursal = "CENTRO",
-            detalleTurno = "Cierre, 14:00 a 22:00 Â· 2026-09-08",
+            detalleTurno = "Cierre, 14:00 a 22:00 · 2026-09-08",
             diferencia = "90 minutos menos que el turno programado",
             colorBorde = "ROJO",
             colorVorde = "ROJO",
@@ -350,15 +350,15 @@ object MockDataProviders {
         ),
         Novedad(
             id = "2",
-            tipo = "AmpliaciÃ³n del turno",
-            descripcion = "ExtensiÃ³n de turno por afluencia",
+            tipo = "Ampliación del turno",
+            descripcion = "Extensión de turno por afluencia",
             horaInicioReal = null,
             horaFinReal = null,
             estado = EstadoNovedad.REPORTADA,
-            empleado = "Marta LeÃ³n",
+            empleado = "Marta León",
             sucursal = "CENTRO",
-            detalleTurno = "Apertura, 06:00 a 14:00 Â· 2026-09-09",
-            diferencia = "90 minutos mÃ¡s que el turno programado",
+            detalleTurno = "Apertura, 06:00 a 14:00 · 2026-09-09",
+            diferencia = "90 minutos más que el turno programado",
             colorBorde = "VERDE",
             colorVorde = "VERDE",
             empleadoId = "5",
@@ -366,14 +366,14 @@ object MockDataProviders {
         ),
         Novedad(
             id = "3",
-            tipo = "AmpliaciÃ³n del turno",
-            descripcion = "AmpliaciÃ³n por cierre y cuadre",
+            tipo = "Ampliación del turno",
+            descripcion = "Ampliación por cierre y cuadre",
             horaInicioReal = null,
             horaFinReal = null,
             estado = EstadoNovedad.REPORTADA,
             empleado = "Carlos Ruiz",
             sucursal = "NORTE",
-            detalleTurno = "Cierre, 14:00 a 22:00 Â· 2026-09-08",
+            detalleTurno = "Cierre, 14:00 a 22:00 · 2026-09-08",
             diferencia = "sin diferencia",
             colorBorde = "GRIS",
             colorVorde = "GRIS",
@@ -387,9 +387,9 @@ object MockDataProviders {
             horaInicioReal = null,
             horaFinReal = null,
             estado = EstadoNovedad.REVISADA,
-            empleado = "JuliÃ¡n Vera",
+            empleado = "Julián Vera",
             sucursal = "CENTRO",
-            detalleTurno = "Intermedio, 10:00 a 18:00 Â· 2026-09-07",
+            detalleTurno = "Intermedio, 10:00 a 18:00 · 2026-09-07",
             diferencia = "25 minutos menos que el turno programado",
             colorBorde = "ROJO_OSCURO",
             colorVorde = "ROJO_OSCURO",
@@ -401,11 +401,11 @@ object MockDataProviders {
     fun inicialSolicitudesCambio(): List<SolicitudCambioTurno> = emptyList()
 
     fun inicialTurnosPropios(): List<TurnoSeleccionable> = listOf(
-        TurnoSeleccionable("1", "Lunes 14 Â· Apertura", "06:00-14:00"),
-        TurnoSeleccionable("2", "Martes 15 Â· Apertura", "06:00-14:00"),
-        TurnoSeleccionable("3", "Jueves 17 Â· Cierre", "14:00-22:00"),
-        TurnoSeleccionable("4", "Viernes 18 Â· Apertura", "06:00-14:00"),
-        TurnoSeleccionable("5", "SÃ¡bado 19 Â· Apertura", "06:00-14:00")
+        TurnoSeleccionable("1", "Lunes 14 · Apertura", "06:00-14:00"),
+        TurnoSeleccionable("2", "Martes 15 · Apertura", "06:00-14:00"),
+        TurnoSeleccionable("3", "Jueves 17 · Cierre", "14:00-22:00"),
+        TurnoSeleccionable("4", "Viernes 18 · Apertura", "06:00-14:00"),
+        TurnoSeleccionable("5", "Sábado 19 · Apertura", "06:00-14:00")
     )
 
     fun inicialTurnosCompaneros(): List<TurnoCompaneroSeleccionable> = emptyList()

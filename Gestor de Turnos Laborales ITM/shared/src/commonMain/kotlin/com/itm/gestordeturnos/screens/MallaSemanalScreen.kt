@@ -1,4 +1,4 @@
-﻿package com.itm.gestordeturnos.screens
+package com.itm.gestordeturnos.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -468,7 +468,10 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                                     colDiaWidth = colDiaWidth,
                                     colTotalWidth = colTotalWidth,
                                     onCeldaClick = { f, diaIdx, turno ->
+                                        if (turno.tipoCelda != com.itm.gestordeturnos.domain.model.TipoCeldaMalla.INCAPACIDAD &&
+                                            turno.tipoCelda != com.itm.gestordeturnos.domain.model.TipoCeldaMalla.VACACIONES) {
                                         celdaSeleccionada = Triple(f, diaIdx, turno)
+                                        }
                                     }
                                 )
                                 if (index < state.filas.size - 1) {

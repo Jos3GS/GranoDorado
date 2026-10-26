@@ -19,10 +19,22 @@ data class Novedad(
     val colorBorde: String = "GRIS",
     val colorVorde: String = "GRIS",
     val empleadoId: String = "",
-    val asignacionTurnoId: String = ""
+    val asignacionTurnoId: String = "",
+    val fechaReferencia: String = "",
+    val fechaCreacionIso: String = "",
+    val horaReal: String = "",
+    val comentarioRevision: String = "",
+    val revisadoPor: String = "",
+    val fechaRevision: String = "",
+    val reportadoPorSupervisor: Boolean = false
 ) {
     fun registrar(): Novedad = copy(estado = EstadoNovedad.REPORTADA)
-    fun revisar(): Novedad = copy(estado = EstadoNovedad.REVISADA)
+    fun revisar(comentario: String = "", revisor: String = "", fecha: String = ""): Novedad = copy(
+        estado = EstadoNovedad.REVISADA,
+        comentarioRevision = comentario,
+        revisadoPor = revisor,
+        fechaRevision = fecha
+    )
     fun corregir(nuevaDescripcion: String): Novedad = copy(descripcion = nuevaDescripcion)
     fun eliminar(): Novedad = copy(estado = EstadoNovedad.REVISADA)
 }

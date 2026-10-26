@@ -2,6 +2,10 @@ package com.itm.gestordeturnos
 
 import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.Novedad
+import com.itm.gestordeturnos.domain.model.NotificacionIncumplimiento
+import com.itm.gestordeturnos.domain.model.RegistroAsistencia
+import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 
 interface Platform {
@@ -45,3 +49,27 @@ expect suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<Asignaci
 expect suspend fun obtenerAsignacionesFirestore(): List<AsignacionTurno>
 
 expect fun observarAsignacionesFirestore(onUpdate: (List<AsignacionTurno>) -> Unit)
+
+expect suspend fun guardarRegistroAsistenciaFirestore(registro: RegistroAsistencia): Result<Unit>
+
+expect suspend fun obtenerRegistrosAsistenciaFirestore(): List<RegistroAsistencia>
+
+expect fun observarRegistrosAsistenciaFirestore(onUpdate: (List<RegistroAsistencia>) -> Unit)
+
+expect suspend fun guardarNovedadFirestore(novedad: Novedad): Result<Unit>
+
+expect suspend fun obtenerNovedadesFirestore(): List<Novedad>
+
+expect fun observarNovedadesFirestore(onUpdate: (List<Novedad>) -> Unit)
+
+expect suspend fun guardarSolicitudCambioFirestore(solicitud: SolicitudCambioTurno): Result<Unit>
+
+expect suspend fun obtenerSolicitudesCambioFirestore(): List<SolicitudCambioTurno>
+
+expect fun observarSolicitudesCambioFirestore(onUpdate: (List<SolicitudCambioTurno>) -> Unit)
+
+expect suspend fun guardarIncumplimientoFirestore(notificacion: NotificacionIncumplimiento): Result<Unit>
+
+expect suspend fun obtenerIncumplimientosFirestore(): List<NotificacionIncumplimiento>
+
+expect fun observarIncumplimientosFirestore(onUpdate: (List<NotificacionIncumplimiento>) -> Unit)

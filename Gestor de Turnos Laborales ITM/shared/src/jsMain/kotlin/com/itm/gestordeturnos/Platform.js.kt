@@ -1,12 +1,20 @@
 package com.itm.gestordeturnos
 
 import com.itm.gestordeturnos.domain.model.AsignacionTurno
+import com.itm.gestordeturnos.domain.model.RegistroAsistencia
+import com.itm.gestordeturnos.domain.model.EstadoAsistencia
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import com.itm.gestordeturnos.domain.model.RangoDescanso
 import com.itm.gestordeturnos.domain.model.Cargo
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.EstadoEmpleado
+import com.itm.gestordeturnos.domain.model.EstadoNovedad
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
+import com.itm.gestordeturnos.domain.model.EstadoSolicitudCambio
+import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
+import com.itm.gestordeturnos.domain.model.NotificacionIncumplimiento
+import com.itm.gestordeturnos.domain.model.Novedad
+import kotlinx.datetime.LocalDate
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.FirebaseOptions
 import dev.gitlive.firebase.initialize
@@ -94,6 +102,423 @@ actual suspend fun iniciarSesionGooglePlataforma(): GoogleUserData? = suspendCan
             }
         } catch (e) {
             onError(e);
+        }
+    """)
+}
+
+private fun parsearIncumplimientoJs(d: dynamic): NotificacionIncumplimiento? {
+    if (d == null || d == js("undefined")) return null
+    return try {
+        val id = (d.id as? String) ?: ""
+        val empId = (d.empleadoId as? String) ?: ""
+        val empNombre = (d.empleadoNombre as? String) ?: (d.empleado as? String) ?: ""
+        val tipo = (d.tipo as? String) ?: ""
+        val detalleHora = (d.detalleHora as? String) ?: ""
+        val fechaIso = (d.fechaIso as? String) ?: ""
+        val sucursal = (d.sucursal as? String) ?: "CENTRO"
+        val atendida = (d.atendida as? Boolean) ?: false
+        val motivoAtencion = (d.motivoAtencion as? String) ?: ""
+        val horaAtencion = (d.horaAtencion as? String) ?: ""
+
+        NotificacionIncumplimiento(
+            id = id,
+            empleadoId = empId,
+            empleado = empNombre,
+            tipo = tipo,
+            detalleHora = detalleHora,
+            fechaIso = fechaIso,
+            sucursal = sucursal,
+            atendida = atendida,
+            motivoAtencion = motivoAtencion,
+            horaAtencion = horaAtencion
+        )
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+actual suspend fun guardarIncumplimientoFirestore(notificacion: NotificacionIncumplimiento): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val id = if (notificacion.id.isNotBlank()) notificacion.id else "${notificacion.empleadoId}_${notificacion.fechaIso}_${notificacion.tipo}"
+    val empId = notificacion.empleadoId
+    val empNombre = notificacion.empleado
+    val tipo = notificacion.tipo
+    val detalleHora = notificacion.detalleHora
+    val fechaIso = notificacion.fechaIso
+    val sucursal = notificacion.sucursal
+    val atendida = notificacion.atendida
+    val motivoAtencion = notificacion.motivoAtencion
+    val horaAtencion = notificacion.horaAtencion
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Incumplimiento guardado con éxito en Firestore: $id")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar incumplimiento en Firestore"
+        println("Error guardando incumplimiento en Firestore ($id): $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                var data = {
+                    id: String(id || ''),
+                    empleadoId: String(empId || ''),
+                    empleadoNombre: String(empNombre || ''),
+                    empleado: String(empNombre || ''),
+                    tipo: String(tipo || ''),
+                    detalleHora: String(detalleHora || ''),
+                    fechaIso: String(fechaIso || ''),
+                    sucursal: String(sucursal || 'CENTRO'),
+                    atendida: Boolean(atendida),
+                    motivoAtencion: String(motivoAtencion || ''),
+                    horaAtencion: String(horaAtencion || ''),
+                    timestamp: Date.now()
+                };
+                console.log("Enviando incumplimiento a Firestore /incumplimientos/" + id, data);
+                db.collection("incumplimientos").doc(id).set(data)
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onError(new Error("Firebase Firestore no está disponible en window"));
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual suspend fun obtenerIncumplimientosFirestore(): List<NotificacionIncumplimiento> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<NotificacionIncumplimiento>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val inc = parsearIncumplimientoJs(data)
+                    if (inc != null) {
+                        lista.add(inc)
+                    }
+                }
+            }
+        }
+        println("Incumplimientos obtenidos de Firestore: " + lista.size)
+        continuation.resume(lista)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        println("Error obteniendo incumplimientos de Firestore: " + error)
+        continuation.resume(emptyList())
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("incumplimientos").get()
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onSuccess({ docs: [] });
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual fun observarIncumplimientosFirestore(onUpdate: (List<NotificacionIncumplimiento>) -> Unit) {
+    val callback: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<NotificacionIncumplimiento>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val inc = parsearIncumplimientoJs(data)
+                    if (inc != null) {
+                        lista.add(inc)
+                    }
+                }
+            }
+        }
+        println("Cambio en tiempo real de Firestore /incumplimientos, total: " + lista.size)
+        onUpdate(lista)
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("incumplimientos").onSnapshot(callback, function(err) {
+                    console.error("Error en onSnapshot /incumplimientos de Firestore:", err);
+                });
+            }
+        } catch(e) {
+            console.error("Error suscribiendo a Firestore /incumplimientos:", e);
+        }
+    """)
+}
+
+private fun parsearSolicitudCambioJs(d: dynamic): SolicitudCambioTurno? {
+    if (d == null || d == js("undefined")) return null
+    return try {
+        val id = (d.id as? String) ?: ""
+        val numeroSolicitud = (d.numeroSolicitud as? String) ?: ""
+        val fechaSolicitudStr = (d.fechaSolicitud as? String) ?: (d.fechaSolicitudIso as? String) ?: ""
+        val fechaSolicitud = try {
+            if (fechaSolicitudStr.isNotBlank()) LocalDate.parse(fechaSolicitudStr.take(10)) else null
+        } catch (_: Throwable) {
+            null
+        }
+        val estadoStr = (d.estado as? String) ?: "PENDIENTE"
+        val estadoEnum = try { EstadoSolicitudCambio.valueOf(estadoStr) } catch (_: Throwable) { EstadoSolicitudCambio.PENDIENTE }
+        val motivoRechazo = (d.motivoRechazo as? String) ?: ""
+        val motivo = (d.motivo as? String) ?: ""
+        val empleadoSolicitanteId = (d.empleadoSolicitanteId as? String) ?: ""
+        val nombreSolicitante = (d.nombreSolicitante as? String) ?: ""
+        val empleadoCompaneroId = (d.empleadoCompaneroId as? String) ?: ""
+        val nombreCompanero = (d.nombreCompanero as? String) ?: ""
+        val turnoEntregaId = (d.turnoEntregaId as? String) ?: ""
+        val tipoTurnoEntrega = (d.tipoTurnoEntrega as? String) ?: ""
+        val detalleTurnoEntrega = (d.detalleTurnoEntrega as? String) ?: ""
+        val turnoRecibeId = (d.turnoRecibeId as? String) ?: ""
+        val tipoTurnoRecibe = (d.tipoTurnoRecibe as? String) ?: ""
+        val detalleTurnoRecibe = (d.detalleTurnoRecibe as? String) ?: ""
+        val sucursalNombre = (d.sucursalNombre as? String) ?: (d.sucursal as? String) ?: "CENTRO"
+        val validacionesOk = when (val v = d.validacionesOk) {
+            is Boolean -> v
+            is String -> v.toBoolean()
+            else -> true
+        }
+        val esRemitente = when (val r = d.esRemitente) {
+            is Boolean -> r
+            is String -> r.toBoolean()
+            else -> false
+        }
+
+        SolicitudCambioTurno(
+            id = id,
+            numeroSolicitud = numeroSolicitud,
+            fechaSolicitud = fechaSolicitud,
+            estado = estadoEnum,
+            motivoRechazo = motivoRechazo,
+            motivo = motivo,
+            empleadoSolicitanteId = empleadoSolicitanteId,
+            nombreSolicitante = nombreSolicitante,
+            empleadoCompaneroId = empleadoCompaneroId,
+            nombreCompanero = nombreCompanero,
+            turnoEntregaId = turnoEntregaId,
+            tipoTurnoEntrega = tipoTurnoEntrega,
+            detalleTurnoEntrega = detalleTurnoEntrega,
+            turnoRecibeId = turnoRecibeId,
+            tipoTurnoRecibe = tipoTurnoRecibe,
+            detalleTurnoRecibe = detalleTurnoRecibe,
+            sucursalNombre = sucursalNombre,
+            validacionesOk = validacionesOk,
+            esRemitente = esRemitente
+        )
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+actual suspend fun guardarSolicitudCambioFirestore(solicitud: SolicitudCambioTurno): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val id = if (solicitud.id.isNotBlank()) solicitud.id else "sol_${kotlin.random.Random.nextInt(100000, 999999)}"
+    val numeroSolicitud = if (solicitud.numeroSolicitud.isNotBlank()) solicitud.numeroSolicitud else "SOL-${kotlin.random.Random.nextInt(1000, 9999)}"
+    val fechaSolicitudStr = solicitud.fechaSolicitud?.toString() ?: ""
+    val estado = solicitud.estado.name
+    val motivoRechazo = solicitud.motivoRechazo
+    val motivo = solicitud.motivo
+    val empleadoSolicitanteId = solicitud.empleadoSolicitanteId
+    val nombreSolicitante = solicitud.nombreSolicitante
+    val empleadoCompaneroId = solicitud.empleadoCompaneroId
+    val nombreCompanero = solicitud.nombreCompanero
+    val turnoEntregaId = solicitud.turnoEntregaId
+    val tipoTurnoEntrega = solicitud.tipoTurnoEntrega
+    val detalleTurnoEntrega = solicitud.detalleTurnoEntrega
+    val turnoRecibeId = solicitud.turnoRecibeId
+    val tipoTurnoRecibe = solicitud.tipoTurnoRecibe
+    val detalleTurnoRecibe = solicitud.detalleTurnoRecibe
+    val sucursalNombre = solicitud.sucursalNombre
+    val validacionesOk = solicitud.validacionesOk
+    val esRemitente = solicitud.esRemitente
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Solicitud de cambio guardada con éxito en Firestore: $id")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar solicitud de cambio en Firestore"
+        println("Error guardando solicitud de cambio en Firestore ($id): $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                var data = {
+                    id: String(id || ''),
+                    numeroSolicitud: String(numeroSolicitud || ''),
+                    fechaSolicitud: String(fechaSolicitudStr || ''),
+                    fechaSolicitudIso: String(fechaSolicitudStr || ''),
+                    estado: String(estado || 'PENDIENTE'),
+                    motivoRechazo: String(motivoRechazo || ''),
+                    motivo: String(motivo || ''),
+                    empleadoSolicitanteId: String(empleadoSolicitanteId || ''),
+                    nombreSolicitante: String(nombreSolicitante || ''),
+                    empleadoCompaneroId: String(empleadoCompaneroId || ''),
+                    nombreCompanero: String(nombreCompanero || ''),
+                    turnoEntregaId: String(turnoEntregaId || ''),
+                    tipoTurnoEntrega: String(tipoTurnoEntrega || ''),
+                    detalleTurnoEntrega: String(detalleTurnoEntrega || ''),
+                    turnoRecibeId: String(turnoRecibeId || ''),
+                    tipoTurnoRecibe: String(tipoTurnoRecibe || ''),
+                    detalleTurnoRecibe: String(detalleTurnoRecibe || ''),
+                    sucursalNombre: String(sucursalNombre || 'CENTRO'),
+                    sucursal: String(sucursalNombre || 'CENTRO'),
+                    validacionesOk: Boolean(validacionesOk),
+                    esRemitente: Boolean(esRemitente),
+                    timestamp: Date.now()
+                };
+                console.log("Enviando solicitud de cambio a Firestore /solicitudes_cambio/" + id, data);
+                db.collection("solicitudes_cambio").doc(id).set(data)
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onError(new Error("Firebase Firestore no está disponible en window"));
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual suspend fun obtenerSolicitudesCambioFirestore(): List<SolicitudCambioTurno> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<SolicitudCambioTurno>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val s = parsearSolicitudCambioJs(data)
+                    if (s != null) {
+                        lista.add(s)
+                    }
+                }
+            }
+        }
+        println("Solicitudes de cambio obtenidas de Firestore: " + lista.size)
+        continuation.resume(lista)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        println("Error obteniendo solicitudes de cambio de Firestore: " + error)
+        continuation.resume(emptyList())
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("solicitudes_cambio").get()
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onSuccess({ docs: [] });
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual fun observarSolicitudesCambioFirestore(onUpdate: (List<SolicitudCambioTurno>) -> Unit) {
+    val callback: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<SolicitudCambioTurno>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val s = parsearSolicitudCambioJs(data)
+                    if (s != null) {
+                        lista.add(s)
+                    }
+                }
+            }
+        }
+        println("Cambio en tiempo real de Firestore /solicitudes_cambio, total: " + lista.size)
+        onUpdate(lista)
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("solicitudes_cambio").onSnapshot(callback, function(err) {
+                    console.error("Error en onSnapshot /solicitudes_cambio de Firestore:", err);
+                });
+            }
+        } catch(e) {
+            console.error("Error suscribiendo a Firestore /solicitudes_cambio:", e);
         }
     """)
 }
@@ -198,7 +623,10 @@ private fun parsearEmpleadoJs(d: dynamic): Empleado? {
         val tel = (d.telefono as? String) ?: ""
         val cargoStr = (d.cargo as? String) ?: "BARISTA"
         val cargoEnum = Cargo.entries.find { it.name.equals(cargoStr, ignoreCase = true) || it.displayName.equals(cargoStr, ignoreCase = true) } ?: Cargo.BARISTA
-        val sucursal = (d.sucursal as? String) ?: "CENTRO"
+        val sucursal = (d.sucursal as? String) ?: (d.sucursalId as? String) ?: "CENTRO"
+        val sucursalId = (d.sucursalId as? String) ?: sucursal
+        val sucursalAnterior = (d.sucursalAnterior as? String) ?: ""
+        val fechaCambioSucursal = (d.fechaCambioSucursal as? String) ?: ""
         val fechaIngreso = (d.fechaIngreso as? String) ?: "15/01/2024"
         val estadoStr = (d.estado as? String) ?: "ACTIVO"
         val estadoEnum = EstadoUsuario.entries.find { it.name.equals(estadoStr, ignoreCase = true) || it.displayName.equals(estadoStr, ignoreCase = true) } ?: EstadoUsuario.ACTIVO
@@ -216,6 +644,9 @@ private fun parsearEmpleadoJs(d: dynamic): Empleado? {
             telefono = tel,
             cargo = cargoEnum,
             sucursal = sucursal,
+            sucursalId = sucursalId,
+            sucursalAnterior = sucursalAnterior,
+            fechaCambioSucursal = fechaCambioSucursal,
             fechaIngreso = fechaIngreso,
             estado = estadoEnum,
             estadoLaboral = estadoLabEnum,
@@ -236,6 +667,9 @@ actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = 
     val telefono = empleado.telefono
     val cargo = empleado.cargo.name
     val sucursal = empleado.sucursal
+    val sucursalId = empleado.sucursalId.ifBlank { sucursal }
+    val sucursalAnterior = empleado.sucursalAnterior
+    val fechaCambioSucursal = empleado.fechaCambioSucursal
     val fechaIngreso = empleado.fechaIngreso
     val estado = empleado.estado.name
     val estadoLaboral = empleado.estadoLaboral.name
@@ -274,6 +708,9 @@ actual suspend fun guardarEmpleadoFirestore(empleado: Empleado): Result<Unit> = 
                     telefono: telefono,
                     cargo: cargo,
                     sucursal: sucursal,
+                    sucursalId: sucursalId,
+                    sucursalAnterior: sucursalAnterior,
+                    fechaCambioSucursal: fechaCambioSucursal,
                     fechaIngreso: fechaIngreso,
                     estado: estado,
                     estadoLaboral: estadoLaboral,
@@ -382,7 +819,6 @@ actual fun observarEmpleadosFirestore(onUpdate: (List<Empleado>) -> Unit) {
         }
     """)
 }
-
 
 private fun parsearTurnoJs(d: dynamic): TurnoTemplate? {
     if (d == null || d == js("undefined")) return null
@@ -610,6 +1046,7 @@ actual fun observarTurnosFirestore(onUpdate: (List<TurnoTemplate>) -> Unit) {
         }
     """)
 }
+
 private fun parsearAsignacionJs(d: dynamic): AsignacionTurno? {
     if (d == null || d == js("undefined")) return null
     return try {
@@ -818,6 +1255,7 @@ actual fun observarAsignacionesFirestore(onUpdate: (List<AsignacionTurno>) -> Un
         }
     """)
 }
+
 actual suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<AsignacionTurno>): Result<Unit> = suspendCancellableCoroutine { continuation ->
     if (asignaciones.isEmpty()) {
         continuation.resume(Result.success(Unit))
@@ -887,6 +1325,449 @@ actual suspend fun guardarAsignacionesBatchFirestore(asignaciones: List<Asignaci
         } catch(e) {
             console.error("Excepción en guardarAsignacionesBatchFirestore:", e);
             onError(e);
+        }
+    """)
+}
+
+private fun parsearRegistroAsistenciaJs(d: dynamic): RegistroAsistencia? {
+    if (d == null || d == js("undefined")) return null
+    return try {
+        val id = (d.id as? String) ?: ""
+        val empId = (d.empleadoId as? String) ?: ""
+        val empNombre = (d.empleado as? String) ?: (d.empleadoNombre as? String) ?: ""
+        val sucursal = (d.sucursal as? String) ?: "CENTRO"
+        val fechaIso = (d.fechaIso as? String) ?: ""
+        val tipoTurno = (d.tipoTurno as? String) ?: ""
+        val horarioProgramado = (d.horarioProgramado as? String) ?: ""
+        val horaEntrada = (d.horaEntrada as? String) ?: "-"
+        val horaSalida = (d.horaSalida as? String) ?: "-"
+        val inicioDescanso = (d.inicioDescanso as? String) ?: "-"
+        val finDescanso = (d.finDescanso as? String) ?: "-"
+        val estado = (d.estado as? String) ?: "PENDIENTE"
+        val estadoAsisStr = (d.estadoAsistencia as? String) ?: "SIN_INICIAR"
+        val estadoAsisEnum = try { EstadoAsistencia.valueOf(estadoAsisStr) } catch (_: Throwable) { EstadoAsistencia.SIN_INICIAR }
+        val tiempoEfectivo = when (val t = d.tiempoEfectivoMinutos) {
+            is Number -> t.toInt()
+            is String -> t.toIntOrNull() ?: 0
+            else -> 0
+        }
+        val minsTarde = when (val m = d.minutosTarde) {
+            is Number -> m.toInt()
+            is String -> m.toIntOrNull() ?: 0
+            else -> 0
+        }
+        val esDescanso = (d.esDescanso as? Boolean) ?: false
+        val registradoPorSupervisor = (d.registradoPorSupervisor as? Boolean) ?: false
+        val motivoSupervisor = (d.motivoSupervisor as? String) ?: ""
+
+        RegistroAsistencia(
+            id = id,
+            empleadoId = empId,
+            empleado = empNombre,
+            sucursal = sucursal,
+            fechaIso = fechaIso,
+            tipoTurno = tipoTurno,
+            horarioProgramado = horarioProgramado,
+            horaEntrada = horaEntrada,
+            horaSalida = horaSalida,
+            inicioDescanso = inicioDescanso,
+            finDescanso = finDescanso,
+            estado = estado,
+            estadoAsistencia = estadoAsisEnum,
+            tiempoEfectivoMinutos = tiempoEfectivo,
+            minutosTarde = minsTarde,
+            esDescanso = esDescanso,
+            registradoPorSupervisor = registradoPorSupervisor,
+            motivoSupervisor = motivoSupervisor
+        )
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+actual suspend fun guardarRegistroAsistenciaFirestore(registro: RegistroAsistencia): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val id = if (registro.id.isNotBlank()) registro.id else "${registro.empleadoId}_${registro.fechaIso}"
+    val empId = registro.empleadoId
+    val empNombre = registro.empleado
+    val sucursal = registro.sucursal
+    val fechaIso = registro.fechaIso
+    val tipoTurno = registro.tipoTurno
+    val horarioProgramado = registro.horarioProgramado
+    val horaEntrada = registro.horaEntrada
+    val horaSalida = registro.horaSalida
+    val inicioDescanso = registro.inicioDescanso
+    val finDescanso = registro.finDescanso
+    val estado = registro.estado
+    val estadoAsistencia = registro.estadoAsistencia.name
+    val tiempoEfectivoMinutos = registro.tiempoEfectivoMinutos
+    val minutosTarde = registro.minutosTarde
+    val esDescanso = registro.esDescanso
+    val registradoPorSupervisor = registro.registradoPorSupervisor
+    val motivoSupervisor = registro.motivoSupervisor
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Registro de asistencia guardado con éxito en Firestore: $id")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar registro de asistencia en Firestore"
+        println("Error guardando asistencia en Firestore ($id): $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                var data = {
+                    id: id,
+                    empleadoId: empId,
+                    empleado: empNombre,
+                    empleadoNombre: empNombre,
+                    sucursal: sucursal,
+                    fechaIso: fechaIso,
+                    tipoTurno: tipoTurno,
+                    horarioProgramado: horarioProgramado,
+                    horaEntrada: horaEntrada,
+                    horaSalida: horaSalida,
+                    inicioDescanso: inicioDescanso,
+                    finDescanso: finDescanso,
+                    estado: estado,
+                    estadoAsistencia: estadoAsistencia,
+                    tiempoEfectivoMinutos: tiempoEfectivoMinutos,
+                    minutosTarde: minutosTarde,
+                    esDescanso: esDescanso,
+                    registradoPorSupervisor: Boolean(registradoPorSupervisor),
+                    motivoSupervisor: String(motivoSupervisor || ''),
+                    timestampActualizacion: Date.now()
+                };
+                console.log("Enviando a Firestore /asistencia/" + id, data);
+                db.collection("asistencia").doc(id).set(data)
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onError(new Error("Firebase Firestore no está disponible en window"));
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual suspend fun obtenerRegistrosAsistenciaFirestore(): List<RegistroAsistencia> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<RegistroAsistencia>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val r = parsearRegistroAsistenciaJs(data)
+                    if (r != null) {
+                        lista.add(r)
+                    }
+                }
+            }
+        }
+        println("Registros de asistencia obtenidos de Firestore: " + lista.size)
+        continuation.resume(lista)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        println("Error obteniendo asistencia de Firestore: " + error)
+        continuation.resume(emptyList())
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("asistencia").get()
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onSuccess({ docs: [] });
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual fun observarRegistrosAsistenciaFirestore(onUpdate: (List<RegistroAsistencia>) -> Unit) {
+    val callback: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<RegistroAsistencia>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val r = parsearRegistroAsistenciaJs(data)
+                    if (r != null) {
+                        lista.add(r)
+                    }
+                }
+            }
+        }
+        println("Cambio en tiempo real de Firestore /asistencia, total: " + lista.size)
+        onUpdate(lista)
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("asistencia").onSnapshot(callback, function(err) {
+                    console.error("Error en onSnapshot /asistencia de Firestore:", err);
+                });
+            }
+        } catch(e) {
+            console.error("Error suscribiendo a Firestore /asistencia:", e);
+        }
+    """)
+}
+
+private fun parsearNovedadJs(d: dynamic): Novedad? {
+    if (d == null || d == js("undefined")) return null
+    return try {
+        val id = (d.id as? String) ?: ""
+        val tipo = (d.tipo as? String) ?: ""
+        val descripcion = (d.descripcion as? String) ?: ""
+        val estadoStr = (d.estado as? String) ?: "REPORTADA"
+        val estadoEnum = try { EstadoNovedad.valueOf(estadoStr) } catch (_: Throwable) { EstadoNovedad.REPORTADA }
+        val empleado = (d.empleado as? String) ?: ""
+        val sucursal = (d.sucursal as? String) ?: "CENTRO"
+        val detalleTurno = (d.detalleTurno as? String) ?: ""
+        val diferencia = (d.diferencia as? String) ?: ""
+        val colorBorde = (d.colorBorde as? String) ?: "GRIS"
+        val colorVorde = (d.colorVorde as? String) ?: colorBorde
+        val empleadoId = (d.empleadoId as? String) ?: ""
+        val asignacionTurnoId = (d.asignacionTurnoId as? String) ?: ""
+        val fechaReferencia = (d.fechaReferencia as? String) ?: ""
+        val fechaCreacionIso = (d.fechaCreacionIso as? String) ?: ""
+        val horaReal = (d.horaReal as? String) ?: ""
+        val comentarioRevision = (d.comentarioRevision as? String) ?: ""
+        val revisadoPor = (d.revisadoPor as? String) ?: ""
+        val fechaRevision = (d.fechaRevision as? String) ?: ""
+        val reportadoPorSupervisor = (d.reportadoPorSupervisor as? Boolean) ?: false
+
+        Novedad(
+            id = id,
+            tipo = tipo,
+            descripcion = descripcion,
+            estado = estadoEnum,
+            empleado = empleado,
+            sucursal = sucursal,
+            detalleTurno = detalleTurno,
+            diferencia = diferencia,
+            colorBorde = colorBorde,
+            colorVorde = colorVorde,
+            empleadoId = empleadoId,
+            asignacionTurnoId = asignacionTurnoId,
+            fechaReferencia = fechaReferencia,
+            fechaCreacionIso = fechaCreacionIso,
+            horaReal = horaReal,
+            comentarioRevision = comentarioRevision,
+            revisadoPor = revisadoPor,
+            fechaRevision = fechaRevision,
+            reportadoPorSupervisor = reportadoPorSupervisor
+        )
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+actual suspend fun guardarNovedadFirestore(novedad: Novedad): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val id = if (novedad.id.isNotBlank()) novedad.id else "nov_${kotlin.random.Random.nextInt(100000, 999999)}"
+    val tipo = novedad.tipo
+    val descripcion = novedad.descripcion
+    val estado = novedad.estado.name
+    val empleado = novedad.empleado
+    val sucursal = novedad.sucursal
+    val detalleTurno = novedad.detalleTurno
+    val diferencia = novedad.diferencia
+    val colorBorde = novedad.colorBorde
+    val colorVorde = novedad.colorVorde
+    val empleadoId = novedad.empleadoId
+    val asignacionTurnoId = novedad.asignacionTurnoId
+    val fechaReferencia = novedad.fechaReferencia
+    val fechaCreacionIso = novedad.fechaCreacionIso
+    val horaReal = novedad.horaReal
+    val comentarioRevision = novedad.comentarioRevision
+    val revisadoPor = novedad.revisadoPor
+    val fechaRevision = novedad.fechaRevision
+    val reportadoPorSupervisor = novedad.reportadoPorSupervisor
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Novedad guardada con éxito en Firestore: $id")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar novedad en Firestore"
+        println("Error guardando novedad en Firestore ($id): $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                var data = {
+                    id: String(id || ''),
+                    tipo: String(tipo || ''),
+                    descripcion: String(descripcion || ''),
+                    estado: String(estado || 'REPORTADA'),
+                    empleado: String(empleado || ''),
+                    sucursal: String(sucursal || 'CENTRO'),
+                    detalleTurno: String(detalleTurno || ''),
+                    diferencia: String(diferencia || ''),
+                    colorBorde: String(colorBorde || 'GRIS'),
+                    colorVorde: String(colorVorde || 'GRIS'),
+                    empleadoId: String(empleadoId || ''),
+                    asignacionTurnoId: String(asignacionTurnoId || ''),
+                    fechaReferencia: String(fechaReferencia || ''),
+                    fechaCreacionIso: String(fechaCreacionIso || ''),
+                    horaReal: String(horaReal || ''),
+                    comentarioRevision: String(comentarioRevision || ''),
+                    revisadoPor: String(revisadoPor || ''),
+                    fechaRevision: String(fechaRevision || ''),
+                    reportadoPorSupervisor: Boolean(reportadoPorSupervisor),
+                    timestamp: Date.now()
+                };
+                console.log("Enviando novedad a Firestore /novedades/" + id, data);
+                db.collection("novedades").doc(id).set(data)
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onError(new Error("Firebase Firestore no está disponible en window"));
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual suspend fun obtenerNovedadesFirestore(): List<Novedad> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<Novedad>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val n = parsearNovedadJs(data)
+                    if (n != null) {
+                        lista.add(n)
+                    }
+                }
+            }
+        }
+        println("Novedades obtenidas de Firestore: " + lista.size)
+        continuation.resume(lista)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        println("Error obteniendo novedades de Firestore: " + error)
+        continuation.resume(emptyList())
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("novedades").get()
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onSuccess({ docs: [] });
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual fun observarNovedadesFirestore(onUpdate: (List<Novedad>) -> Unit) {
+    val callback: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<Novedad>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val n = parsearNovedadJs(data)
+                    if (n != null) {
+                        lista.add(n)
+                    }
+                }
+            }
+        }
+        println("Cambio en tiempo real de Firestore /novedades, total: " + lista.size)
+        onUpdate(lista)
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("novedades").onSnapshot(callback, function(err) {
+                    console.error("Error en onSnapshot /novedades de Firestore:", err);
+                });
+            }
+        } catch(e) {
+            console.error("Error suscribiendo a Firestore /novedades:", e);
         }
     """)
 }

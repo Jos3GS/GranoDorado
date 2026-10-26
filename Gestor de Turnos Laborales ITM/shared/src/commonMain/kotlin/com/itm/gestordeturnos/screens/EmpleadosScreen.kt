@@ -913,6 +913,7 @@ private fun FormularioEmpleadoDrawer(
                         telefono = telefono.trim(),
                         cargo = cargoEnum,
                         sucursal = sucursalSeleccionada,
+                        sucursalId = sucursalSeleccionada,
                         fechaIngreso = fechaIngreso,
                         estado = estadoEnum
                     )

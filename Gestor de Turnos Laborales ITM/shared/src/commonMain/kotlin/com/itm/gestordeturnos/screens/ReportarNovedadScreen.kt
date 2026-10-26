@@ -57,35 +57,30 @@ fun ReportarNovedadScreen(viewModel: ReportarNovedadViewModel) {
                 Column(modifier = Modifier.padding(24.dp)) {
 
                     // A. Turno de referencia
-                    val permiteCambiarFecha = state.tipoNovedad == "Incapacidad médica" || state.tipoNovedad == "Permiso especial"
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text("TURNO DE REFERENCIA", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(state.turnoReferencia, color = CafeTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
 
-                        // Si permite cambiar fecha, lo volvemos un botón clickeable con icono
-                        if (permiteCambiarFecha) {
-                            Row(
-                                modifier = Modifier
-                                    .clickable { viewModel.toggleDatePicker(true) }
-                                    .border(1.dp, CafeDarkBrown, RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(state.fechaReferencia, color = CafeDarkBrown, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Icon(Icons.Default.DateRange, contentDescription = "Cambiar fecha", tint = CafeDarkBrown, modifier = Modifier.size(16.dp))
-                            }
-                        } else {
-                            // Si no, se queda como texto estático
-                            Text(state.fechaReferencia, color = CafeTextSecondary, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        // Selector de fecha de referencia
+                        Row(
+                            modifier = Modifier
+                                .clickable { viewModel.toggleDatePicker(true) }
+                                .border(1.dp, CafeBorderLight, RoundedCornerShape(4.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(state.fechaReferencia, color = CafeDarkBrown, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(Icons.Default.DateRange, contentDescription = "Cambiar fecha", tint = CafeDarkBrown, modifier = Modifier.size(16.dp))
                         }
                     }
 
@@ -136,6 +131,45 @@ fun ReportarNovedadScreen(viewModel: ReportarNovedadViewModel) {
                         textoSize = 14.sp
                     )
 
+                    if (state.requiereHoraReal) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("HORA REAL DEL EVENTO (HH:mm)", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = state.horaReal,
+                            onValueChange = { viewModel.onHoraRealCambio(it) },
+                            placeholder = { Text("Ej. 13:30", color = CafeTextSecondary, fontSize = 14.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(2.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedContainerColor = CafeSurfaceWarm,
+                                focusedContainerColor = Color.White,
+                                unfocusedBorderColor = CafeBorderLight,
+                                focusedBorderColor = CafeDarkBrown
+                            )
+                        )
+
+                        if (state.diferenciaCalculada.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, CafeAccentYellow.copy(alpha = 0.5f), RoundedCornerShape(2.dp))
+                                    .padding(10.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Diferencia calculada: ", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CafeDarkBrown)
+                                    Text(
+                                        text = state.diferenciaCalculada,
+                                        fontSize = 12.sp,
+                                        color = if (state.diferenciaCalculada.startsWith("-")) Color(0xFFC62828) else Color(0xFF2E7D32),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // C. Campo de texto: Descripción
@@ -155,6 +189,24 @@ fun ReportarNovedadScreen(viewModel: ReportarNovedadViewModel) {
                             focusedBorderColor = CafeDarkBrown
                         )
                     )
+
+                    state.errorMensaje?.let { err ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Box(
+                            modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFFEF9A9A), RoundedCornerShape(2.dp)).padding(8.dp)
+                        ) {
+                            Text(err, color = Color(0xFFC62828), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+
+                    state.mensajeExito?.let { msg ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Box(
+                            modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFFA5D6A7), RoundedCornerShape(2.dp)).padding(8.dp)
+                        ) {
+                            Text(msg, color = Color(0xFF2E7D32), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
