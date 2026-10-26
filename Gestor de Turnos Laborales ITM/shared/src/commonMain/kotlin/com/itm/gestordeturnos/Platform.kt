@@ -4,6 +4,7 @@ import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
+import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 
 interface Platform {
@@ -59,3 +60,9 @@ expect suspend fun guardarNovedadFirestore(novedad: Novedad): Result<Unit>
 expect suspend fun obtenerNovedadesFirestore(): List<Novedad>
 
 expect fun observarNovedadesFirestore(onUpdate: (List<Novedad>) -> Unit)
+
+expect suspend fun guardarSolicitudCambioFirestore(solicitud: SolicitudCambioTurno): Result<Unit>
+
+expect suspend fun obtenerSolicitudesCambioFirestore(): List<SolicitudCambioTurno>
+
+expect fun observarSolicitudesCambioFirestore(onUpdate: (List<SolicitudCambioTurno>) -> Unit)

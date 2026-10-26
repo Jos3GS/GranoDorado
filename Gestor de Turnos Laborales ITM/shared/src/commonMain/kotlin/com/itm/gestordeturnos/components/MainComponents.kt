@@ -93,6 +93,7 @@ import com.itm.gestordeturnos.CafeSurfaceWarm
 import com.itm.gestordeturnos.CafeTextPrimary
 import com.itm.gestordeturnos.CafeTextSecondary
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.EstadoSolicitudCambio
 import com.itm.gestordeturnos.domain.model.FilaMalla
 import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.model.RangoDescanso
@@ -1246,7 +1247,17 @@ fun EmpleadoCard(empleado: Empleado){
 fun EmpeladoCard(empleado: Empleado) = EmpleadoCard(empleado)
 
 @Composable
-fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
+fun SolicitudCambioCard(
+    solicitud: SolicitudCambio,
+    isRolAdmin: Boolean,
+    onAprobar: ((SolicitudCambio) -> Unit)? = null,
+    onRechazar: ((SolicitudCambio, String) -> Unit)? = null,
+    onAceptar: ((SolicitudCambio) -> Unit)? = null,
+    onCancelar: ((SolicitudCambio) -> Unit)? = null
+) {
+    var mostrarDialogoRechazo by remember { mutableStateOf(false) }
+    var motivoRechazoInput by remember { mutableStateOf("") }
+
     BoxWithConstraints {
         val isCompact = maxWidth < 600.dp
 
@@ -1274,12 +1285,17 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
                         Text("SOLICITUD ${solicitud.numeroSolicitud}", color = CafeTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     }
 
-                    val isAceptada = solicitud.estadoResumen == "ACEPTADA POR EL COMPAÑERO"
-                    val bgEstado = if (isAceptada) CafeStatusInfoBg else CafeStatusWarningBg
-                    val textEstado = if (isAceptada) CafeStatusInfoText else CafeDarkBrown
+                    val (bgEstado, textEstado) = when (solicitud.estado) {
+                        EstadoSolicitudCambio.APROBADA -> Pair(CafeStatusSuccessBg, CafeStatusSuccessText)
+                        EstadoSolicitudCambio.RECHAZADA -> Pair(CafeStatusErrorBg, CafeStatusErrorText)
+                        EstadoSolicitudCambio.ACEPTADA_COMPANERO -> Pair(CafeStatusInfoBg, CafeStatusInfoText)
+                        EstadoSolicitudCambio.VENCIDA -> Pair(Color(0xFFF3F4F6), Color(0xFF6B7280))
+                        else -> Pair(CafeStatusWarningBg, CafeDarkBrown)
+                    }
+                    val estadoTexto = solicitud.estado.displayName.uppercase()
 
                     Box(modifier = Modifier.background(bgEstado, RoundedCornerShape(2.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                        Text(solicitud.estadoResumen, color = textEstado, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Text(estadoTexto, color = textEstado, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     }
                 }
 
@@ -1312,6 +1328,14 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(solicitud.motivo, color = CafeTextPrimary, fontSize = 14.sp)
 
+                // MOTIVO DE RECHAZO SI ESTÁ RECHAZADA
+                if (solicitud.estado == EstadoSolicitudCambio.RECHAZADA && solicitud.motivoRechazo.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text("MOTIVO DE RECHAZO", color = CafeStatusErrorText, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(solicitud.motivoRechazo, color = CafeStatusErrorText, fontSize = 13.sp)
+                }
+
                 // 4. CAJA DE VALIDACIONES (SOLO ADMINISTRADOR)
                 if (isRolAdmin && solicitud.validacionesOk) {
                     Spacer(modifier = Modifier.height(12.dp))
@@ -1330,13 +1354,13 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
 
                 // 5. BOTONES Y ACCIONES DINÁMICAS
                 if (isRolAdmin) {
-                    if (solicitud.estadoResumen != "APROBADA" && solicitud.estadoResumen != "RECHAZADA") {
+                    if (solicitud.estado == EstadoSolicitudCambio.PENDIENTE || solicitud.estado == EstadoSolicitudCambio.ACEPTADA_COMPANERO) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = if (isCompact) Arrangement.SpaceBetween else Arrangement.Start
                         ) {
                             Button(
-                                onClick = { },
+                                onClick = { onAprobar?.invoke(solicitud) },
                                 colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
                                 shape = RoundedCornerShape(4.dp),
                                 modifier = if (isCompact) Modifier.weight(1f) else Modifier
@@ -1345,7 +1369,7 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             OutlinedButton(
-                                onClick = { },
+                                onClick = { mostrarDialogoRechazo = true },
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeTextPrimary),
                                 border = BorderStroke(1.dp, CafeBorderColor),
                                 shape = RoundedCornerShape(4.dp),
@@ -1357,22 +1381,23 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
                     }
                 } else {
                     if (solicitud.esRemitente) {
-                        if (solicitud.estadoResumen == "SOLICITADA" || solicitud.estadoResumen == "ACEPTADA POR EL COMPAÑERO") {
+                        if (solicitud.estado == EstadoSolicitudCambio.PENDIENTE || solicitud.estado == EstadoSolicitudCambio.ACEPTADA_COMPANERO) {
                             Text(
                                 text = "Cancelar solicitud",
                                 color = CafeTextPrimary,
                                 fontSize = 14.sp,
-                                modifier = Modifier.clickable { }
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.clickable { onCancelar?.invoke(solicitud) }
                             )
                         }
                     } else {
-                        if (solicitud.estadoResumen == "SOLICITADA") {
+                        if (solicitud.estado == EstadoSolicitudCambio.PENDIENTE) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = if (isCompact) Arrangement.SpaceBetween else Arrangement.Start
                             ) {
                                 Button(
-                                    onClick = { },
+                                    onClick = { onAceptar?.invoke(solicitud) },
                                     colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
                                     shape = RoundedCornerShape(4.dp),
                                     modifier = if (isCompact) Modifier.weight(1f) else Modifier
@@ -1381,13 +1406,60 @@ fun SolicitudCambioCard(solicitud: SolicitudCambio, isRolAdmin: Boolean) {
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 OutlinedButton(
-                                    onClick = { },
+                                    onClick = { onRechazar?.invoke(solicitud, "Rechazada por el compañero") },
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeTextPrimary),
                                     border = BorderStroke(1.dp, CafeBorderColor),
                                     shape = RoundedCornerShape(4.dp),
                                     modifier = if (isCompact) Modifier.weight(1f) else Modifier
                                 ) {
                                     Text("Rechazar")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // DIÁLOGO RECHAZO ADMINISTRADOR
+            if (mostrarDialogoRechazo) {
+                Dialog(onDismissRequest = { mostrarDialogoRechazo = false }) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(0.95f).padding(16.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, CafeBorderColor)
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Text("Rechazar solicitud de cambio", color = CafeDarkBrown, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Indica el motivo del rechazo para informar a los empleados involucrados:", color = CafeTextSecondary, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = motivoRechazoInput,
+                                onValueChange = { motivoRechazoInput = it },
+                                placeholder = { Text("Ej. No cumple con descanso mínimo o cobertura crítica") },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 2,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CafeDarkBrown,
+                                    unfocusedBorderColor = CafeBorderColor
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { mostrarDialogoRechazo = false }) {
+                                    Text("Cancelar", color = CafeTextSecondary)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(
+                                    onClick = {
+                                        onRechazar?.invoke(solicitud, motivoRechazoInput.ifBlank { "Rechazada por el administrador" })
+                                        mostrarDialogoRechazo = false
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text("Rechazar solicitud")
                                 }
                             }
                         }
@@ -1864,7 +1936,12 @@ fun ModalSolicitarCambio(
     turnosPropios: List<TurnoSeleccionable>,
     turnosCompaneros: List<TurnoCompaneroSeleccionable>,
     turnoSeleccionado: TurnoSeleccionable?,
+    turnoCompaneroSeleccionado: TurnoCompaneroSeleccionable? = null,
+    motivo: String = "",
     onTurnoPropioSeleccionado: (TurnoSeleccionable) -> Unit,
+    onTurnoCompaneroSeleccionado: ((TurnoCompaneroSeleccionable) -> Unit)? = null,
+    onMotivoCambiado: ((String) -> Unit)? = null,
+    onConfirmarSolicitud: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -1931,22 +2008,25 @@ fun ModalSolicitarCambio(
                         Column(modifier = Modifier.padding(top = 24.dp)) {
                             Text("2 · TURNO DEL COMPAÑERO QUE RECIBES", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text("Solo se listan Baristas de Centro sin conflicto de agenda.", color = CafeTextSecondary, fontSize = 12.sp)
+                            Text("Solo se listan compañeros de la misma sucursal y cargo disponible.", color = CafeTextSecondary, fontSize = 12.sp)
                             Spacer(modifier = Modifier.height(12.dp))
 
                             turnosCompaneros.forEach { companero ->
+                                val isSelected = companero == turnoCompaneroSeleccionado
+                                val borderCol = if (isSelected) CafeDarkBrown else CafeBorderColor
+                                val borderW = if (isSelected) 2.dp else 1.dp
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(bottom = 8.dp)
-                                        .border(1.dp, CafeBorderColor, RoundedCornerShape(2.dp))
-                                        .clickable { }
+                                        .border(borderW, borderCol, RoundedCornerShape(2.dp))
+                                        .clickable { onTurnoCompaneroSeleccionado?.invoke(companero) }
                                         .padding(16.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column {
-                                        Text(companero.nombre, color = CafeTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                        Text(companero.nombre, color = CafeTextPrimary, fontSize = 14.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium)
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(companero.descripcion, color = CafeTextSecondary, fontSize = 12.sp)
                                     }
@@ -1954,6 +2034,51 @@ fun ModalSolicitarCambio(
                                 }
                             }
                         }
+
+                        // SECCIÓN 3: MOTIVO
+                        AnimatedVisibility(visible = turnoCompaneroSeleccionado != null) {
+                            Column(modifier = Modifier.padding(top = 24.dp)) {
+                                Text("3 · MOTIVO DE LA SOLICITUD", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedTextField(
+                                    value = motivo,
+                                    onValueChange = { onMotivoCambiado?.invoke(it) },
+                                    placeholder = { Text("Indica el motivo por el cual requieres intercambiar este turno...", color = CafeTextSecondary, fontSize = 13.sp) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    minLines = 3,
+                                    shape = RoundedCornerShape(4.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = CafeDarkBrown,
+                                        unfocusedBorderColor = CafeBorderColor
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = CafeBorderColor)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // BOTONES DE CONFIRMACIÓN
+                val puedeConfirmar = turnoSeleccionado != null && turnoCompaneroSeleccionado != null && motivo.isNotBlank()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancelar", color = CafeTextSecondary)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Button(
+                        onClick = { onConfirmarSolicitud?.invoke() },
+                        enabled = puedeConfirmar,
+                        colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text("Enviar solicitud", fontWeight = FontWeight.Bold)
                     }
                 }
             }

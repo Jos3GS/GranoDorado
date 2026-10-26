@@ -5,21 +5,25 @@ import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
+import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import com.itm.gestordeturnos.guardarAsignacionFirestore
 import com.itm.gestordeturnos.guardarAsignacionesBatchFirestore
 import com.itm.gestordeturnos.guardarEmpleadoFirestore
 import com.itm.gestordeturnos.guardarNovedadFirestore
+import com.itm.gestordeturnos.guardarSolicitudCambioFirestore
 import com.itm.gestordeturnos.guardarRegistroAsistenciaFirestore
 import com.itm.gestordeturnos.guardarTurnoFirestore
 import com.itm.gestordeturnos.observarAsignacionesFirestore
 import com.itm.gestordeturnos.observarEmpleadosFirestore
 import com.itm.gestordeturnos.observarNovedadesFirestore
+import com.itm.gestordeturnos.observarSolicitudesCambioFirestore
 import com.itm.gestordeturnos.observarRegistrosAsistenciaFirestore
 import com.itm.gestordeturnos.observarTurnosFirestore
 import com.itm.gestordeturnos.obtenerAsignacionesFirestore
 import com.itm.gestordeturnos.obtenerEmpleadosFirestore
 import com.itm.gestordeturnos.obtenerNovedadesFirestore
+import com.itm.gestordeturnos.obtenerSolicitudesCambioFirestore
 import com.itm.gestordeturnos.obtenerRegistrosAsistenciaFirestore
 import com.itm.gestordeturnos.obtenerTurnosFirestore
 import kotlinx.coroutines.channels.awaitClose
@@ -182,5 +186,21 @@ object FirestoreService {
         } catch (_: Exception) {
             false
         }
+    }
+
+    // --- Solicitudes de Cambio de Turno ---
+    fun observarSolicitudesCambio(): Flow<List<SolicitudCambioTurno>> = callbackFlow {
+        observarSolicitudesCambioFirestore { lista ->
+            trySend(lista)
+        }
+        awaitClose { }
+    }
+
+    suspend fun obtenerSolicitudesCambio(): List<SolicitudCambioTurno> {
+        return obtenerSolicitudesCambioFirestore()
+    }
+
+    suspend fun guardarSolicitudCambio(solicitud: SolicitudCambioTurno): Result<Unit> {
+        return guardarSolicitudCambioFirestore(solicitud)
     }
 }

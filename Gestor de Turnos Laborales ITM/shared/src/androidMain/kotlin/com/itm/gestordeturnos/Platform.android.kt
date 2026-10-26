@@ -4,6 +4,7 @@ import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
+import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 
 class AndroidPlatform : Platform {
@@ -94,4 +95,15 @@ actual suspend fun obtenerNovedadesFirestore(): List<Novedad> {
 }
 
 actual fun observarNovedadesFirestore(onUpdate: (List<Novedad>) -> Unit) {
+}
+
+actual suspend fun guardarSolicitudCambioFirestore(solicitud: SolicitudCambioTurno): Result<Unit> {
+    return Result.success(Unit)
+}
+
+actual suspend fun obtenerSolicitudesCambioFirestore(): List<SolicitudCambioTurno> {
+    return emptyList()
+}
+
+actual fun observarSolicitudesCambioFirestore(onUpdate: (List<SolicitudCambioTurno>) -> Unit) {
 }

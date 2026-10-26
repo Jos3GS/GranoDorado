@@ -393,11 +393,218 @@ object NovedadRepository {
 }
 
 object CambiosTurnoRepository {
-    private val _solicitudes = MutableStateFlow(MockDataProviders.inicialSolicitudesCambio())
+    private val repositoryScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val _solicitudes = MutableStateFlow<List<SolicitudCambioTurno>>(emptyList())
     val solicitudes: StateFlow<List<SolicitudCambioTurno>> = _solicitudes.asStateFlow()
 
-    fun agregarSolicitud(solicitud: SolicitudCambioTurno) {
-        _solicitudes.update { it + solicitud }
+    private var jobSincronizacion: Job? = null
+
+    init {
+        iniciarSincronizacionFirestore()
+    }
+
+    fun iniciarSincronizacionFirestore() {
+        jobSincronizacion?.cancel()
+        jobSincronizacion = repositoryScope.launch {
+            try {
+                val remotos = FirestoreService.obtenerSolicitudesCambio()
+                if (remotos.isNotEmpty()) {
+                    _solicitudes.value = remotos
+                }
+
+                FirestoreService.observarSolicitudesCambio().collect { listaRemota ->
+                    _solicitudes.value = listaRemota
+                }
+            } catch (e: Exception) {
+                println("Error en sincronización de Solicitudes de Cambio: ${e.message}")
+            }
+        }
+    }
+
+    suspend fun guardarSolicitud(solicitud: SolicitudCambioTurno): Result<Unit> {
+        _solicitudes.update { lista ->
+            val sinDuplicado = lista.filterNot { it.id == solicitud.id }
+            listOf(solicitud) + sinDuplicado
+        }
+        val res = FirestoreService.guardarSolicitudCambio(solicitud)
+        if (res.isFailure) {
+            println("Error al guardar solicitud de cambio en Firestore: ${res.exceptionOrNull()?.message}")
+        }
+        return res
+    }
+
+    fun crearSolicitud(solicitud: SolicitudCambioTurno) {
+        repositoryScope.launch {
+            guardarSolicitud(solicitud)
+        }
+    }
+
+    fun aceptarPorCompanero(idSolicitud: String) {
+        val actual = _solicitudes.value.find { it.id == idSolicitud } ?: return
+        val actualizada = actual.aceptarCompanero()
+        repositoryScope.launch {
+            guardarSolicitud(actualizada)
+        }
+    }
+
+    fun rechazarSolicitud(idSolicitud: String, motivo: String) {
+        val actual = _solicitudes.value.find { it.id == idSolicitud } ?: return
+        val actualizada = actual.rechazar(motivo)
+        repositoryScope.launch {
+            guardarSolicitud(actualizada)
+        }
+    }
+
+    fun cancelarSolicitud(idSolicitud: String) {
+        val actual = _solicitudes.value.find { it.id == idSolicitud } ?: return
+        val actualizada = actual.copy(
+            estado = EstadoSolicitudCambio.RECHAZADA,
+            motivoRechazo = "Cancelada por el solicitante"
+        )
+        repositoryScope.launch {
+            guardarSolicitud(actualizada)
+        }
+    }
+
+    fun aprobarEIntercambiar(solicitud: SolicitudCambioTurno) {
+        repositoryScope.launch {
+            val aprobada = solicitud.aprobar()
+            guardarSolicitud(aprobada)
+            intercambiarTurnos(solicitud)
+        }
+    }
+
+    private suspend fun intercambiarTurnos(solicitud: SolicitudCambioTurno) {
+        val asignacionesActuales = TurnoRepository.asignaciones.value
+        val empAId = solicitud.empleadoSolicitanteId
+        val empANombre = solicitud.nombreSolicitante
+        val empBId = solicitud.empleadoCompaneroId
+        val empBNombre = solicitud.nombreCompanero
+
+        var asigEntrega = asignacionesActuales.find {
+            (it.id.isNotBlank() && it.id == solicitud.turnoEntregaId) ||
+            (it.empleadoId == empAId && (it.id.endsWith(solicitud.turnoEntregaId) || solicitud.detalleTurnoEntrega.contains(it.fechaIso)))
+        }
+        var asigRecibe = asignacionesActuales.find {
+            (it.id.isNotBlank() && it.id == solicitud.turnoRecibeId) ||
+            (it.empleadoId == empBId && (it.id.endsWith(solicitud.turnoRecibeId) || solicitud.detalleTurnoRecibe.contains(it.fechaIso)))
+        }
+
+        val fechaEntregaIso = asigEntrega?.fechaIso ?: extraerFechaIso(solicitud.turnoEntregaId).ifBlank { extraerFechaIso(solicitud.detalleTurnoEntrega) }
+        val fechaRecibeIso = asigRecibe?.fechaIso ?: extraerFechaIso(solicitud.turnoRecibeId).ifBlank { extraerFechaIso(solicitud.detalleTurnoRecibe) }
+
+        if (asigEntrega == null && fechaEntregaIso.isNotBlank()) {
+            asigEntrega = asignacionesActuales.find { it.empleadoId == empAId && it.fechaIso == fechaEntregaIso }
+        }
+        if (asigRecibe == null && fechaRecibeIso.isNotBlank()) {
+            asigRecibe = asignacionesActuales.find { it.empleadoId == empBId && it.fechaIso == fechaRecibeIso }
+        }
+
+        val nuevasAsignaciones = mutableListOf<AsignacionTurno>()
+
+        if (fechaEntregaIso == fechaRecibeIso && asigEntrega != null && asigRecibe != null) {
+            nuevasAsignaciones.add(
+                asigEntrega.copy(
+                    tipoTurno = asigRecibe.tipoTurno,
+                    horario = asigRecibe.horario,
+                    turnoId = asigRecibe.turnoId,
+                    turno = asigRecibe.turno,
+                    modificadoTrasPublicar = true
+                )
+            )
+            nuevasAsignaciones.add(
+                asigRecibe.copy(
+                    tipoTurno = asigEntrega.tipoTurno,
+                    horario = asigEntrega.horario,
+                    turnoId = asigEntrega.turnoId,
+                    turno = asigEntrega.turno,
+                    modificadoTrasPublicar = true
+                )
+            )
+        } else {
+            if (fechaEntregaIso.isNotBlank() && asigEntrega != null) {
+                val bEnFechaEntrega = asignacionesActuales.find { it.empleadoId == empBId && it.fechaIso == fechaEntregaIso }
+                val nuevoTurnoB = if (bEnFechaEntrega != null) {
+                    bEnFechaEntrega.copy(
+                        tipoTurno = asigEntrega.tipoTurno,
+                        horario = asigEntrega.horario,
+                        turnoId = asigEntrega.turnoId,
+                        turno = asigEntrega.turno,
+                        esDescanso = false,
+                        modificadoTrasPublicar = true
+                    )
+                } else {
+                    AsignacionTurno(
+                        id = "${empBId}_$fechaEntregaIso",
+                        fechaIso = fechaEntregaIso,
+                        empleadoId = empBId,
+                        empleadoNombre = empBNombre,
+                        tipoTurno = asigEntrega.tipoTurno,
+                        horario = asigEntrega.horario,
+                        turnoId = asigEntrega.turnoId,
+                        turno = asigEntrega.turno,
+                        sucursalId = asigEntrega.sucursalId,
+                        estado = "PUBLICADA",
+                        esDescanso = false,
+                        modificadoTrasPublicar = true
+                    )
+                }
+                val nuevoTurnoA = asigEntrega.copy(
+                    tipoTurno = "Descanso",
+                    horario = "-",
+                    esDescanso = true,
+                    modificadoTrasPublicar = true
+                )
+                nuevasAsignaciones.add(nuevoTurnoB)
+                nuevasAsignaciones.add(nuevoTurnoA)
+            }
+
+            if (fechaRecibeIso.isNotBlank() && asigRecibe != null) {
+                val aEnFechaRecibe = asignacionesActuales.find { it.empleadoId == empAId && it.fechaIso == fechaRecibeIso }
+                val nuevoTurnoA = if (aEnFechaRecibe != null) {
+                    aEnFechaRecibe.copy(
+                        tipoTurno = asigRecibe.tipoTurno,
+                        horario = asigRecibe.horario,
+                        turnoId = asigRecibe.turnoId,
+                        turno = asigRecibe.turno,
+                        esDescanso = false,
+                        modificadoTrasPublicar = true
+                    )
+                } else {
+                    AsignacionTurno(
+                        id = "${empAId}_$fechaRecibeIso",
+                        fechaIso = fechaRecibeIso,
+                        empleadoId = empAId,
+                        empleadoNombre = empANombre,
+                        tipoTurno = asigRecibe.tipoTurno,
+                        horario = asigRecibe.horario,
+                        turnoId = asigRecibe.turnoId,
+                        turno = asigRecibe.turno,
+                        sucursalId = asigRecibe.sucursalId,
+                        estado = "PUBLICADA",
+                        esDescanso = false,
+                        modificadoTrasPublicar = true
+                    )
+                }
+                val nuevoTurnoB = asigRecibe.copy(
+                    tipoTurno = "Descanso",
+                    horario = "-",
+                    esDescanso = true,
+                    modificadoTrasPublicar = true
+                )
+                nuevasAsignaciones.add(nuevoTurnoA)
+                nuevasAsignaciones.add(nuevoTurnoB)
+            }
+        }
+
+        if (nuevasAsignaciones.isNotEmpty()) {
+            TurnoRepository.guardarAsignaciones(nuevasAsignaciones)
+        }
+    }
+
+    private fun extraerFechaIso(texto: String): String {
+        val regex = Regex("""\d{4}-\d{2}-\d{2}""")
+        return regex.find(texto)?.value ?: ""
     }
 }
 

@@ -10,7 +10,10 @@ import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.EstadoEmpleado
 import com.itm.gestordeturnos.domain.model.EstadoNovedad
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
+import com.itm.gestordeturnos.domain.model.EstadoSolicitudCambio
+import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
 import com.itm.gestordeturnos.domain.model.Novedad
+import kotlinx.datetime.LocalDate
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.FirebaseOptions
 import dev.gitlive.firebase.initialize
@@ -98,6 +101,240 @@ actual suspend fun iniciarSesionGooglePlataforma(): GoogleUserData? = suspendCan
             }
         } catch (e) {
             onError(e);
+        }
+    """)
+}
+
+private fun parsearSolicitudCambioJs(d: dynamic): SolicitudCambioTurno? {
+    if (d == null || d == js("undefined")) return null
+    return try {
+        val id = (d.id as? String) ?: ""
+        val numeroSolicitud = (d.numeroSolicitud as? String) ?: ""
+        val fechaSolicitudStr = (d.fechaSolicitud as? String) ?: (d.fechaSolicitudIso as? String) ?: ""
+        val fechaSolicitud = try {
+            if (fechaSolicitudStr.isNotBlank()) LocalDate.parse(fechaSolicitudStr.take(10)) else null
+        } catch (_: Throwable) {
+            null
+        }
+        val estadoStr = (d.estado as? String) ?: "PENDIENTE"
+        val estadoEnum = try { EstadoSolicitudCambio.valueOf(estadoStr) } catch (_: Throwable) { EstadoSolicitudCambio.PENDIENTE }
+        val motivoRechazo = (d.motivoRechazo as? String) ?: ""
+        val motivo = (d.motivo as? String) ?: ""
+        val empleadoSolicitanteId = (d.empleadoSolicitanteId as? String) ?: ""
+        val nombreSolicitante = (d.nombreSolicitante as? String) ?: ""
+        val empleadoCompaneroId = (d.empleadoCompaneroId as? String) ?: ""
+        val nombreCompanero = (d.nombreCompanero as? String) ?: ""
+        val turnoEntregaId = (d.turnoEntregaId as? String) ?: ""
+        val tipoTurnoEntrega = (d.tipoTurnoEntrega as? String) ?: ""
+        val detalleTurnoEntrega = (d.detalleTurnoEntrega as? String) ?: ""
+        val turnoRecibeId = (d.turnoRecibeId as? String) ?: ""
+        val tipoTurnoRecibe = (d.tipoTurnoRecibe as? String) ?: ""
+        val detalleTurnoRecibe = (d.detalleTurnoRecibe as? String) ?: ""
+        val sucursalNombre = (d.sucursalNombre as? String) ?: (d.sucursal as? String) ?: "CENTRO"
+        val validacionesOk = when (val v = d.validacionesOk) {
+            is Boolean -> v
+            is String -> v.toBoolean()
+            else -> true
+        }
+        val esRemitente = when (val r = d.esRemitente) {
+            is Boolean -> r
+            is String -> r.toBoolean()
+            else -> false
+        }
+
+        SolicitudCambioTurno(
+            id = id,
+            numeroSolicitud = numeroSolicitud,
+            fechaSolicitud = fechaSolicitud,
+            estado = estadoEnum,
+            motivoRechazo = motivoRechazo,
+            motivo = motivo,
+            empleadoSolicitanteId = empleadoSolicitanteId,
+            nombreSolicitante = nombreSolicitante,
+            empleadoCompaneroId = empleadoCompaneroId,
+            nombreCompanero = nombreCompanero,
+            turnoEntregaId = turnoEntregaId,
+            tipoTurnoEntrega = tipoTurnoEntrega,
+            detalleTurnoEntrega = detalleTurnoEntrega,
+            turnoRecibeId = turnoRecibeId,
+            tipoTurnoRecibe = tipoTurnoRecibe,
+            detalleTurnoRecibe = detalleTurnoRecibe,
+            sucursalNombre = sucursalNombre,
+            validacionesOk = validacionesOk,
+            esRemitente = esRemitente
+        )
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+actual suspend fun guardarSolicitudCambioFirestore(solicitud: SolicitudCambioTurno): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val id = if (solicitud.id.isNotBlank()) solicitud.id else "sol_${kotlin.random.Random.nextInt(100000, 999999)}"
+    val numeroSolicitud = if (solicitud.numeroSolicitud.isNotBlank()) solicitud.numeroSolicitud else "SOL-${kotlin.random.Random.nextInt(1000, 9999)}"
+    val fechaSolicitudStr = solicitud.fechaSolicitud?.toString() ?: ""
+    val estado = solicitud.estado.name
+    val motivoRechazo = solicitud.motivoRechazo
+    val motivo = solicitud.motivo
+    val empleadoSolicitanteId = solicitud.empleadoSolicitanteId
+    val nombreSolicitante = solicitud.nombreSolicitante
+    val empleadoCompaneroId = solicitud.empleadoCompaneroId
+    val nombreCompanero = solicitud.nombreCompanero
+    val turnoEntregaId = solicitud.turnoEntregaId
+    val tipoTurnoEntrega = solicitud.tipoTurnoEntrega
+    val detalleTurnoEntrega = solicitud.detalleTurnoEntrega
+    val turnoRecibeId = solicitud.turnoRecibeId
+    val tipoTurnoRecibe = solicitud.tipoTurnoRecibe
+    val detalleTurnoRecibe = solicitud.detalleTurnoRecibe
+    val sucursalNombre = solicitud.sucursalNombre
+    val validacionesOk = solicitud.validacionesOk
+    val esRemitente = solicitud.esRemitente
+
+    val onSuccess: (dynamic) -> Unit = {
+        println("Solicitud de cambio guardada con éxito en Firestore: $id")
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = (error?.message as? String) ?: (error?.toString() as? String) ?: "Error al guardar solicitud de cambio en Firestore"
+        println("Error guardando solicitud de cambio en Firestore ($id): $msg")
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                var data = {
+                    id: String(id || ''),
+                    numeroSolicitud: String(numeroSolicitud || ''),
+                    fechaSolicitud: String(fechaSolicitudStr || ''),
+                    fechaSolicitudIso: String(fechaSolicitudStr || ''),
+                    estado: String(estado || 'PENDIENTE'),
+                    motivoRechazo: String(motivoRechazo || ''),
+                    motivo: String(motivo || ''),
+                    empleadoSolicitanteId: String(empleadoSolicitanteId || ''),
+                    nombreSolicitante: String(nombreSolicitante || ''),
+                    empleadoCompaneroId: String(empleadoCompaneroId || ''),
+                    nombreCompanero: String(nombreCompanero || ''),
+                    turnoEntregaId: String(turnoEntregaId || ''),
+                    tipoTurnoEntrega: String(tipoTurnoEntrega || ''),
+                    detalleTurnoEntrega: String(detalleTurnoEntrega || ''),
+                    turnoRecibeId: String(turnoRecibeId || ''),
+                    tipoTurnoRecibe: String(tipoTurnoRecibe || ''),
+                    detalleTurnoRecibe: String(detalleTurnoRecibe || ''),
+                    sucursalNombre: String(sucursalNombre || 'CENTRO'),
+                    sucursal: String(sucursalNombre || 'CENTRO'),
+                    validacionesOk: Boolean(validacionesOk),
+                    esRemitente: Boolean(esRemitente),
+                    timestamp: Date.now()
+                };
+                console.log("Enviando solicitud de cambio a Firestore /solicitudes_cambio/" + id, data);
+                db.collection("solicitudes_cambio").doc(id).set(data)
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onError(new Error("Firebase Firestore no está disponible en window"));
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual suspend fun obtenerSolicitudesCambioFirestore(): List<SolicitudCambioTurno> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<SolicitudCambioTurno>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val s = parsearSolicitudCambioJs(data)
+                    if (s != null) {
+                        lista.add(s)
+                    }
+                }
+            }
+        }
+        println("Solicitudes de cambio obtenidas de Firestore: " + lista.size)
+        continuation.resume(lista)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        println("Error obteniendo solicitudes de cambio de Firestore: " + error)
+        continuation.resume(emptyList())
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("solicitudes_cambio").get()
+                    .then(onSuccess)
+                    .catch(onError);
+            } else {
+                onSuccess({ docs: [] });
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual fun observarSolicitudesCambioFirestore(onUpdate: (List<SolicitudCambioTurno>) -> Unit) {
+    val callback: (dynamic) -> Unit = { snapshot ->
+        val lista = mutableListOf<SolicitudCambioTurno>()
+        if (snapshot != null && snapshot.docs != null) {
+            val docs = snapshot.docs as Array<dynamic>
+            for (doc in docs) {
+                val data = doc.data()
+                if (data != null) {
+                    val s = parsearSolicitudCambioJs(data)
+                    if (s != null) {
+                        lista.add(s)
+                    }
+                }
+            }
+        }
+        println("Cambio en tiempo real de Firestore /solicitudes_cambio, total: " + lista.size)
+        onUpdate(lista)
+    }
+
+    js("""
+        try {
+            var db = null;
+            if (typeof firebase !== 'undefined') {
+                if ((!firebase.apps || firebase.apps.length === 0) && window.firebaseConfig) {
+                    try { firebase.initializeApp(window.firebaseConfig); } catch(e) {}
+                }
+                if (typeof firebase.firestore === 'function') {
+                    db = firebase.firestore();
+                }
+            }
+
+            if (db) {
+                db.collection("solicitudes_cambio").onSnapshot(callback, function(err) {
+                    console.error("Error en onSnapshot /solicitudes_cambio de Firestore:", err);
+                });
+            }
+        } catch(e) {
+            console.error("Error suscribiendo a Firestore /solicitudes_cambio:", e);
         }
     """)
 }
