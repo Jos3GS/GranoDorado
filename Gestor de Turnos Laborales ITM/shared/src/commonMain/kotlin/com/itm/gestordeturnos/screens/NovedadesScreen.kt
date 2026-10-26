@@ -78,8 +78,8 @@ private val TIPOS_NOVEDAD_SUPERVISOR = listOf(
     "Ausencia justificada",
     "Llegada tarde",
     "Salida antes de la hora",
-    "Ampliación del turno",
-    "Incapacidad médica",
+    "AmpliaciÃ³n del turno",
+    "Incapacidad mÃ©dica",
     "Permiso remunerado",
     "Permiso no remunerado",
     "Otro"
@@ -95,7 +95,7 @@ fun NovedadesScreen(viewModel: NovedadesViewModel) {
         Column(modifier = Modifier.fillMaxSize()) {
             EncabezadoPantalla(
                 titulo = "Bandeja de novedades",
-                subtitulo = "Lo que el equipo reporta llega aquí y queda constancia de que fue leído.",
+                subtitulo = "Lo que el equipo reporta llega aquÃ­ y queda constancia de que fue leÃ­do.",
                 isCompact = isCompact,
                 accion = {
                     Button(
@@ -111,7 +111,7 @@ fun NovedadesScreen(viewModel: NovedadesViewModel) {
                 }
             )
 
-            // Mensajes de Éxito o Error
+            // Mensajes de Ã‰xito o Error
             if (state.mensajeExito != null) {
                 Box(
                     modifier = Modifier
@@ -191,7 +191,7 @@ fun NovedadesScreen(viewModel: NovedadesViewModel) {
                 }
             }
 
-            // Barra de Búsqueda y Filtros de Estado / Tipo
+            // Barra de BÃºsqueda y Filtros de Estado / Tipo
             if (isCompact) {
                 Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                     OutlinedTextField(
@@ -233,7 +233,7 @@ fun NovedadesScreen(viewModel: NovedadesViewModel) {
                     OutlinedTextField(
                         value = state.busqueda,
                         onValueChange = { viewModel.cambiarBusqueda(it) },
-                        placeholder = { Text("Buscar novedad por empleado, turno o descripción...", fontSize = 13.sp, color = CafeTextSecondary) },
+                        placeholder = { Text("Buscar novedad por empleado, turno o descripciÃ³n...", fontSize = 13.sp, color = CafeTextSecondary) },
                         modifier = Modifier.weight(1f).height(46.dp),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
@@ -261,7 +261,7 @@ fun NovedadesScreen(viewModel: NovedadesViewModel) {
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
-                    "${state.pendientesCount} NOVEDADES PENDIENTES DE REVISIÓN",
+                    "${state.pendientesCount} NOVEDADES PENDIENTES DE REVISIÃ“N",
                     color = CafeDarkBrown,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
@@ -297,7 +297,7 @@ fun NovedadesScreen(viewModel: NovedadesViewModel) {
             }
         }
 
-        // Diálogo de Revisión con Comentario (CA-12.3)
+        // DiÃ¡logo de RevisiÃ³n con Comentario (CA-12.3)
         state.dialogoRevisionNovedad?.let { novedad ->
             DialogoRevisarNovedad(
                 novedad = novedad,
@@ -308,7 +308,7 @@ fun NovedadesScreen(viewModel: NovedadesViewModel) {
             )
         }
 
-        // Diálogo de Registro de Novedad por Supervisor (HU-14)
+        // DiÃ¡logo de Registro de Novedad por Supervisor (HU-14)
         if (state.mostrarDialogoSupervisor) {
             DialogoRegistrarNovedadSupervisor(
                 empleados = state.empleadosParaSupervisor,
@@ -345,7 +345,7 @@ private fun DialogoRevisarNovedad(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        if (isIncapacidad) "Aprobar incapacidad médica" else "Revisar novedad",
+                        if (isIncapacidad) "Aprobar incapacidad mÃ©dica" else "Revisar novedad",
                         color = CafeDarkBrown,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
@@ -391,7 +391,7 @@ private fun DialogoRevisarNovedad(
                             .padding(10.dp)
                     ) {
                         Text(
-                            "Al aprobar esta novedad, el turno del empleado será reemplazado automáticamente por 'Incapacidad' bloqueada.",
+                            "Al aprobar esta novedad, el turno del empleado serÃ¡ reemplazado automÃ¡ticamente por 'Incapacidad' bloqueada.",
                             color = Color(0xFF991B1B),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
@@ -401,13 +401,13 @@ private fun DialogoRevisarNovedad(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Text("OBSERVACIÓN / COMENTARIO DE REVISIÓN", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Text("OBSERVACIÃ“N / COMENTARIO DE REVISIÃ“N", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 Spacer(modifier = Modifier.height(6.dp))
 
                 OutlinedTextField(
                     value = comentario,
                     onValueChange = { comentario = it },
-                    placeholder = { Text(if (isIncapacidad) "Ej. Soporte EPS validado y conforme." else "Ej. Revisado y justificación aceptada.") },
+                    placeholder = { Text(if (isIncapacidad) "Ej. Soporte EPS validado y conforme." else "Ej. Revisado y justificaciÃ³n aceptada.") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -428,7 +428,7 @@ private fun DialogoRevisarNovedad(
                         colors = ButtonDefaults.buttonColors(containerColor = if (isIncapacidad) Color(0xFF991B1B) else CafeDarkBrown),
                         shape = RoundedCornerShape(4.dp)
                     ) {
-                        Text(if (isIncapacidad) "Aprobar incapacidad" else "Confirmar revisión")
+                        Text(if (isIncapacidad) "Aprobar incapacidad" else "Confirmar revisiÃ³n")
                     }
                 }
             }
@@ -450,7 +450,7 @@ private fun DialogoRegistrarNovedadSupervisor(
     var horaReal by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
 
-    val requiereHoraReal = tipoSeleccionado in listOf("Llegada tarde", "Salida antes de la hora", "Ampliación del turno")
+    val requiereHoraReal = tipoSeleccionado in listOf("Llegada tarde", "Salida antes de la hora", "AmpliaciÃ³n del turno")
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -571,13 +571,13 @@ private fun DialogoRegistrarNovedadSupervisor(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Descripción Obligatoria
-                Text("MOTIVO / DESCRIPCIÓN (OBLIGATORIO)", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                // DescripciÃ³n Obligatoria
+                Text("MOTIVO / DESCRIPCIÃ“N (OBLIGATORIO)", color = CafeTextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
                     value = descripcion,
                     onValueChange = { descripcion = it },
-                    placeholder = { Text("Indica la justificación o causa de la novedad...") },
+                    placeholder = { Text("Indica la justificaciÃ³n o causa de la novedad...") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                     colors = OutlinedTextFieldDefaults.colors(

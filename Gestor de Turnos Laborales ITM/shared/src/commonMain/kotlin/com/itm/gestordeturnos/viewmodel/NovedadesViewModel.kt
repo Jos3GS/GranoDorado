@@ -194,7 +194,7 @@ class NovedadesViewModel : ViewModel() {
         if (nov != null) {
             abrirDialogoRevision(nov)
         } else {
-            revisarNovedadConComentario(idNovedad, "Revisado por administración")
+            revisarNovedadConComentario(idNovedad, "Revisado por administraciÃ³n")
         }
     }
 
@@ -226,7 +226,7 @@ class NovedadesViewModel : ViewModel() {
         descripcion: String
     ): Boolean {
         if (descripcion.isBlank()) {
-            _uiState.update { it.copy(mensajeError = "La descripción de la novedad es obligatoria (CA-14.2).") }
+            _uiState.update { it.copy(mensajeError = "La descripciÃ³n de la novedad es obligatoria (CA-14.2).") }
             return false
         }
 
@@ -234,9 +234,9 @@ class NovedadesViewModel : ViewModel() {
         val fechaObj = try { LocalDate.parse(fechaIso) } catch (_: Throwable) { hoy }
         val diffDias = hoy.toEpochDays() - fechaObj.toEpochDays()
 
-        // CA-14.6: Plazo máximo de 48 horas hacia atrás
+        // CA-14.6: Plazo mÃ¡ximo de 48 horas hacia atrÃ¡s
         if (diffDias > 2) {
-            _uiState.update { it.copy(mensajeError = "No es posible registrar novedades para turnos con más de 48 horas de antigüedad (CA-14.6).") }
+            _uiState.update { it.copy(mensajeError = "No es posible registrar novedades para turnos con mÃ¡s de 48 horas de antigÃ¼edad (CA-14.6).") }
             return false
         }
 
@@ -263,16 +263,16 @@ class NovedadesViewModel : ViewModel() {
             it.empleadoId == empleado.id && it.fechaIso == fechaIso
         }
         val detalleTurnoTexto = when {
-            asig != null && asig.esDescanso -> "Descanso · $fechaIso"
-            asig != null && asig.tipoTurno.isNotBlank() -> "${asig.tipoTurno} (${asig.horario.replace("\n", " ").trim()}) · $fechaIso"
-            else -> "Turno asignado · $fechaIso"
+            asig != null && asig.esDescanso -> "Descanso Â· $fechaIso"
+            asig != null && asig.tipoTurno.isNotBlank() -> "${asig.tipoTurno} (${asig.horario.replace("\n", " ").trim()}) Â· $fechaIso"
+            else -> "Turno asignado Â· $fechaIso"
         }
 
         val color = when (tipoNovedad) {
             "Ausencia injustificada" -> "ROJO"
-            "Ausencia justificada", "Incapacidad médica" -> "ROJO_OSCURO"
+            "Ausencia justificada", "Incapacidad mÃ©dica" -> "ROJO_OSCURO"
             "Llegada tarde", "Salida antes de la hora" -> "MARRON"
-            "Ampliación del turno" -> "VERDE"
+            "AmpliaciÃ³n del turno" -> "VERDE"
             else -> "GRIS"
         }
 

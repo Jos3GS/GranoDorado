@@ -57,18 +57,18 @@ data class ResumenAsistenciaHoy(
 )
 
 data class PanelState(
-    val saludo: String = "BUENOS DÕAS",
+    val saludo: String = "BUENOS D√çAS",
     val fechaHoyTexto: String = "",
     val horaActualTexto: String = "",
     val semanaEnCurso: String = "",
-    val estadoMalla: String = "La malla semanal est· en borrador",
+    val estadoMalla: String = "La malla semanal est√° en borrador",
     val esMallaPublicada: Boolean = false,
     val sucursalSeleccionada: String = "TODAS",
     val sucursalesDisponibles: List<String> = listOf("TODAS", "CENTRO", "NORTE", "SUR"),
     val esAdminGeneral: Boolean = true,
     val sucursalUsuario: String = "CENTRO",
 
-    // MÈtricas principales
+    // M√©tricas principales
     val empleadosActivos: Int = 0,
     val turnosCatalogo: Int = 0,
     val novedadesPendientes: Int = 0,
@@ -83,7 +83,7 @@ data class PanelState(
     // Desglose por sucursales (Para Admin General)
     val metricasPorSucursal: List<SucursalMetrica> = emptyList(),
 
-    // Acciones prioritarias / Ronda del dÌa interactivas
+    // Acciones prioritarias / Ronda del d√≠a interactivas
     val rondaDelDia: List<TareaRonda> = emptyList()
 )
 
@@ -191,12 +191,12 @@ class PanelViewModel : ViewModel() {
         val minutosActuales = now.hour * 60 + now.minute
 
         val saludo = when {
-            now.hour < 12 -> "BUENOS DÕAS"
+            now.hour < 12 -> "BUENOS D√çAS"
             now.hour < 18 -> "BUENAS TARDES"
             else -> "BUENAS NOCHES"
         }
 
-        val nombresDias = listOf("Lunes", "Martes", "MiÈrcoles", "Jueves", "Viernes", "S·bado", "Domingo")
+        val nombresDias = listOf("Lunes", "Martes", "Mi√©rcoles", "Jueves", "Viernes", "S√°bado", "Domingo")
         val nombresMeses = listOf("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
         val diaSemana = nombresDias.getOrElse(hoy.dayOfWeek.ordinal) { "" }
         val mesNombre = nombresMeses.getOrElse(hoy.monthNumber - 1) { "" }
@@ -227,10 +227,10 @@ class PanelViewModel : ViewModel() {
         }
         val empActivosCount = empleadosEnAlcance.size
 
-        // 2. Turnos en cat·logo activos
+        // 2. Turnos en cat√°logo activos
         val turnosActivos = turnos.count { it.estado.equals("ACTIVO", ignoreCase = true) }
 
-        // 3. Novedades pendientes de revisiÛn
+        // 3. Novedades pendientes de revisi√≥n
         val novedadesEnAlcance = novedades.filter { nov ->
             coincideSucursal(nov.sucursal)
         }
@@ -273,9 +273,9 @@ class PanelViewModel : ViewModel() {
             it.estado.equals("PUBLICADA", ignoreCase = true)
         }
         val estadoMallaTexto = if (esMallaPublicada) {
-            "La malla semanal est· publicada"
+            "La malla semanal est√° publicada"
         } else {
-            "La malla semanal est· en borrador"
+            "La malla semanal est√° en borrador"
         }
 
         // 8. Resumen Asistencia Hoy
@@ -337,12 +337,12 @@ class PanelViewModel : ViewModel() {
             )
         }
 
-        // 11. Ronda del dÌa con acciones prioritarias
+        // 11. Ronda del d√≠a con acciones prioritarias
         val ronda = mutableListOf<TareaRonda>()
         if (novPendientes > 0) {
-            ronda.add(TareaRonda("$novPendientes novedades esperan revisiÛn", "novedades", "URGENTE"))
+            ronda.add(TareaRonda("$novPendientes novedades esperan revisi√≥n", "novedades", "URGENTE"))
         } else {
-            ronda.add(TareaRonda("Todas las novedades al dÌa", "novedades", "INFO"))
+            ronda.add(TareaRonda("Todas las novedades al d√≠a", "novedades", "INFO"))
         }
 
         if (cambiosPendientes > 0) {
@@ -360,7 +360,7 @@ class PanelViewModel : ViewModel() {
         if (!esMallaPublicada) {
             ronda.add(TareaRonda("Malla semanal en borrador: verificar y publicar", "malla", "PENDIENTE"))
         } else {
-            ronda.add(TareaRonda("Malla semanal publicada y en operaciÛn normal", "malla", "INFO"))
+            ronda.add(TareaRonda("Malla semanal publicada y en operaci√≥n normal", "malla", "INFO"))
         }
 
         return PanelState(
