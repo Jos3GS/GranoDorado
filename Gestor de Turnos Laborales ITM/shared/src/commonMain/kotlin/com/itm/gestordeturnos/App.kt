@@ -14,6 +14,16 @@ import com.itm.gestordeturnos.screens.LoginScreen
 import com.itm.gestordeturnos.screens.MainScreen
 import com.itm.gestordeturnos.viewmodel.LoginViewModel
 import com.itm.gestordeturnos.viewmodel.MainViewModel
+import kotlinx.serialization.Serializable
+
+/**
+ * Rutas tipadas para la navegación raíz de la aplicación.
+ */
+@Serializable
+object LoginRoute
+
+@Serializable
+object MainRoute
 
 @Composable
 @Preview
@@ -29,26 +39,26 @@ fun App() {
         ){
             NavHost(
                 navController = navController,
-                startDestination = "login"
+                startDestination = LoginRoute
             ){
-                composable("login"){
+                composable<LoginRoute>{
                     val loginViewModel = viewModel { LoginViewModel() }
                     LoginScreen(
                         viewModel = loginViewModel,
                         onLoginSuccess = {
-                            navController.navigate("main"){
-                                popUpTo("login"){inclusive = true}
+                            navController.navigate(MainRoute){
+                                popUpTo<LoginRoute>{inclusive = true}
                             }
                         }
                     )
                 }
-                composable("main"){
+                composable<MainRoute>{
                     val mainViewModel = viewModel { MainViewModel() }
                     MainScreen(
                         viewModel = mainViewModel,
                         onLogoutSuccess = {
-                            navController.navigate("login"){
-                                popUpTo("main"){inclusive = true}
+                            navController.navigate(LoginRoute){
+                                popUpTo<MainRoute>{inclusive = true}
                             }
                         }
                     )

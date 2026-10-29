@@ -54,7 +54,6 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,6 +68,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itm.gestordeturnos.CafeAccentYellow
 import com.itm.gestordeturnos.CafeBackgroundLight
 import com.itm.gestordeturnos.CafeBorderColor
@@ -98,7 +98,7 @@ private val ESTADOS_FORMULARIO = listOf("ACTIVO", "INACTIVO")
 
 @Composable
 fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(CafeBackgroundLight)) {
         val isCompact = maxWidth < 950.dp

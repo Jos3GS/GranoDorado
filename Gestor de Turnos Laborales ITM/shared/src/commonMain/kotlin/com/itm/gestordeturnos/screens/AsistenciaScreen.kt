@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itm.gestordeturnos.*
 import com.itm.gestordeturnos.components.EncabezadoPantalla
 import com.itm.gestordeturnos.components.SucursalChip
@@ -28,7 +29,7 @@ import kotlinx.datetime.toLocalDateTime
 
 @Composable
 fun AsistenciaScreen(viewModel: AsistenciaViewModel) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     var notificacionAAtender by remember { mutableStateOf<NotificacionIncumplimiento?>(null) }
     var registroAMarcar by remember { mutableStateOf<RegistroAsistencia?>(null) }
     var feedbackMensaje by remember { mutableStateOf<String?>(null) }

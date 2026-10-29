@@ -47,7 +47,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itm.gestordeturnos.CafeBackgroundLight
 import com.itm.gestordeturnos.CafeDarkBrown
 import com.itm.gestordeturnos.components.MallaEmployeeRow
@@ -115,7 +115,7 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
         }
     }
 
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     var dropdownExpanded by remember { mutableStateOf(false) }
     var mostrarDatePickerSemana by remember { mutableStateOf(false) }
 
