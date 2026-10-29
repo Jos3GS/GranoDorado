@@ -8,6 +8,8 @@ import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.TurnoAsignado
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -76,21 +78,24 @@ data class MiHorarioState(
     val cargoEmpleado: String = ""
 )
 
-class MiHorarioViewModel : ViewModel() {
+class MiHorarioViewModel(
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository
+) : ViewModel() {
     private val _uiState = MutableStateFlow(MiHorarioState())
     val uiState: StateFlow<MiHorarioState> = _uiState.asStateFlow()
 
     init {
-        EmpleadoRepository.iniciarSincronizacionFirestore()
-        TurnoRepository.iniciarSincronizacionFirestore()
+        empleadoRepository.iniciarSincronizacionFirestore()
+        turnoRepository.iniciarSincronizacionFirestore()
         observarAsignaciones()
     }
 
     private fun observarAsignaciones() {
         viewModelScope.launch {
             combine(
-                TurnoRepository.asignaciones,
-                EmpleadoRepository.empleados
+                turnoRepository.asignaciones,
+                empleadoRepository.empleados
             ) { _, _ ->
                 recalcularHorarioSemana(_uiState.value.fechaInicioSemana)
             }.collect { }
@@ -132,7 +137,7 @@ class MiHorarioViewModel : ViewModel() {
         val fechasIsoSemana = fechasSemana.map { it.toString() }.toSet()
         val nombresDias = listOf("LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM")
 
-        val todasAsigs = TurnoRepository.asignaciones.value
+        val todasAsigs = turnoRepository.asignaciones.value
 
         // Asignaciones del empleado en la semana seleccionada
         val asigsEmp = todasAsigs.filter { asig ->
@@ -248,7 +253,7 @@ class MiHorarioViewModel : ViewModel() {
 
     private fun resolverEmpleado(): Empleado? {
         val usuario = SessionManager.usuarioActivo
-        val lista = EmpleadoRepository.empleados.value
+        val lista = empleadoRepository.empleados.value
 
         if (usuario != null) {
             if (usuario.id.isNotBlank()) {

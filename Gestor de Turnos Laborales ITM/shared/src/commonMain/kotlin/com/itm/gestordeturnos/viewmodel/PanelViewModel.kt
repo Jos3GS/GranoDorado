@@ -19,6 +19,11 @@ import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import com.itm.gestordeturnos.domain.model.UsuarioActual
+import com.itm.gestordeturnos.domain.repository.AsistenciaRepositoryContract
+import com.itm.gestordeturnos.domain.repository.CambiosTurnoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
+import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -87,18 +92,24 @@ data class PanelState(
     val rondaDelDia: List<TareaRonda> = emptyList()
 )
 
-class PanelViewModel : ViewModel() {
+class PanelViewModel(
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
+    private val novedadRepository: NovedadRepositoryContract = NovedadRepository,
+    private val cambiosTurnoRepository: CambiosTurnoRepositoryContract = CambiosTurnoRepository,
+    private val asistenciaRepository: AsistenciaRepositoryContract = AsistenciaRepository
+) : ViewModel() {
     private val _uiState = MutableStateFlow(PanelState())
     val uiState: StateFlow<PanelState> = _uiState.asStateFlow()
 
     private val _sucursalFiltro = MutableStateFlow("TODAS")
 
     init {
-        EmpleadoRepository.iniciarSincronizacionFirestore()
-        TurnoRepository.iniciarSincronizacionFirestore()
-        NovedadRepository.iniciarSincronizacionFirestore()
-        CambiosTurnoRepository.iniciarSincronizacionFirestore()
-        AsistenciaRepository.iniciarSincronizacionFirestore()
+        empleadoRepository.iniciarSincronizacionFirestore()
+        turnoRepository.iniciarSincronizacionFirestore()
+        novedadRepository.iniciarSincronizacionFirestore()
+        cambiosTurnoRepository.iniciarSincronizacionFirestore()
+        asistenciaRepository.iniciarSincronizacionFirestore()
     }
 
     fun cargarDatos(usuario: UsuarioActual) {
@@ -108,19 +119,19 @@ class PanelViewModel : ViewModel() {
 
         viewModelScope.launch {
             val flujo1 = combine(
-                EmpleadoRepository.empleados,
-                TurnoRepository.turnosCatalogo,
-                TurnoRepository.asignaciones
+                empleadoRepository.empleados,
+                turnoRepository.turnosCatalogo,
+                turnoRepository.asignaciones
             ) { emp, tur, asig -> Triple(emp, tur, asig) }
 
             val flujo2 = combine(
-                NovedadRepository.novedades,
-                CambiosTurnoRepository.solicitudes,
-                AsistenciaRepository.registrosDiarios
+                novedadRepository.novedades,
+                cambiosTurnoRepository.solicitudes,
+                asistenciaRepository.registrosDiarios
             ) { nov, sol, reg -> Triple(nov, sol, reg) }
 
             val flujo3 = combine(
-                AsistenciaRepository.notificaciones,
+                asistenciaRepository.notificaciones,
                 _sucursalFiltro
             ) { notif, filtro -> Pair(notif, filtro) }
 

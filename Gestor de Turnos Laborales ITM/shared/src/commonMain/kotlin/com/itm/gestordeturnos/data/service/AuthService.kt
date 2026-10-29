@@ -5,6 +5,7 @@ import com.itm.gestordeturnos.data.repository.EmpleadoRepository
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.UsuarioActual
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.enviarRecuperacionPlataforma
 import com.itm.gestordeturnos.iniciarSesionGooglePlataforma
 import com.itm.gestordeturnos.registrarCuentaEmpleadoPlataforma
@@ -26,7 +27,9 @@ interface AuthService {
     fun obtenerUsuarioActivo(): UsuarioActual?
 }
 
-class FirebaseAuthService : AuthService {
+class FirebaseAuthService(
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository
+) : AuthService {
 
     private val auth: FirebaseAuth?
         get() = try {
@@ -153,7 +156,7 @@ class FirebaseAuthService : AuthService {
     }
 
     private suspend fun resolverUsuario(correo: String): Result<UsuarioActual> {
-        val empleado = EmpleadoRepository.buscarPorCorreo(correo)
+        val empleado = empleadoRepository.buscarPorCorreo(correo)
             ?: return Result.failure(Exception("La cuenta $correo no se encuentra registrada en el sistema. Contacta al administrador."))
 
         if (empleado.estado != EstadoUsuario.ACTIVO) {
@@ -178,7 +181,7 @@ class FirebaseAuthService : AuthService {
     }
 
     private fun resolverUsuarioSync(correo: String): UsuarioActual? {
-        val listaEmpleados = EmpleadoRepository.empleados.value
+        val listaEmpleados = empleadoRepository.empleados.value
         val empleado = listaEmpleados.find { it.correo.equals(correo, ignoreCase = true) } ?: return null
         if (empleado.estado != EstadoUsuario.ACTIVO) return null
 

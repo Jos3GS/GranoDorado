@@ -10,6 +10,9 @@ import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.EstadoAsistencia
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
+import com.itm.gestordeturnos.domain.repository.AsistenciaRepositoryContract
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +42,11 @@ data class MarcarAsistenciaState(
     val mensajeAviso: String? = null
 )
 
-class MarcarAsistenciaViewModel : ViewModel() {
+class MarcarAsistenciaViewModel(
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
+    private val asistenciaRepository: AsistenciaRepositoryContract = AsistenciaRepository
+) : ViewModel() {
     private val _uiState = MutableStateFlow(MarcarAsistenciaState())
     val uiState: StateFlow<MarcarAsistenciaState> = _uiState.asStateFlow()
 
@@ -48,18 +55,18 @@ class MarcarAsistenciaViewModel : ViewModel() {
     private var asignacionDeHoy: AsignacionTurno? = null
 
     init {
-        EmpleadoRepository.iniciarSincronizacionFirestore()
-        TurnoRepository.iniciarSincronizacionFirestore()
-        AsistenciaRepository.iniciarSincronizacionFirestore()
+        empleadoRepository.iniciarSincronizacionFirestore()
+        turnoRepository.iniciarSincronizacionFirestore()
+        asistenciaRepository.iniciarSincronizacionFirestore()
         observarDatos()
     }
 
     private fun observarDatos() {
         viewModelScope.launch {
             combine(
-                TurnoRepository.asignaciones,
-                EmpleadoRepository.empleados,
-                AsistenciaRepository.registrosDiarios
+                turnoRepository.asignaciones,
+                empleadoRepository.empleados,
+                asistenciaRepository.registrosDiarios
             ) { asignaciones, empleados, registros ->
                 Triple(asignaciones, empleados, registros)
             }.collect { (asignaciones, empleados, registros) ->
@@ -225,10 +232,10 @@ class MarcarAsistenciaViewModel : ViewModel() {
             )
         }
 
-        AsistenciaRepository.guardarRegistroAsistenciaEnBackground(nuevoRegistro)
+        asistenciaRepository.guardarRegistroAsistenciaEnBackground(nuevoRegistro)
         if (minutosTarde > 0) {
             viewModelScope.launch {
-                AsistenciaRepository.resolverIncumplimientoPorLlegada(empId, hoyIso)
+                asistenciaRepository.resolverIncumplimientoPorLlegada(empId, hoyIso)
             }
         }
     }
@@ -265,7 +272,7 @@ class MarcarAsistenciaViewModel : ViewModel() {
             )
         }
 
-        AsistenciaRepository.guardarRegistroAsistenciaEnBackground(registroActualizado)
+        asistenciaRepository.guardarRegistroAsistenciaEnBackground(registroActualizado)
     }
 
     fun finalizarDescanso() {
@@ -300,7 +307,7 @@ class MarcarAsistenciaViewModel : ViewModel() {
             )
         }
 
-        AsistenciaRepository.guardarRegistroAsistenciaEnBackground(registroActualizado)
+        asistenciaRepository.guardarRegistroAsistenciaEnBackground(registroActualizado)
     }
 
     fun marcarSalida() {
@@ -342,7 +349,7 @@ class MarcarAsistenciaViewModel : ViewModel() {
             )
         }
 
-        AsistenciaRepository.guardarRegistroAsistenciaEnBackground(registroFinal)
+        asistenciaRepository.guardarRegistroAsistenciaEnBackground(registroFinal)
     }
 
     private fun resolverEmpleado(lista: List<Empleado>): Empleado? {

@@ -7,6 +7,8 @@ import com.itm.gestordeturnos.data.repository.TurnoRepository
 import com.itm.gestordeturnos.data.service.AuthResult
 import com.itm.gestordeturnos.data.service.AuthService
 import com.itm.gestordeturnos.data.service.FirebaseAuthService
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,7 +41,9 @@ data class LoginState(
 )
 
 class LoginViewModel(
-    private val authService: AuthService = FirebaseAuthService()
+    private val authService: AuthService = FirebaseAuthService(),
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(LoginState())
     val uiState: StateFlow<LoginState> = _uiState.asStateFlow()
@@ -72,8 +76,8 @@ class LoginViewModel(
             when (val resultado = authService.iniciarSesion(email, password)) {
                 is AuthResult.Success -> {
                     SessionManager.usuarioActivo = resultado.usuario
-                    EmpleadoRepository.iniciarSincronizacionFirestore()
-                    TurnoRepository.iniciarSincronizacionFirestore()
+                    empleadoRepository.iniciarSincronizacionFirestore()
+                    turnoRepository.iniciarSincronizacionFirestore()
                     _uiState.update { it.copy(isLoading = false, isSuccess = true, mensajeError = null) }
                 }
                 is AuthResult.Error -> {
@@ -91,8 +95,8 @@ class LoginViewModel(
             when (val resultado = authService.loginConGoogle()) {
                 is AuthResult.Success -> {
                     SessionManager.usuarioActivo = resultado.usuario
-                    EmpleadoRepository.iniciarSincronizacionFirestore()
-                    TurnoRepository.iniciarSincronizacionFirestore()
+                    empleadoRepository.iniciarSincronizacionFirestore()
+                    turnoRepository.iniciarSincronizacionFirestore()
                     _uiState.update { it.copy(isLoading = false, isSuccess = true, mensajeError = null) }
                 }
                 is AuthResult.Error -> {

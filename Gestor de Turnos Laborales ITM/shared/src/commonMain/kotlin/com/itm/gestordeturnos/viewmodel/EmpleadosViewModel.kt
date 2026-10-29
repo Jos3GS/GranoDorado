@@ -10,6 +10,8 @@ import com.itm.gestordeturnos.domain.model.Cargo
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.EstadoEmpleado
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,7 +42,9 @@ data class EmpleadosState(
 )
 
 class EmpleadosViewModel(
-    private val authService: AuthService = FirebaseAuthService()
+    private val authService: AuthService = FirebaseAuthService(),
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(EmpleadosState())
     val uiState: StateFlow<EmpleadosState> = _uiState.asStateFlow()
@@ -51,7 +55,7 @@ class EmpleadosViewModel(
 
     private fun observarEmpleados() {
         viewModelScope.launch {
-            EmpleadoRepository.empleados.collect { lista ->
+            empleadoRepository.empleados.collect { lista ->
                 _uiState.update { state ->
                     aplicarFiltros(state.copy(empleadosOriginales = lista))
                 }
@@ -275,7 +279,7 @@ class EmpleadosViewModel(
             // del empleado a su nueva sucursal, asegurando que un empleado no tenga sucursales distintas
             // en una misma semana y que se refleje inmediatamente en la nueva sede.
             if (sucursalCambio && empleadoPrevio != null) {
-                val todasAsigs = TurnoRepository.asignaciones.value
+                val todasAsigs = turnoRepository.asignaciones.value
                 val asigsFuturas = todasAsigs.filter {
                     it.empleadoId == empleadoFinal.id && it.fechaIso >= fechaLunesProximaSemanaIso
                 }
@@ -289,11 +293,11 @@ class EmpleadosViewModel(
                             programacionId = progId
                         )
                     }
-                    TurnoRepository.guardarAsignacionesEnBackground(asigsMigradas)
+                    turnoRepository.guardarAsignacionesEnBackground(asigsMigradas)
                 }
             }
 
-            EmpleadoRepository.guardarEmpleado(empleadoFinal, esNuevo)
+            empleadoRepository.guardarEmpleado(empleadoFinal, esNuevo)
 
             _uiState.update { state ->
                 state.copy(

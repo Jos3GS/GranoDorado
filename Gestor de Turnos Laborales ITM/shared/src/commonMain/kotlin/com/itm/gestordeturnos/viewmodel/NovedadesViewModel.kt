@@ -11,6 +11,9 @@ import com.itm.gestordeturnos.domain.model.EstadoNovedad
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.model.RolUsuario
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
+import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -110,14 +113,18 @@ data class NovedadesState(
         }
 }
 
-class NovedadesViewModel : ViewModel() {
+class NovedadesViewModel(
+    private val novedadRepository: NovedadRepositoryContract = NovedadRepository,
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository
+) : ViewModel() {
     private val _uiState = MutableStateFlow(NovedadesState())
     val uiState: StateFlow<NovedadesState> = _uiState.asStateFlow()
 
     init {
-        NovedadRepository.iniciarSincronizacionFirestore()
-        EmpleadoRepository.iniciarSincronizacionFirestore()
-        TurnoRepository.iniciarSincronizacionFirestore()
+        novedadRepository.iniciarSincronizacionFirestore()
+        empleadoRepository.iniciarSincronizacionFirestore()
+        turnoRepository.iniciarSincronizacionFirestore()
 
         val usuario = SessionManager.usuarioActivo
         val esAdminGen = usuario == null || usuario.rol == RolUsuario.ADMINISTRADOR_GENERAL
@@ -136,9 +143,9 @@ class NovedadesViewModel : ViewModel() {
     private fun observarDatos() {
         viewModelScope.launch {
             combine(
-                NovedadRepository.novedades,
-                EmpleadoRepository.empleados,
-                TurnoRepository.asignaciones
+                novedadRepository.novedades,
+                empleadoRepository.empleados,
+                turnoRepository.asignaciones
             ) { novedades, empleados, asignaciones ->
                 Triple(novedades, empleados, asignaciones)
             }.collect { (novedades, empleados, asignaciones) ->
@@ -204,7 +211,7 @@ class NovedadesViewModel : ViewModel() {
         } ?: "Administrador"
 
         val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault()).toString()
-        NovedadRepository.revisarNovedad(
+        novedadRepository.revisarNovedad(
             idNovedad = idNovedad,
             comentario = comentario.ifBlank { "Revisado y conforme" },
             revisor = revisor,
@@ -297,7 +304,7 @@ class NovedadesViewModel : ViewModel() {
             reportadoPorSupervisor = true
         )
 
-        NovedadRepository.reportarNovedad(nuevaNovedad)
+        novedadRepository.reportarNovedad(nuevaNovedad)
         _uiState.update {
             it.copy(
                 mostrarDialogoSupervisor = false,

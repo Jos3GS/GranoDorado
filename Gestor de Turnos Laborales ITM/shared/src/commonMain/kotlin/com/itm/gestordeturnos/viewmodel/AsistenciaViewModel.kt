@@ -10,7 +10,9 @@ import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.NotificacionIncumplimiento
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
 import com.itm.gestordeturnos.domain.model.RolUsuario
-import com.itm.gestordeturnos.domain.model.EstadoAsistencia
+import com.itm.gestordeturnos.domain.repository.AsistenciaRepositoryContract
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,25 +35,29 @@ data class AsistenciaState(
     val mensajeFeedback: String? = null
 )
 
-class AsistenciaViewModel : ViewModel() {
+class AsistenciaViewModel(
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
+    private val asistenciaRepository: AsistenciaRepositoryContract = AsistenciaRepository
+) : ViewModel() {
     private val _uiState = MutableStateFlow(AsistenciaState())
     val uiState: StateFlow<AsistenciaState> = _uiState.asStateFlow()
     private val _sucursalFiltro = MutableStateFlow("TODAS")
 
     init {
-        EmpleadoRepository.iniciarSincronizacionFirestore()
-        TurnoRepository.iniciarSincronizacionFirestore()
-        AsistenciaRepository.iniciarSincronizacionFirestore()
+        empleadoRepository.iniciarSincronizacionFirestore()
+        turnoRepository.iniciarSincronizacionFirestore()
+        asistenciaRepository.iniciarSincronizacionFirestore()
         observarAsistencia()
     }
 
     private fun observarAsistencia() {
         viewModelScope.launch {
             combine(
-                TurnoRepository.asignaciones,
-                EmpleadoRepository.empleados,
-                AsistenciaRepository.registrosDiarios,
-                AsistenciaRepository.notificaciones,
+                turnoRepository.asignaciones,
+                empleadoRepository.empleados,
+                asistenciaRepository.registrosDiarios,
+                asistenciaRepository.notificaciones,
                 _sucursalFiltro
             ) { asignaciones, empleados, registros, notificacionesRepositorio, filtroSucursal ->
                 recalcularAsistencia(asignaciones, empleados, registros, notificacionesRepositorio, filtroSucursal)
@@ -173,7 +179,7 @@ class AsistenciaViewModel : ViewModel() {
                         )
                         notificacionesGeneradas.add(notifAuto)
                         if (atendidaExistente == null) {
-                            AsistenciaRepository.registrarIncumplimiento(notifAuto)
+                            asistenciaRepository.registrarIncumplimiento(notifAuto)
                         }
                     }
                 }
@@ -221,7 +227,7 @@ class AsistenciaViewModel : ViewModel() {
         if (motivo.isBlank()) return
         val hora = obtenerHoraActual()
         viewModelScope.launch {
-            AsistenciaRepository.atenderIncumplimiento(id, motivo, hora)
+            asistenciaRepository.atenderIncumplimiento(id, motivo, hora)
         }
     }
 
@@ -249,7 +255,7 @@ class AsistenciaViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            val res = AsistenciaRepository.registrarMarcaSupervisor(
+            val res = asistenciaRepository.registrarMarcaSupervisor(
                 registroId = registroId,
                 empleadoId = empleadoId,
                 empleadoNombre = empleadoNombre,

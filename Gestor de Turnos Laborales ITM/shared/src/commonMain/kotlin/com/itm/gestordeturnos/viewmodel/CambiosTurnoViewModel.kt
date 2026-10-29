@@ -14,6 +14,9 @@ import com.itm.gestordeturnos.domain.model.SolicitudCambio
 import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
 import com.itm.gestordeturnos.domain.model.TurnoCompaneroSeleccionable
 import com.itm.gestordeturnos.domain.model.TurnoSeleccionable
+import com.itm.gestordeturnos.domain.repository.CambiosTurnoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,23 +40,27 @@ data class CambiosTurnoState(
     val mensajeFeedback: String? = null
 )
 
-class CambiosTurnoViewModel : ViewModel() {
+class CambiosTurnoViewModel(
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
+    private val cambiosTurnoRepository: CambiosTurnoRepositoryContract = CambiosTurnoRepository
+) : ViewModel() {
     private val _uiState = MutableStateFlow(CambiosTurnoState())
     val uiState: StateFlow<CambiosTurnoState> = _uiState.asStateFlow()
 
     init {
-        TurnoRepository.iniciarSincronizacionFirestore()
-        EmpleadoRepository.iniciarSincronizacionFirestore()
-        CambiosTurnoRepository.iniciarSincronizacionFirestore()
+        turnoRepository.iniciarSincronizacionFirestore()
+        empleadoRepository.iniciarSincronizacionFirestore()
+        cambiosTurnoRepository.iniciarSincronizacionFirestore()
         observarDatos()
     }
 
     private fun observarDatos() {
         viewModelScope.launch {
             combine(
-                CambiosTurnoRepository.solicitudes,
-                TurnoRepository.asignaciones,
-                EmpleadoRepository.empleados
+                cambiosTurnoRepository.solicitudes,
+                turnoRepository.asignaciones,
+                empleadoRepository.empleados
             ) { solicitudes, asignaciones, empleados ->
                 Triple(solicitudes, asignaciones, empleados)
             }.collect { (solicitudes, asignaciones, empleados) ->
@@ -267,7 +274,7 @@ class CambiosTurnoViewModel : ViewModel() {
         if (motivo.isBlank()) return
 
         val usuario = SessionManager.usuarioActivo
-        val emp = resolverEmpleado(usuario, EmpleadoRepository.empleados.value)
+        val emp = resolverEmpleado(usuario, empleadoRepository.empleados.value)
         val empId = emp?.id ?: usuario?.id ?: "emp_1"
         val empNombre = emp?.let {
             if (it.apellido.isNotBlank()) "${it.nombre} ${it.apellido}".trim() else it.nombre
@@ -300,24 +307,24 @@ class CambiosTurnoViewModel : ViewModel() {
             esRemitente = true
         )
 
-        CambiosTurnoRepository.crearSolicitud(nuevaSolicitud)
+        cambiosTurnoRepository.crearSolicitud(nuevaSolicitud)
         toggleModalSolicitud(false)
     }
 
     fun aceptarSolicitud(solicitud: SolicitudCambioTurno) {
-        CambiosTurnoRepository.aceptarPorCompanero(solicitud.id)
+        cambiosTurnoRepository.aceptarPorCompanero(solicitud.id)
     }
 
     fun rechazarSolicitud(solicitud: SolicitudCambioTurno, motivo: String) {
         val motivoFinal = motivo.ifBlank { "Rechazada" }
-        CambiosTurnoRepository.rechazarSolicitud(solicitud.id, motivoFinal)
+        cambiosTurnoRepository.rechazarSolicitud(solicitud.id, motivoFinal)
     }
 
     fun cancelarSolicitud(solicitud: SolicitudCambioTurno) {
-        CambiosTurnoRepository.cancelarSolicitud(solicitud.id)
+        cambiosTurnoRepository.cancelarSolicitud(solicitud.id)
     }
 
     fun aprobarSolicitud(solicitud: SolicitudCambioTurno) {
-        CambiosTurnoRepository.aprobarEIntercambiar(solicitud)
+        cambiosTurnoRepository.aprobarEIntercambiar(solicitud)
     }
 }

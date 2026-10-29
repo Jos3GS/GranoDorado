@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.itm.gestordeturnos.data.repository.TurnoRepository
 import com.itm.gestordeturnos.domain.model.RangoDescanso
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
+import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.CalcularDescansosTurnoUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
 import kotlin.random.Random
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,20 +40,23 @@ data class TurnosState(
     val mensajeErrorNuevo: String? = null
 )
 
-class TurnosViewModel : ViewModel() {
+class TurnosViewModel(
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
+    private val calcularDescansosUseCase: CalcularDescansosTurnoUseCase = defaultUseCase
+) : ViewModel() {
     private val _uiState = MutableStateFlow(TurnosState())
     val uiState: StateFlow<TurnosState> = _uiState.asStateFlow()
 
     init {
         observarTurnosCatalogo()
-        TurnoRepository.iniciarSincronizacionFirestore()
+        turnoRepository.iniciarSincronizacionFirestore()
     }
 
     private fun observarTurnosCatalogo() {
         viewModelScope.launch {
             combine(
-                TurnoRepository.turnosCatalogo,
-                TurnoRepository.asignaciones
+                turnoRepository.turnosCatalogo,
+                turnoRepository.asignaciones
             ) { turnos, asignaciones ->
                 val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
                 val diasDesdeLunes = hoy.dayOfWeek.ordinal
@@ -90,8 +96,8 @@ class TurnosViewModel : ViewModel() {
             if (mostrar) {
                 val inicioDefault = "08:00"
                 val finDefault = "16:00"
-                val descansosAuto = generarDescansosAutomaticos(inicioDefault, finDefault)
-                val horasEfectivas = calcularHorasEfectivas(inicioDefault, finDefault, descansosAuto)
+                val descansosAuto = calcularDescansosUseCase.generarDescansosAutomaticos(inicioDefault, finDefault)
+                val horasEfectivas = calcularDescansosUseCase.calcularHorasEfectivas(inicioDefault, finDefault, descansosAuto)
                 it.copy(
                     mostrarModalCrearTurno = true,
                     esEdicion = false,
@@ -124,17 +130,17 @@ class TurnosViewModel : ViewModel() {
     }
 
     fun abrirEditarTurno(turno: TurnoTemplate) {
-        val (iniParse, fnParse) = extraerHorasDeTexto(turno.horario)
+        val (iniParse, fnParse) = calcularDescansosUseCase.extraerHorasDeTexto(turno.horario)
         val inicio = if (turno.horaInicio.isNotBlank()) turno.horaInicio else if (iniParse.isNotBlank()) iniParse else "08:00"
         val fin = if (turno.horaFin.isNotBlank()) turno.horaFin else if (fnParse.isNotBlank()) fnParse else "16:00"
 
         val descansos = if (turno.listaDescansos.isNotEmpty()) {
             turno.listaDescansos
         } else {
-            extraerDescansosDeTexto(turno.descansos)
+            calcularDescansosUseCase.extraerDescansosDeTexto(turno.descansos)
         }
 
-        val horasEf = calcularHorasEfectivas(inicio, fin, descansos)
+        val horasEf = calcularDescansosUseCase.calcularHorasEfectivas(inicio, fin, descansos)
 
         _uiState.update {
             it.copy(
@@ -158,7 +164,7 @@ class TurnosViewModel : ViewModel() {
     }
 
     fun alternarEstadoTurno(idTurno: String) {
-        TurnoRepository.alternarEstadoTurno(idTurno)
+        turnoRepository.alternarEstadoTurno(idTurno)
     }
 
     // --- Actualización de campos principales ---
@@ -184,11 +190,11 @@ class TurnosViewModel : ViewModel() {
         val inicio = state.horaInicioNuevo
         val fin = state.horaFinNuevo
         if (inicio.isNotBlank() && fin.isNotBlank()) {
-            val iMin = parsearHoraAMinutos(inicio)
-            val fMin = parsearHoraAMinutos(fin)
+            val iMin = calcularDescansosUseCase.parsearHoraAMinutos(inicio)
+            val fMin = calcularDescansosUseCase.parsearHoraAMinutos(fin)
             if (iMin != null && fMin != null && fMin > iMin) {
-                val autoDescansos = generarDescansosAutomaticos(inicio, fin)
-                val horasEfectivas = calcularHorasEfectivas(inicio, fin, autoDescansos)
+                val autoDescansos = calcularDescansosUseCase.generarDescansosAutomaticos(inicio, fin)
+                val horasEfectivas = calcularDescansosUseCase.calcularHorasEfectivas(inicio, fin, autoDescansos)
                 return state.copy(
                     descansosNuevo = autoDescansos,
                     horasEfectivasCalculadas = horasEfectivas
@@ -202,9 +208,9 @@ class TurnosViewModel : ViewModel() {
     fun agregarDescanso() {
         _uiState.update { state ->
             val nuevosDescansos = state.descansosNuevo.toMutableList()
-            val sugerido = sugerirNuevoDescanso(state.horaInicioNuevo, state.horaFinNuevo, nuevosDescansos)
+            val sugerido = calcularDescansosUseCase.sugerirNuevoDescanso(state.horaInicioNuevo, state.horaFinNuevo, nuevosDescansos)
             nuevosDescansos.add(sugerido)
-            val horasEf = calcularHorasEfectivas(state.horaInicioNuevo, state.horaFinNuevo, nuevosDescansos)
+            val horasEf = calcularDescansosUseCase.calcularHorasEfectivas(state.horaInicioNuevo, state.horaFinNuevo, nuevosDescansos)
             state.copy(
                 descansosNuevo = nuevosDescansos,
                 horasEfectivasCalculadas = horasEf,
@@ -213,23 +219,10 @@ class TurnosViewModel : ViewModel() {
         }
     }
 
-    private fun sugerirNuevoDescanso(inicioStr: String, finStr: String, actuales: List<RangoDescanso>): RangoDescanso {
-        val inicioMin = parsearHoraAMinutos(inicioStr) ?: 480
-        val finMin = parsearHoraAMinutos(finStr) ?: 960
-        val ultimoFin = actuales.mapNotNull { parsearHoraAMinutos(it.horaFin) }.maxOrNull() ?: inicioMin
-
-        val sugeridoInicio = (ultimoFin + 165).coerceAtMost(finMin - 15).coerceAtLeast(inicioMin)
-        val sugeridoFin = (sugeridoInicio + 15).coerceAtMost(finMin)
-        return RangoDescanso(
-            horaInicio = formatearMinutosAHora(sugeridoInicio),
-            horaFin = formatearMinutosAHora(sugeridoFin)
-        )
-    }
-
     fun quitarDescanso(id: String) {
         _uiState.update { state ->
             val nuevosDescansos = state.descansosNuevo.filterNot { it.id == id }
-            val horasEf = calcularHorasEfectivas(state.horaInicioNuevo, state.horaFinNuevo, nuevosDescansos)
+            val horasEf = calcularDescansosUseCase.calcularHorasEfectivas(state.horaInicioNuevo, state.horaFinNuevo, nuevosDescansos)
             state.copy(
                 descansosNuevo = nuevosDescansos,
                 horasEfectivasCalculadas = horasEf,
@@ -242,15 +235,15 @@ class TurnosViewModel : ViewModel() {
         _uiState.update { state ->
             val actualizados = state.descansosNuevo.map { descanso ->
                 if (descanso.id == id) {
-                    val iniMin = parsearHoraAMinutos(hora)
-                    val duracionActual = parsearHoraAMinutos(descanso.horaFin)?.let { fn ->
-                        parsearHoraAMinutos(descanso.horaInicio)?.let { ini -> (fn - ini).takeIf { it >= 15 } }
+                    val iniMin = calcularDescansosUseCase.parsearHoraAMinutos(hora)
+                    val duracionActual = calcularDescansosUseCase.parsearHoraAMinutos(descanso.horaFin)?.let { fn ->
+                        calcularDescansosUseCase.parsearHoraAMinutos(descanso.horaInicio)?.let { ini -> (fn - ini).takeIf { it >= 15 } }
                     } ?: 15
-                    val finAuto = if (iniMin != null) formatearMinutosAHora(iniMin + duracionActual) else descanso.horaFin
+                    val finAuto = if (iniMin != null) calcularDescansosUseCase.formatearMinutosAHora(iniMin + duracionActual) else descanso.horaFin
                     descanso.copy(horaInicio = hora, horaFin = finAuto)
                 } else descanso
             }
-            val horasEf = calcularHorasEfectivas(state.horaInicioNuevo, state.horaFinNuevo, actualizados)
+            val horasEf = calcularDescansosUseCase.calcularHorasEfectivas(state.horaInicioNuevo, state.horaFinNuevo, actualizados)
             state.copy(
                 descansosNuevo = actualizados,
                 horasEfectivasCalculadas = horasEf,
@@ -264,7 +257,7 @@ class TurnosViewModel : ViewModel() {
             val actualizados = state.descansosNuevo.map { descanso ->
                 if (descanso.id == id) descanso.copy(horaFin = hora) else descanso
             }
-            val horasEf = calcularHorasEfectivas(state.horaInicioNuevo, state.horaFinNuevo, actualizados)
+            val horasEf = calcularDescansosUseCase.calcularHorasEfectivas(state.horaInicioNuevo, state.horaFinNuevo, actualizados)
             state.copy(
                 descansosNuevo = actualizados,
                 horasEfectivasCalculadas = horasEf,
@@ -273,280 +266,76 @@ class TurnosViewModel : ViewModel() {
         }
     }
 
-    // --- Acción de Guardar con Validaciones ---
+    // --- Acción de Guardar con Validaciones de Dominio ---
     fun guardarTurno() {
         val actual = _uiState.value
 
-        // 1. Nombre
-        if (actual.nombreTurnoNuevo.isBlank()) {
-            _uiState.update { it.copy(mensajeErrorNuevo = "El nombre del turno es obligatorio.") }
-            return
-        }
-
-        // 2. Horas de inicio y fin
-        if (actual.horaInicioNuevo.isBlank() || actual.horaFinNuevo.isBlank()) {
-            _uiState.update { it.copy(mensajeErrorNuevo = "Debe especificar la hora de inicio y fin del turno.") }
-            return
-        }
-
-        val inicioMin = parsearHoraAMinutos(actual.horaInicioNuevo)
-        val finMin = parsearHoraAMinutos(actual.horaFinNuevo)
-        if (inicioMin == null || finMin == null) {
-            _uiState.update { it.copy(mensajeErrorNuevo = "Formato de hora inválido en inicio o fin.") }
-            return
-        }
-
-        if (finMin <= inicioMin) {
-            _uiState.update { it.copy(mensajeErrorNuevo = "La hora de fin debe ser posterior a la hora de inicio.") }
-            return
-        }
-
-        val duracionTotalMin = finMin - inicioMin
-
-        // Regla 1: No exceder 10 horas al día (600 minutos)
-        if (duracionTotalMin > 600) {
-            _uiState.update {
-                it.copy(mensajeErrorNuevo = "Un turno no puede exceder las 10 horas al día (duración actual: ${formatearMinutosADuracion(duracionTotalMin)}).")
+        when (
+            val validacion = calcularDescansosUseCase.validarYCalcularTurno(
+                nombreTurno = actual.nombreTurnoNuevo,
+                horaInicio = actual.horaInicioNuevo,
+                horaFin = actual.horaFinNuevo,
+                descansos = actual.descansosNuevo
+            )
+        ) {
+            is ValidacionTurnoResult.Error -> {
+                _uiState.update { it.copy(mensajeErrorNuevo = validacion.mensaje) }
             }
-            return
-        }
-
-        // Parsear y ordenar descansos
-        data class DescansoParsed(val id: String, val inicio: Int, val fin: Int, val original: RangoDescanso)
-        val descansosParsed = mutableListOf<DescansoParsed>()
-
-        for (d in actual.descansosNuevo) {
-            val dIni = parsearHoraAMinutos(d.horaInicio)
-            val dFn = parsearHoraAMinutos(d.horaFin)
-            if (dIni == null || dFn == null) {
-                _uiState.update { it.copy(mensajeErrorNuevo = "Formato inválido en los descansos.") }
-                return
-            }
-            if (dFn <= dIni) {
-                _uiState.update { it.copy(mensajeErrorNuevo = "Cada descanso debe terminar después de su inicio (${d.horaInicio} - ${d.horaFin}).") }
-                return
-            }
-            if (dIni < inicioMin || dFn > finMin) {
-                _uiState.update { it.copy(mensajeErrorNuevo = "Los descansos deben estar dentro del horario laboral (${actual.horaInicioNuevo} - ${actual.horaFinNuevo}).") }
-                return
-            }
-            descansosParsed.add(DescansoParsed(d.id, dIni, dFn, d))
-        }
-
-        descansosParsed.sortBy { it.inicio }
-
-        // Validar no solapamiento entre descansos
-        for (i in 0 until descansosParsed.size - 1) {
-            if (descansosParsed[i].fin > descansosParsed[i + 1].inicio) {
-                _uiState.update { it.copy(mensajeErrorNuevo = "Hay descansos que se solapan entre sí.") }
-                return
-            }
-        }
-
-        // Validar reglas de trabajo continuo:
-        // Máximo tiempo entre inicio/descanso/fin es de 2h 45min (165 min)
-        // Mínimo tiempo continuo de trabajo es de 30 min (excepto si el turno completo es menor a 2h 45m sin descansos)
-        if (descansosParsed.isEmpty()) {
-            if (duracionTotalMin > 165) {
-                _uiState.update {
-                    it.copy(mensajeErrorNuevo = "Máximo tiempo de trabajo continuo es 2 h 45 min. Este turno de ${formatearMinutosADuracion(duracionTotalMin)} requiere descansos.")
+            is ValidacionTurnoResult.Exito -> {
+                val horarioStr = "${actual.horaInicioNuevo}-\n${actual.horaFinNuevo}"
+                val descansosStr = if (validacion.descansosOrdenados.isNotEmpty()) {
+                    validacion.descansosOrdenados.joinToString("\n") { "${it.horaInicio}-${it.horaFin}" }
+                } else {
+                    "-"
                 }
-                return
-            }
-        } else {
-            // Primer bloque: inicio de turno -> primer descanso
-            val primerBloque = descansosParsed.first().inicio - inicioMin
-            if (primerBloque > 165) {
-                _uiState.update {
-                    it.copy(mensajeErrorNuevo = "El primer bloque de trabajo (${formatearMinutosADuracion(primerBloque)}) excede el límite de 2 h 45 min.")
-                }
-                return
-            }
-            if (primerBloque < 30) {
-                _uiState.update {
-                    it.copy(mensajeErrorNuevo = "El primer bloque de trabajo (${formatearMinutosADuracion(primerBloque)}) debe ser de mínimo 30 minutos.")
-                }
-                return
-            }
 
-            // Bloques intermedios
-            for (i in 0 until descansosParsed.size - 1) {
-                val bloqueIntermedio = descansosParsed[i + 1].inicio - descansosParsed[i].fin
-                if (bloqueIntermedio > 165) {
-                    _uiState.update {
-                        it.copy(mensajeErrorNuevo = "Un bloque intermedio de trabajo (${formatearMinutosADuracion(bloqueIntermedio)}) excede el límite de 2 h 45 min.")
+                val esEdicion = actual.esEdicion
+                val idTurno = if (esEdicion && !actual.idTurnoEditando.isNullOrBlank()) {
+                    actual.idTurnoEditando
+                } else {
+                    "t_${Random.nextInt(1000, 9999)}"
+                }
+
+                val turnoGuardado = TurnoTemplate(
+                    id = idTurno,
+                    nombre = actual.nombreTurnoNuevo.trim(),
+                    horario = horarioStr,
+                    descansos = descansosStr,
+                    horasEfectivas = validacion.horasEfectivas,
+                    estado = actual.estadoTurnoNuevo,
+                    asignaciones = if (esEdicion) actual.asignacionesTurnoEditando else 0,
+                    horaInicio = actual.horaInicioNuevo,
+                    horaFin = actual.horaFinNuevo,
+                    listaDescansos = validacion.descansosOrdenados
+                )
+
+                viewModelScope.launch {
+                    _uiState.update { it.copy(mensajeErrorNuevo = null) }
+                    val resultado = turnoRepository.guardarTurnoCatalogo(turnoGuardado, esNuevo = !esEdicion)
+                    if (resultado.isFailure) {
+                        val errorMsg = resultado.exceptionOrNull()?.message ?: "Error al guardar en Firestore"
+                        _uiState.update { it.copy(mensajeErrorNuevo = "Error guardando en Firestore: $errorMsg. Verifica la conexión y las reglas de seguridad en Firebase Console.") }
+                    } else {
+                        toggleModalCrearTurno(false)
                     }
-                    return
                 }
-                if (bloqueIntermedio < 30) {
-                    _uiState.update {
-                        it.copy(mensajeErrorNuevo = "El tiempo de trabajo entre descansos (${formatearMinutosADuracion(bloqueIntermedio)}) debe ser de mínimo 30 minutos.")
-                    }
-                    return
-                }
-            }
-
-            // Último bloque: último descanso -> fin de turno
-            val ultimoBloque = finMin - descansosParsed.last().fin
-            if (ultimoBloque > 165) {
-                _uiState.update {
-                    it.copy(mensajeErrorNuevo = "El bloque final de trabajo (${formatearMinutosADuracion(ultimoBloque)}) excede el límite de 2 h 45 min.")
-                }
-                return
-            }
-            if (ultimoBloque < 30) {
-                _uiState.update {
-                    it.copy(mensajeErrorNuevo = "El bloque final de trabajo (${formatearMinutosADuracion(ultimoBloque)}) debe ser de mínimo 30 minutos.")
-                }
-                return
-            }
-        }
-
-        val totalDescansoMin = descansosParsed.sumOf { it.fin - it.inicio }
-        val minutosEfectivos = duracionTotalMin - totalDescansoMin
-        val horasEfectivasStr = formatearMinutosADuracion(minutosEfectivos)
-
-        val horarioStr = "${actual.horaInicioNuevo}-\n${actual.horaFinNuevo}"
-        val descansosStr = if (descansosParsed.isNotEmpty()) {
-            descansosParsed.joinToString("\n") { "${it.original.horaInicio}-${it.original.horaFin}" }
-        } else {
-            "-"
-        }
-
-        val esEdicion = actual.esEdicion
-        val idTurno = if (esEdicion && !actual.idTurnoEditando.isNullOrBlank()) {
-            actual.idTurnoEditando
-        } else {
-            "t_${Random.nextInt(1000, 9999)}"
-        }
-
-        val turnoGuardado = TurnoTemplate(
-            id = idTurno,
-            nombre = actual.nombreTurnoNuevo.trim(),
-            horario = horarioStr,
-            descansos = descansosStr,
-            horasEfectivas = horasEfectivasStr,
-            estado = actual.estadoTurnoNuevo,
-            asignaciones = if (esEdicion) actual.asignacionesTurnoEditando else 0,
-            horaInicio = actual.horaInicioNuevo,
-            horaFin = actual.horaFinNuevo,
-            listaDescansos = descansosParsed.map { it.original }
-        )
-
-        viewModelScope.launch {
-            _uiState.update { it.copy(mensajeErrorNuevo = null) }
-            val resultado = TurnoRepository.guardarTurnoCatalogo(turnoGuardado, esNuevo = !esEdicion)
-            if (resultado.isFailure) {
-                val errorMsg = resultado.exceptionOrNull()?.message ?: "Error al guardar en Firestore"
-                _uiState.update { it.copy(mensajeErrorNuevo = "Error guardando en Firestore: $errorMsg. Verifica la conexión y las reglas de seguridad en Firebase Console.") }
-            } else {
-                toggleModalCrearTurno(false)
             }
         }
     }
 
     companion object {
-        fun parsearHoraAMinutos(hora: String): Int? {
-            val partes = hora.trim().split(":")
-            if (partes.size != 2) return null
-            val h = partes[0].toIntOrNull() ?: return null
-            val m = partes[1].toIntOrNull() ?: return null
-            if (h !in 0..23 || m !in 0..59) return null
-            return h * 60 + m
-        }
+        private val defaultUseCase = CalcularDescansosTurnoUseCase()
 
-        fun formatearMinutosAHora(minutos: Int): String {
-            val normalizado = ((minutos % 1440) + 1440) % 1440
-            val h = (normalizado / 60).toString().padStart(2, '0')
-            val m = (normalizado % 60).toString().padStart(2, '0')
-            return "$h:$m"
-        }
-
-        fun formatearMinutosADuracion(minutos: Int): String {
-            val h = minutos / 60
-            val m = minutos % 60
-            return when {
-                m == 0 -> "$h h"
-                h == 0 -> "$m min"
-                else -> "$h h $m min"
-            }
-        }
-
-        fun calcularHorasEfectivas(inicioStr: String, finStr: String, descansos: List<RangoDescanso>): String {
-            val ini = parsearHoraAMinutos(inicioStr) ?: return ""
-            val fn = parsearHoraAMinutos(finStr) ?: return ""
-            if (fn <= ini) return ""
-            val totalMin = fn - ini
-            var descMin = 0
-            for (d in descansos) {
-                val dIni = parsearHoraAMinutos(d.horaInicio)
-                val dFn = parsearHoraAMinutos(d.horaFin)
-                if (dIni != null && dFn != null && dFn > dIni) {
-                    descMin += (dFn - dIni)
-                }
-            }
-            val ef = (totalMin - descMin).coerceAtLeast(0)
-            return formatearMinutosADuracion(ef)
-        }
-
-        fun generarDescansosAutomaticos(inicioStr: String, finStr: String): List<RangoDescanso> {
-            val inicio = parsearHoraAMinutos(inicioStr) ?: return emptyList()
-            val fin = parsearHoraAMinutos(finStr) ?: return emptyList()
-            val duracion = fin - inicio
-            if (duracion <= 165 || duracion > 600) return emptyList()
-
-            val descansos = mutableListOf<RangoDescanso>()
-            var cursor = inicio
-
-            while (fin - cursor > 165) {
-                var dInicio = cursor + 165
-                val dFin = dInicio + 15
-
-                // Si al colocar el descanso a las 2h 45m el bloque restante hasta el fin de turno es < 30m:
-                if (fin - dFin in 0..29) {
-                    dInicio = fin - 45 // 15m descanso + 30m de trabajo final
-                }
-
-                if (dInicio - cursor < 30) {
-                    break
-                }
-
-                descansos.add(
-                    RangoDescanso(
-                        horaInicio = formatearMinutosAHora(dInicio),
-                        horaFin = formatearMinutosAHora(dInicio + 15)
-                    )
-                )
-                cursor = dInicio + 15
-            }
-
-            return descansos
-        }
-
-        fun extraerHorasDeTexto(horarioStr: String): Pair<String, String> {
-            val limpio = horarioStr.replace("-\r\n", "-").replace("-\n", "-").replace("\r", "").replace("\n", "").trim()
-            val partes = limpio.split("-")
-            val ini = if (partes.isNotEmpty()) partes[0].trim() else ""
-            val fn = if (partes.size > 1) partes[1].trim() else ""
-            return Pair(ini, fn)
-        }
-
-        fun extraerDescansosDeTexto(descansosStr: String): List<RangoDescanso> {
-            if (descansosStr.isBlank() || descansosStr.trim() == "-") return emptyList()
-            val normalizado = descansosStr
-                .replace("-\r\n", "-")
-                .replace("-\n", "-")
-                .replace("\r", "")
-            return normalizado.split("\n", ";", ",").mapNotNull { item ->
-                val limpio = item.trim()
-                if (limpio.isBlank() || limpio == "-") null
-                else {
-                    val p = limpio.split("-")
-                    if (p.size == 2 && p[0].contains(":") && p[1].contains(":")) {
-                        RangoDescanso(horaInicio = p[0].trim(), horaFin = p[1].trim())
-                    } else null
-                }
-            }
-        }
+        fun parsearHoraAMinutos(hora: String): Int? = defaultUseCase.parsearHoraAMinutos(hora)
+        fun formatearMinutosAHora(minutos: Int): String = defaultUseCase.formatearMinutosAHora(minutos)
+        fun formatearMinutosADuracion(minutos: Int): String = defaultUseCase.formatearMinutosADuracion(minutos)
+        fun calcularHorasEfectivas(inicioStr: String, finStr: String, descansos: List<RangoDescanso>): String =
+            defaultUseCase.calcularHorasEfectivas(inicioStr, finStr, descansos)
+        fun generarDescansosAutomaticos(inicioStr: String, finStr: String): List<RangoDescanso> =
+            defaultUseCase.generarDescansosAutomaticos(inicioStr, finStr)
+        fun extraerHorasDeTexto(horarioStr: String): Pair<String, String> =
+            defaultUseCase.extraerHorasDeTexto(horarioStr)
+        fun extraerDescansosDeTexto(descansosStr: String): List<RangoDescanso> =
+            defaultUseCase.extraerDescansosDeTexto(descansosStr)
     }
 }

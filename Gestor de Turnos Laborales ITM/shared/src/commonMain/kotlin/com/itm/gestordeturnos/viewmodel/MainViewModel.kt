@@ -11,6 +11,11 @@ import com.itm.gestordeturnos.data.service.AuthService
 import com.itm.gestordeturnos.data.service.FirebaseAuthService
 import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.UsuarioActual
+import com.itm.gestordeturnos.domain.repository.AsistenciaRepositoryContract
+import com.itm.gestordeturnos.domain.repository.CambiosTurnoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
+import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +34,12 @@ data class MainState(
 )
 
 class MainViewModel(
-    private val authService: AuthService = FirebaseAuthService()
+    private val authService: AuthService = FirebaseAuthService(),
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
+    private val novedadRepository: NovedadRepositoryContract = NovedadRepository,
+    private val cambiosTurnoRepository: CambiosTurnoRepositoryContract = CambiosTurnoRepository,
+    private val asistenciaRepository: AsistenciaRepositoryContract = AsistenciaRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MainState())
     val uiState: StateFlow<MainState> = _uiState.asStateFlow()
@@ -74,11 +84,11 @@ class MainViewModel(
         viewModelScope.launch {
             authService.cerrarSesion()
             SessionManager.limpiarSesion()
-            EmpleadoRepository.detenerSincronizacion()
-            TurnoRepository.detenerSincronizacion()
-            NovedadRepository.detenerSincronizacion()
-            CambiosTurnoRepository.detenerSincronizacion()
-            AsistenciaRepository.detenerSincronizacion()
+            empleadoRepository.detenerSincronizacion()
+            turnoRepository.detenerSincronizacion()
+            novedadRepository.detenerSincronizacion()
+            cambiosTurnoRepository.detenerSincronizacion()
+            asistenciaRepository.detenerSincronizacion()
             _uiState.value = MainState()
             onCompletado()
         }

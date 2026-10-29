@@ -10,6 +10,9 @@ import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.EstadoNovedad
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
 import com.itm.gestordeturnos.domain.model.Novedad
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
+import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,7 +49,11 @@ data class ReportarNovedadState(
         get() = tipoNovedad in listOf("Llegada tarde", "Salida antes de la hora", "Ampliación del turno")
 }
 
-class ReportarNovedadViewModel : ViewModel() {
+class ReportarNovedadViewModel(
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
+    private val novedadRepository: NovedadRepositoryContract = NovedadRepository
+) : ViewModel() {
     private val _uiState = MutableStateFlow(ReportarNovedadState())
     val uiState: StateFlow<ReportarNovedadState> = _uiState.asStateFlow()
 
@@ -54,9 +61,9 @@ class ReportarNovedadViewModel : ViewModel() {
     private var listaEmpleados: List<Empleado> = emptyList()
 
     init {
-        EmpleadoRepository.iniciarSincronizacionFirestore()
-        TurnoRepository.iniciarSincronizacionFirestore()
-        NovedadRepository.iniciarSincronizacionFirestore()
+        empleadoRepository.iniciarSincronizacionFirestore()
+        turnoRepository.iniciarSincronizacionFirestore()
+        novedadRepository.iniciarSincronizacionFirestore()
 
         val hoyIso = Clock.System.todayIn(TimeZone.currentSystemDefault()).toString()
         _uiState.update { it.copy(fechaReferencia = hoyIso) }
@@ -67,9 +74,9 @@ class ReportarNovedadViewModel : ViewModel() {
     private fun observarDatos() {
         viewModelScope.launch {
             combine(
-                NovedadRepository.novedades,
-                TurnoRepository.asignaciones,
-                EmpleadoRepository.empleados
+                novedadRepository.novedades,
+                turnoRepository.asignaciones,
+                empleadoRepository.empleados
             ) { novedades, asignaciones, empleados ->
                 Triple(novedades, asignaciones, empleados)
             }.collect { (novedades, asignaciones, empleados) ->
@@ -373,7 +380,7 @@ class ReportarNovedadViewModel : ViewModel() {
             fechaCreacionIso = hoyIso
         )
 
-        NovedadRepository.reportarNovedad(nueva)
+        novedadRepository.reportarNovedad(nueva)
 
         _uiState.update {
             it.copy(
