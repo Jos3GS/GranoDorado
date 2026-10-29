@@ -1,5 +1,6 @@
 package com.itm.gestordeturnos.domain.model
 
+import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
 data class TurnoAsignado(
@@ -15,20 +16,22 @@ data class TurnoAsignado(
     val sinAsignar: Boolean = false
 )
 
+@Serializable
 data class RangoDescanso(
     val id: String = Uuid.random().toString(),
     val horaInicio: String = "",
     val horaFin: String = ""
 )
 
+@Serializable
 data class TurnoTemplate(
-    val id: String,
-    val nombre: String,
-    val horario: String,
-    val descansos: String,
-    val horasEfectivas: String,
-    val estado: String,
-    val asignaciones: Int,
+    val id: String = "",
+    val nombre: String = "",
+    val horario: String = "",
+    val descansos: String = "-",
+    val horasEfectivas: String = "",
+    val estado: String = "ACTIVO",
+    val asignaciones: Int = 0,
     val horaInicio: String = "",
     val horaFin: String = "",
     val listaDescansos: List<RangoDescanso> = emptyList()

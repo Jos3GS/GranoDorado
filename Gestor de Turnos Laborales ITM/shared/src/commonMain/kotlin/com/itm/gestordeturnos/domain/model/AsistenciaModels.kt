@@ -2,6 +2,7 @@ package com.itm.gestordeturnos.domain.model
 
 import kotlinx.serialization.Serializable
 
+@Serializable
 enum class EstadoAsistencia {
     SIN_INICIAR,
     EN_TURNO,

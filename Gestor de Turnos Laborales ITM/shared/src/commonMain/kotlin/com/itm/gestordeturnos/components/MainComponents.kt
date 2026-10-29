@@ -600,17 +600,7 @@ fun MallaHeaderRow(
     }
 }
 
-// Sobrecarga de compatibilidad para listas de String
-@Composable
-fun MallaHeaderRow(
-    diasNombres: List<String>,
-    modifier: Modifier = Modifier
-) {
-    val dias = diasNombres.mapIndexed { idx, d ->
-        DiaColumnaMalla(diaSemana = d, numeroDia = "${14 + idx}", cubierto = d != "SÁB" && d != "SAB")
-    }
-    MallaHeaderRow(dias = dias, modifier = modifier)
-}
+
 
 
 @Composable
@@ -2547,3 +2537,4 @@ fun textFieldColorsGestor() = OutlinedTextFieldDefaults.colors(
     unfocusedTextColor = CafeTextPrimary,
     focusedTextColor = CafeTextPrimary
 )
+

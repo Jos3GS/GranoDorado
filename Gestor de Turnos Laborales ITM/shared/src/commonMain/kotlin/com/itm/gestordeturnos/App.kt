@@ -6,6 +6,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -18,8 +19,6 @@ import com.itm.gestordeturnos.viewmodel.MainViewModel
 @Preview
 fun App() {
     remember { initPlatformFirebase() }
-    val loginViewModel = remember { LoginViewModel() }
-    val mainViewModel = remember { MainViewModel() }
 
     val navController = rememberNavController()
 
@@ -33,6 +32,7 @@ fun App() {
                 startDestination = "login"
             ){
                 composable("login"){
+                    val loginViewModel = viewModel { LoginViewModel() }
                     LoginScreen(
                         viewModel = loginViewModel,
                         onLoginSuccess = {
@@ -43,6 +43,7 @@ fun App() {
                     )
                 }
                 composable("main"){
+                    val mainViewModel = viewModel { MainViewModel() }
                     MainScreen(
                         viewModel = mainViewModel,
                         onLogoutSuccess = {

@@ -135,7 +135,7 @@ fun MainScreen(viewModel: MainViewModel, onLogoutSuccess: () -> Unit) {
                     nombre = usuario.nombre,
                     iniciales = usuario.iniciales,
                     cargo = usuario.cargo,
-                    onLogoutClick = { onLogoutSuccess() }
+                    onLogoutClick = { viewModel.cerrarSesion(onLogoutSuccess) }
                 )
             }
         }

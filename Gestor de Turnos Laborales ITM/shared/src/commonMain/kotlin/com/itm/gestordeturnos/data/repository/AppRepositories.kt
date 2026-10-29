@@ -18,12 +18,16 @@ object EmpleadoRepository {
     private val _empleados = MutableStateFlow(MockDataProviders.inicialEmpleados())
     val empleados: StateFlow<List<Empleado>> = _empleados.asStateFlow()
 
+    private var jobSincronizacion: Job? = null
+
     init {
         iniciarSincronizacionFirestore()
     }
 
-    fun iniciarSincronizacionFirestore() {
-        repositoryScope.launch {
+    fun iniciarSincronizacionFirestore(forzar: Boolean = false) {
+        if (!forzar && jobSincronizacion?.isActive == true) return
+        jobSincronizacion?.cancel()
+        jobSincronizacion = repositoryScope.launch {
             try {
                 // 1. Si la colección de Firestore está vacía, poblarla con el usuario inicial
                 FirestoreService.inicializarSiEstaVacio()
@@ -34,10 +38,15 @@ object EmpleadoRepository {
                         _empleados.value = listaRemota
                     }
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // En caso de estar sin conexión o fallo temporal de red, mantiene la memoria local
             }
         }
+    }
+
+    fun detenerSincronizacion() {
+        jobSincronizacion?.cancel()
+        jobSincronizacion = null
     }
 
     fun guardarEmpleado(empleado: Empleado, esNuevo: Boolean) {
@@ -104,7 +113,8 @@ object TurnoRepository {
         iniciarSincronizacionFirestore()
     }
 
-    fun iniciarSincronizacionFirestore() {
+    fun iniciarSincronizacionFirestore(forzar: Boolean = false) {
+        if (!forzar && jobSincronizacion?.isActive == true) return
         jobSincronizacion?.cancel()
         jobSincronizacion = repositoryScope.launch {
             try {
@@ -150,6 +160,11 @@ object TurnoRepository {
                 println("Error en sincronización con Firestore: ${e.message}")
             }
         }
+    }
+
+    fun detenerSincronizacion() {
+        jobSincronizacion?.cancel()
+        jobSincronizacion = null
     }
 
     fun refrescarDesdeFirestore() {
@@ -278,7 +293,8 @@ object NovedadRepository {
         iniciarSincronizacionFirestore()
     }
 
-    fun iniciarSincronizacionFirestore() {
+    fun iniciarSincronizacionFirestore(forzar: Boolean = false) {
+        if (!forzar && jobSincronizacion?.isActive == true) return
         jobSincronizacion?.cancel()
         jobSincronizacion = repositoryScope.launch {
             try {
@@ -304,6 +320,11 @@ object NovedadRepository {
                 println("Error en sincronización de Novedades: ${e.message}")
             }
         }
+    }
+
+    fun detenerSincronizacion() {
+        jobSincronizacion?.cancel()
+        jobSincronizacion = null
     }
 
     suspend fun guardarNovedad(novedad: Novedad): Result<Unit> {
@@ -418,7 +439,8 @@ object CambiosTurnoRepository {
         iniciarSincronizacionFirestore()
     }
 
-    fun iniciarSincronizacionFirestore() {
+    fun iniciarSincronizacionFirestore(forzar: Boolean = false) {
+        if (!forzar && jobSincronizacion?.isActive == true) return
         jobSincronizacion?.cancel()
         jobSincronizacion = repositoryScope.launch {
             try {
@@ -434,6 +456,11 @@ object CambiosTurnoRepository {
                 println("Error en sincronización de Solicitudes de Cambio: ${e.message}")
             }
         }
+    }
+
+    fun detenerSincronizacion() {
+        jobSincronizacion?.cancel()
+        jobSincronizacion = null
     }
 
     suspend fun guardarSolicitud(solicitud: SolicitudCambioTurno): Result<Unit> {
@@ -637,7 +664,8 @@ object AsistenciaRepository {
         iniciarSincronizacionFirestore()
     }
 
-    fun iniciarSincronizacionFirestore() {
+    fun iniciarSincronizacionFirestore(forzar: Boolean = false) {
+        if (!forzar && jobSincronizacion?.isActive == true) return
         jobSincronizacion?.cancel()
         jobSincronizacion = repositoryScope.launch {
             try {
@@ -676,6 +704,11 @@ object AsistenciaRepository {
                 println("Error en sincronización de Asistencia: ${e.message}")
             }
         }
+    }
+
+    fun detenerSincronizacion() {
+        jobSincronizacion?.cancel()
+        jobSincronizacion = null
     }
 
     suspend fun guardarRegistroAsistencia(registro: RegistroAsistencia): Result<Unit> {
