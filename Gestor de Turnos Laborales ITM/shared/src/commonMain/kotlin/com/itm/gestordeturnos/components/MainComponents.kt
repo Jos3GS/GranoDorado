@@ -678,9 +678,7 @@ fun MallaEmployeeRow(
             ) {
                 MallaCeldaTurno(
                     turno = turno,
-                    onClick = if (turno.tipoCelda != TipoCeldaMalla.VACACIONES && turno.tipoCelda != TipoCeldaMalla.INCAPACIDAD) {
-                        { onCeldaClick?.invoke(fila, index, turno) }
-                    } else null
+                    onClick = { onCeldaClick?.invoke(fila, index, turno) }
                 )
             }
 
@@ -718,7 +716,7 @@ fun MallaCeldaTurno(
     modifier: Modifier = Modifier
 ) {
     val cellShape = RoundedCornerShape(6.dp)
-    val esClickeable = turno.tipoCelda != TipoCeldaMalla.VACACIONES && turno.tipoCelda != TipoCeldaMalla.INCAPACIDAD && onClick != null
+    val esClickeable = onClick != null
 
     when (turno.tipoCelda) {
         TipoCeldaMalla.TURNO -> {
@@ -786,12 +784,12 @@ fun MallaCeldaTurno(
         }
 
         TipoCeldaMalla.VACACIONES -> {
-            // Vacaciones NO es clickeable
             Box(
                 modifier = modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .background(Color(0xFFE0EDFB), shape = cellShape),
+                    .background(Color(0xFFE0EDFB), shape = cellShape)
+                    .then(if (esClickeable) Modifier.clickable { onClick?.invoke() } else Modifier),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -810,6 +808,7 @@ fun MallaCeldaTurno(
                     .height(52.dp)
                     .background(Color(0xFFFDE8E8), shape = cellShape)
                     .border(1.dp, Color(0xFFFCA5A5), shape = cellShape)
+                    .then(if (esClickeable) Modifier.clickable { onClick?.invoke() } else Modifier)
                     .padding(horizontal = 4.dp, vertical = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -829,6 +828,41 @@ fun MallaCeldaTurno(
                     Text(
                         text = "Bloqueado",
                         color = Color(0xFFDC2626),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
+        }
+
+        TipoCeldaMalla.PERMISO -> {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .background(Color(0xFFEDE9FE), shape = cellShape)
+                    .border(1.dp, Color(0xFFC4B5FD), shape = cellShape)
+                    .then(if (esClickeable) Modifier.clickable { onClick?.invoke() } else Modifier)
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Permiso",
+                        color = Color(0xFF5B21B6),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Aprobado",
+                        color = Color(0xFF7C3AED),
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Medium,
                         letterSpacing = 0.5.sp
@@ -931,6 +965,22 @@ fun MallaLeyenda(modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = "Incapacidad",
+                fontSize = 11.sp,
+                color = Color(0xFF4B5563)
+            )
+        }
+
+        // Cuadrado lila pastel: Permiso aprobado
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(Color(0xFFEDE9FE), RoundedCornerShape(2.dp))
+                    .border(1.dp, Color(0xFFC4B5FD), RoundedCornerShape(2.dp))
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Permiso",
                 fontSize = 11.sp,
                 color = Color(0xFF4B5563)
             )

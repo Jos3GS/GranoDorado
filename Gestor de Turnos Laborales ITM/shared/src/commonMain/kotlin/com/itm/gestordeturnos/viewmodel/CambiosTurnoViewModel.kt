@@ -129,6 +129,7 @@ class CambiosTurnoViewModel(
             asig.tipoTurno.isNotBlank() &&
             !asig.tipoTurno.equals("Descanso", ignoreCase = true) &&
             !asig.tipoTurno.contains("incapacidad", ignoreCase = true) &&
+            !asig.tipoTurno.contains("permiso", ignoreCase = true) &&
             !asig.tipoTurno.contains("vacaciones", ignoreCase = true)
         }.map { asig ->
             val desc = "${formatearFechaCorta(asig.fechaIso)} · ${asig.tipoTurno}"
@@ -169,6 +170,7 @@ class CambiosTurnoViewModel(
             asig.tipoTurno.isNotBlank() &&
             !asig.tipoTurno.equals("Descanso", ignoreCase = true) &&
             !asig.tipoTurno.contains("incapacidad", ignoreCase = true) &&
+            !asig.tipoTurno.contains("permiso", ignoreCase = true) &&
             !asig.tipoTurno.contains("vacaciones", ignoreCase = true)
         }.map { asig ->
             val emp = empleadosElegibles[asig.empleadoId]

@@ -4,6 +4,7 @@ import com.itm.gestordeturnos.domain.model.*
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import com.itm.gestordeturnos.domain.usecase.AplicarIncapacidadEnTurnoUseCase
+import com.itm.gestordeturnos.domain.usecase.AplicarPermisoEnTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.CalcularDescansosTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.ControlInactividadSesionUseCase
 import com.itm.gestordeturnos.domain.usecase.ControlIntentosLoginUseCase
@@ -1314,6 +1315,206 @@ class SharedCommonTest {
         assertTrue(resultado.isFailure, "El intercambio debe ser rechazado si causa dos turnos el mismo día")
         val errorMsg = resultado.exceptionOrNull()?.message ?: ""
         assertTrue(errorMsg.contains("dos turnos"))
+    }
+
+    // =========================================================================
+    // 14. PRUEBAS DE BLOQUEO DE ASIGNACIÓN POR NOVEDADES Y AUSENCIAS (RN-17)
+    // =========================================================================
+
+    @Test
+    fun rn17_rechazaAsignacionCuandoEmpleadoTieneDescanso() {
+        val useCase = ValidarAsignacionTurnoUseCase()
+        val emp = Empleado(id = "emp_1", nombre = "Carlos", sucursal = "Centro", estado = EstadoUsuario.ACTIVO)
+        val fechaLunes = LocalDate(2026, 11, 9)
+        val fechaMartes = LocalDate(2026, 11, 10)
+
+        // Escenario A: Celda en malla semanal es DESCANSO
+        val celdasSemana = MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
+        celdasSemana[1] = TurnoCelda(tipo = "Descanso", horario = "-", tipoCelda = TipoCeldaMalla.DESCANSO, esDescanso = true)
+
+        val nuevoTurno = TurnoCelda(tipo = "Apertura", horario = "06:00-14:00", tipoCelda = TipoCeldaMalla.TURNO)
+
+        val resCelda = useCase.validarAsignacion(
+            empleado = emp,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = fechaMartes,
+            lunesSemana = fechaLunes,
+            fechaActual = fechaLunes,
+            turnosSemanaActuales = celdasSemana,
+            nuevoTurno = nuevoTurno,
+            diaIndex = 1
+        )
+
+        val errorCelda = assertIs<ValidacionAsignacionResult.Invalido>(resCelda)
+        assertTrue(errorCelda.mensaje.contains("descanso", ignoreCase = true))
+        assertFalse(errorCelda.mensaje.contains("RN-17"))
+
+        // Escenario B: Asignación existente en base de datos es descanso
+        val asignaciones = listOf(
+            AsignacionTurno(
+                id = "emp_1_2026-11-10",
+                fechaIso = "2026-11-10",
+                empleadoId = "emp_1",
+                tipoTurno = "Descanso",
+                esDescanso = true,
+                sucursalId = "Centro"
+            )
+        )
+
+        val resAsig = useCase.validarAsignacion(
+            empleado = emp,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = fechaMartes,
+            lunesSemana = fechaLunes,
+            fechaActual = fechaLunes,
+            nuevoTurno = nuevoTurno,
+            todasAsignaciones = asignaciones
+        )
+
+        val errorAsig = assertIs<ValidacionAsignacionResult.Invalido>(resAsig)
+        assertTrue(errorAsig.mensaje.contains("descanso", ignoreCase = true))
+        assertFalse(errorAsig.mensaje.contains("RN-17"))
+    }
+
+    @Test
+    fun rn17_rechazaAsignacionCuandoEmpleadoTieneVacaciones() {
+        val useCase = ValidarAsignacionTurnoUseCase()
+        val emp = Empleado(id = "emp_1", nombre = "Carlos", sucursal = "Centro", estado = EstadoUsuario.ACTIVO)
+        val fechaLunes = LocalDate(2026, 11, 9)
+        val fechaMiercoles = LocalDate(2026, 11, 11)
+
+        val celdasSemana = MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
+        celdasSemana[2] = TurnoCelda(tipo = "Vacaciones", horario = "-", tipoCelda = TipoCeldaMalla.VACACIONES)
+
+        val nuevoTurno = TurnoCelda(tipo = "Cierre", horario = "14:00-22:00", tipoCelda = TipoCeldaMalla.TURNO)
+
+        val res = useCase.validarAsignacion(
+            empleado = emp,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = fechaMiercoles,
+            lunesSemana = fechaLunes,
+            fechaActual = fechaLunes,
+            turnosSemanaActuales = celdasSemana,
+            nuevoTurno = nuevoTurno,
+            diaIndex = 2
+        )
+
+        val error = assertIs<ValidacionAsignacionResult.Invalido>(res)
+        assertTrue(error.mensaje.contains("vacaciones", ignoreCase = true))
+        assertFalse(error.mensaje.contains("RN-17"))
+    }
+
+    @Test
+    fun rn17_rechazaAsignacionCuandoEmpleadoTieneIncapacidad() {
+        val useCase = ValidarAsignacionTurnoUseCase()
+        val emp = Empleado(id = "emp_1", nombre = "Carlos", sucursal = "Centro", estado = EstadoUsuario.ACTIVO)
+        val fechaLunes = LocalDate(2026, 11, 9)
+        val fechaJueves = LocalDate(2026, 11, 12)
+
+        val celdasSemana = MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
+        celdasSemana[3] = TurnoCelda(tipo = "Incapacidad", horario = "-", tipoCelda = TipoCeldaMalla.INCAPACIDAD)
+
+        val nuevoTurno = TurnoCelda(tipo = "Apertura", horario = "06:00-14:00", tipoCelda = TipoCeldaMalla.TURNO)
+
+        val res = useCase.validarAsignacion(
+            empleado = emp,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = fechaJueves,
+            lunesSemana = fechaLunes,
+            fechaActual = fechaLunes,
+            turnosSemanaActuales = celdasSemana,
+            nuevoTurno = nuevoTurno,
+            diaIndex = 3
+        )
+
+        val error = assertIs<ValidacionAsignacionResult.Invalido>(res)
+        assertTrue(error.mensaje.contains("incapacidad", ignoreCase = true))
+        assertFalse(error.mensaje.contains("RN-17"))
+    }
+
+    @Test
+    fun rn17_rechazaAsignacionCuandoEmpleadoTienePermisoAprobado() {
+        val useCase = ValidarAsignacionTurnoUseCase()
+        val emp = Empleado(id = "emp_1", nombre = "Carlos", sucursal = "Centro", estado = EstadoUsuario.ACTIVO)
+        val fechaLunes = LocalDate(2026, 11, 9)
+        val fechaViernes = LocalDate(2026, 11, 13)
+
+        val celdasSemana = MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
+        celdasSemana[4] = TurnoCelda(tipo = "Permiso", horario = "-", tipoCelda = TipoCeldaMalla.PERMISO)
+
+        val nuevoTurno = TurnoCelda(tipo = "Intermedio", horario = "10:00-18:00", tipoCelda = TipoCeldaMalla.TURNO)
+
+        val res = useCase.validarAsignacion(
+            empleado = emp,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = fechaViernes,
+            lunesSemana = fechaLunes,
+            fechaActual = fechaLunes,
+            turnosSemanaActuales = celdasSemana,
+            nuevoTurno = nuevoTurno,
+            diaIndex = 4
+        )
+
+        val error = assertIs<ValidacionAsignacionResult.Invalido>(res)
+        assertTrue(error.mensaje.contains("permiso", ignoreCase = true))
+        assertFalse(error.mensaje.contains("RN-17"))
+    }
+
+    @Test
+    fun rn17_aplicarPermisoAprobadoBloqueaFechaYRechazaNuevasAsignaciones() = runBlocking {
+        val emp = Empleado(id = "emp_10", nombre = "Sofia", apellido = "Castro", sucursal = "Centro", estado = EstadoUsuario.ACTIVO)
+        val fakeEmpRepo = FakeEmpleadoRepository(listOf(emp))
+        val fakeTurnoRepo = FakeTurnoRepository()
+
+        val aplicarPermisoUseCase = AplicarPermisoEnTurnoUseCase(
+            empleadoRepository = fakeEmpRepo,
+            turnoRepository = fakeTurnoRepo
+        )
+
+        // 1. Empleado tiene un permiso aprobado para el día 2026-11-18
+        val novedadPermiso = Novedad(
+            id = "nov_permiso_1",
+            empleadoId = "emp_10",
+            empleado = "Sofia Castro",
+            tipo = "Permiso especial",
+            fechaReferencia = "2026-11-18",
+            sucursal = "Centro",
+            estado = EstadoNovedad.REVISADA
+        )
+
+        val resAplicacion = aplicarPermisoUseCase(novedadPermiso)
+        assertTrue(resAplicacion.isSuccess, "La aplicación del bloqueo por permiso debe ser exitosa")
+
+        // 2. Verificar que se registró una asignación de tipo Permiso
+        val asignaciones = fakeTurnoRepo.asignaciones.value
+        val asigPermiso = asignaciones.find { it.empleadoId == "emp_10" && it.fechaIso == "2026-11-18" }
+        assertEquals("Permiso", asigPermiso?.tipoTurno)
+
+        // 3. El sistema no admite nuevas asignaciones en ese día
+        val useCase = ValidarAsignacionTurnoUseCase()
+        val nuevoTurno = TurnoCelda(tipo = "Apertura", horario = "06:00-14:00", tipoCelda = TipoCeldaMalla.TURNO)
+        val fechaPermiso = LocalDate(2026, 11, 18)
+        val lunes = LocalDate(2026, 11, 16)
+
+        val resValidacion = useCase.validarAsignacion(
+            empleado = emp,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = fechaPermiso,
+            lunesSemana = lunes,
+            fechaActual = lunes,
+            nuevoTurno = nuevoTurno,
+            todasAsignaciones = asignaciones
+        )
+
+        val error = assertIs<ValidacionAsignacionResult.Invalido>(resValidacion)
+        assertTrue(error.mensaje.contains("permiso", ignoreCase = true))
+        assertFalse(error.mensaje.contains("RN-17"))
     }
 }
 

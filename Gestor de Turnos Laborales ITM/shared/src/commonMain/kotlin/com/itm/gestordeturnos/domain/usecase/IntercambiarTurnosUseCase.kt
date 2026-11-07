@@ -61,8 +61,19 @@ class IntercambiarTurnosUseCase(
         } else {
             if (fechaEntregaIso.isNotBlank() && asigEntrega != null) {
                 val bEnFechaEntrega = asignacionesActuales.find { it.empleadoId == empBId && it.fechaIso == fechaEntregaIso }
-                if (bEnFechaEntrega != null && !bEnFechaEntrega.esDescanso && bEnFechaEntrega.tipoTurno.isNotBlank() && !bEnFechaEntrega.tipoTurno.equals("Descanso", ignoreCase = true)) {
-                    return Result.failure(Exception("Un empleado no puede tener dos turnos asignados el mismo día ni turnos que se solapen entre sí."))
+                if (bEnFechaEntrega != null) {
+                    if (bEnFechaEntrega.tipoTurno.contains("incapacidad", ignoreCase = true)) {
+                        return Result.failure(Exception("No se puede asignar turno: el empleado tiene registrada una incapacidad médica para este día."))
+                    }
+                    if (bEnFechaEntrega.tipoTurno.contains("permiso", ignoreCase = true)) {
+                        return Result.failure(Exception("No se puede asignar turno: el empleado tiene un permiso aprobado para este día."))
+                    }
+                    if (bEnFechaEntrega.tipoTurno.contains("vacaciones", ignoreCase = true)) {
+                        return Result.failure(Exception("No se puede asignar turno: el empleado tiene vacaciones registradas para este día."))
+                    }
+                    if (!bEnFechaEntrega.esDescanso && bEnFechaEntrega.tipoTurno.isNotBlank() && !bEnFechaEntrega.tipoTurno.equals("Descanso", ignoreCase = true)) {
+                        return Result.failure(Exception("Un empleado no puede tener dos turnos asignados el mismo día ni turnos que se solapen entre sí."))
+                    }
                 }
 
                 val nuevoTurnoB = if (bEnFechaEntrega != null) {
@@ -102,8 +113,19 @@ class IntercambiarTurnosUseCase(
 
             if (fechaRecibeIso.isNotBlank() && asigRecibe != null) {
                 val aEnFechaRecibe = asignacionesActuales.find { it.empleadoId == empAId && it.fechaIso == fechaRecibeIso }
-                if (aEnFechaRecibe != null && !aEnFechaRecibe.esDescanso && aEnFechaRecibe.tipoTurno.isNotBlank() && !aEnFechaRecibe.tipoTurno.equals("Descanso", ignoreCase = true)) {
-                    return Result.failure(Exception("Un empleado no puede tener dos turnos asignados el mismo día ni turnos que se solapen entre sí."))
+                if (aEnFechaRecibe != null) {
+                    if (aEnFechaRecibe.tipoTurno.contains("incapacidad", ignoreCase = true)) {
+                        return Result.failure(Exception("No se puede asignar turno: el empleado tiene registrada una incapacidad médica para este día."))
+                    }
+                    if (aEnFechaRecibe.tipoTurno.contains("permiso", ignoreCase = true)) {
+                        return Result.failure(Exception("No se puede asignar turno: el empleado tiene un permiso aprobado para este día."))
+                    }
+                    if (aEnFechaRecibe.tipoTurno.contains("vacaciones", ignoreCase = true)) {
+                        return Result.failure(Exception("No se puede asignar turno: el empleado tiene vacaciones registradas para este día."))
+                    }
+                    if (!aEnFechaRecibe.esDescanso && aEnFechaRecibe.tipoTurno.isNotBlank() && !aEnFechaRecibe.tipoTurno.equals("Descanso", ignoreCase = true)) {
+                        return Result.failure(Exception("Un empleado no puede tener dos turnos asignados el mismo día ni turnos que se solapen entre sí."))
+                    }
                 }
 
                 val nuevoTurnoA = if (aEnFechaRecibe != null) {

@@ -515,9 +515,22 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                                             viewModel.mostrarErrorFechaPasada()
                                             return@MallaEmployeeRow
                                         }
-                                        if (turno.tipoCelda != com.itm.gestordeturnos.domain.model.TipoCeldaMalla.INCAPACIDAD &&
-                                            turno.tipoCelda != com.itm.gestordeturnos.domain.model.TipoCeldaMalla.VACACIONES) {
-                                            celdaSeleccionada = Triple(f, diaIdx, turno)
+                                        when (turno.tipoCelda) {
+                                            com.itm.gestordeturnos.domain.model.TipoCeldaMalla.DESCANSO -> {
+                                                viewModel.mostrarErrorAsignacion("No se puede asignar turno: el empleado tiene programado un descanso para este día.")
+                                            }
+                                            com.itm.gestordeturnos.domain.model.TipoCeldaMalla.VACACIONES -> {
+                                                viewModel.mostrarErrorAsignacion("No se puede asignar turno: el empleado tiene vacaciones registradas para este día.")
+                                            }
+                                            com.itm.gestordeturnos.domain.model.TipoCeldaMalla.INCAPACIDAD -> {
+                                                viewModel.mostrarErrorAsignacion("No se puede asignar turno: el empleado tiene una incapacidad médica registrada para este día.")
+                                            }
+                                            com.itm.gestordeturnos.domain.model.TipoCeldaMalla.PERMISO -> {
+                                                viewModel.mostrarErrorAsignacion("No se puede asignar turno: el empleado tiene un permiso aprobado para este día.")
+                                            }
+                                            else -> {
+                                                celdaSeleccionada = Triple(f, diaIdx, turno)
+                                            }
                                         }
                                     }
                                 )

@@ -6,6 +6,7 @@ import com.itm.gestordeturnos.domain.model.EstadoNovedad
 import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
 import com.itm.gestordeturnos.domain.usecase.AplicarIncapacidadEnTurnoUseCase
+import com.itm.gestordeturnos.domain.usecase.AplicarPermisoEnTurnoUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,6 +24,13 @@ object NovedadRepository : NovedadRepositoryContract {
 
     private val aplicarIncapacidadUseCase by lazy {
         AplicarIncapacidadEnTurnoUseCase(
+            empleadoRepository = EmpleadoRepository,
+            turnoRepository = TurnoRepository
+        )
+    }
+
+    private val aplicarPermisoUseCase by lazy {
+        AplicarPermisoEnTurnoUseCase(
             empleadoRepository = EmpleadoRepository,
             turnoRepository = TurnoRepository
         )
@@ -98,6 +106,8 @@ object NovedadRepository : NovedadRepositoryContract {
             guardarNovedad(novedadActualizada)
             if (novedadActualizada.tipo.contains("incapacidad", ignoreCase = true)) {
                 aplicarIncapacidadUseCase(novedadActualizada)
+            } else if (novedadActualizada.tipo.contains("permiso", ignoreCase = true)) {
+                aplicarPermisoUseCase(novedadActualizada)
             }
         }
     }
@@ -108,10 +118,14 @@ object NovedadRepository : NovedadRepositoryContract {
         repositoryScope.launch {
             guardarNovedad(novedadActualizada)
 
-            // Si es una novedad de incapacidad médica y fue revisada/aprobada,
-            // aplicamos el reemplazo del turno por "Incapacidad" bloqueada
-            if (nuevoEstado == EstadoNovedad.REVISADA && novedadActualizada.tipo.contains("incapacidad", ignoreCase = true)) {
-                aplicarIncapacidadUseCase(novedadActualizada)
+            // Si es una novedad de incapacidad médica o permiso y fue revisada/aprobada,
+            // aplicamos el bloqueo en la malla (RN-17)
+            if (nuevoEstado == EstadoNovedad.REVISADA) {
+                if (novedadActualizada.tipo.contains("incapacidad", ignoreCase = true)) {
+                    aplicarIncapacidadUseCase(novedadActualizada)
+                } else if (novedadActualizada.tipo.contains("permiso", ignoreCase = true)) {
+                    aplicarPermisoUseCase(novedadActualizada)
+                }
             }
         }
     }

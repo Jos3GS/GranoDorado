@@ -23,6 +23,10 @@ sealed interface ValidacionAsignacionResult {
  *
  * RN-16: Un empleado no puede tener dos turnos asignados el mismo día ni turnos que se solapen entre sí.
  * Ningún empleado puede superar 42 horas efectivas de trabajo en una misma semana.
+ *
+ * RN-17: El sistema rechaza la asignación cuando el empleado tiene registrado ese día un descanso,
+ * vacaciones, una incapacidad o un permiso aprobado. Al aprobar un permiso, el empleado queda como no
+ * disponible esos días y el sistema no admite nuevas asignaciones en ellos.
  */
 class ValidarAsignacionTurnoUseCase(
     private val verificarCoberturaUseCase: VerificarCoberturaDiariaUseCase = VerificarCoberturaDiariaUseCase()
@@ -66,6 +70,80 @@ class ValidarAsignacionTurnoUseCase(
                 "Un empleado no puede tener dos turnos asignados el mismo día ni turnos que se solapen entre sí."
             )
         }
+        return ValidacionAsignacionResult.Valido
+    }
+
+    /**
+     * RN-17: El sistema rechaza la asignación cuando el empleado tiene registrado ese día
+     * un descanso, vacaciones, una incapacidad o un permiso aprobado.
+     */
+    fun validarDisponibilidadPorAusenciaODescanso(
+        celdaActual: TurnoCelda?,
+        asignacionExistente: AsignacionTurno? = null,
+        esAsignacionDescanso: Boolean = false
+    ): ValidacionAsignacionResult {
+        // 1. Validar por celda actual en la malla semanal
+        if (celdaActual != null) {
+            when {
+                celdaActual.tipoCelda == TipoCeldaMalla.INCAPACIDAD ||
+                celdaActual.tipo.contains("incapacidad", ignoreCase = true) -> {
+                    return ValidacionAsignacionResult.Invalido(
+                        "No se puede asignar turno: el empleado tiene registrada una incapacidad médica para este día."
+                    )
+                }
+                celdaActual.tipoCelda == TipoCeldaMalla.PERMISO ||
+                celdaActual.tipo.contains("permiso", ignoreCase = true) -> {
+                    return ValidacionAsignacionResult.Invalido(
+                        "No se puede asignar turno: el empleado tiene un permiso aprobado para este día."
+                    )
+                }
+                celdaActual.tipoCelda == TipoCeldaMalla.VACACIONES ||
+                celdaActual.tipo.contains("vacaciones", ignoreCase = true) -> {
+                    return ValidacionAsignacionResult.Invalido(
+                        "No se puede asignar turno: el empleado tiene vacaciones registradas para este día."
+                    )
+                }
+                !esAsignacionDescanso && (
+                    celdaActual.tipoCelda == TipoCeldaMalla.DESCANSO ||
+                    celdaActual.esDescanso ||
+                    celdaActual.tipo.equals("Descanso", ignoreCase = true)
+                ) -> {
+                    return ValidacionAsignacionResult.Invalido(
+                        "No se puede asignar turno: el empleado tiene programado un descanso para este día."
+                    )
+                }
+            }
+        }
+
+        // 2. Validar por asignación ya guardada en el repositorio
+        if (asignacionExistente != null) {
+            when {
+                asignacionExistente.tipoTurno.contains("incapacidad", ignoreCase = true) -> {
+                    return ValidacionAsignacionResult.Invalido(
+                        "No se puede asignar turno: el empleado tiene registrada una incapacidad médica para este día."
+                    )
+                }
+                asignacionExistente.tipoTurno.contains("permiso", ignoreCase = true) -> {
+                    return ValidacionAsignacionResult.Invalido(
+                        "No se puede asignar turno: el empleado tiene un permiso aprobado para este día."
+                    )
+                }
+                asignacionExistente.tipoTurno.contains("vacaciones", ignoreCase = true) -> {
+                    return ValidacionAsignacionResult.Invalido(
+                        "No se puede asignar turno: el empleado tiene vacaciones registradas para este día."
+                    )
+                }
+                !esAsignacionDescanso && (
+                    asignacionExistente.esDescanso ||
+                    asignacionExistente.tipoTurno.equals("Descanso", ignoreCase = true)
+                ) -> {
+                    return ValidacionAsignacionResult.Invalido(
+                        "No se puede asignar turno: el empleado tiene programado un descanso para este día."
+                    )
+                }
+            }
+        }
+
         return ValidacionAsignacionResult.Valido
     }
 
@@ -154,6 +232,29 @@ class ValidarAsignacionTurnoUseCase(
             if (validacionHoras is ValidacionAsignacionResult.Invalido) {
                 return validacionHoras
             }
+        }
+
+        // 8. RN-17: El sistema rechaza la asignación cuando el empleado tiene registrado ese día
+        // un descanso, vacaciones, una incapacidad o un permiso aprobado.
+        val esDescanso = nuevoTurno?.esDescanso == true || nuevoTurno?.tipoCelda == TipoCeldaMalla.DESCANSO
+        val celdaActual = if (turnosSemanaActuales != null && diaIndex != null && diaIndex in turnosSemanaActuales.indices) {
+            turnosSemanaActuales[diaIndex]
+        } else null
+
+        val asigExistente = if (todasAsignaciones != null && empleado != null) {
+            val fechaIso = fechaAsignacion.toString()
+            todasAsignaciones.find {
+                it.empleadoId == empleado.id && it.fechaIso == fechaIso
+            }
+        } else null
+
+        val resDisponibilidad = validarDisponibilidadPorAusenciaODescanso(
+            celdaActual = celdaActual,
+            asignacionExistente = asigExistente,
+            esAsignacionDescanso = esDescanso
+        )
+        if (resDisponibilidad is ValidacionAsignacionResult.Invalido) {
+            return resDisponibilidad
         }
 
         return ValidacionAsignacionResult.Valido

@@ -226,11 +226,27 @@ class MallaSemanalViewModel(
                     val celdas = turnosPorEmpleado.getOrPut(asig.empleadoId) {
                         MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
                     }
-                    if (asig.tipoTurno.equals("Incapacidad", ignoreCase = true)) {
+                    if (asig.tipoTurno.equals("Incapacidad", ignoreCase = true) || asig.tipoTurno.contains("incapacidad", ignoreCase = true)) {
                         celdas[diaIdx] = TurnoCelda(
                             tipo = "Incapacidad",
                             horario = "-",
                             tipoCelda = TipoCeldaMalla.INCAPACIDAD,
+                            esDescanso = false,
+                            modificadoTrasPublicar = asig.modificadoTrasPublicar
+                        )
+                    } else if (asig.tipoTurno.equals("Permiso", ignoreCase = true) || asig.tipoTurno.contains("permiso", ignoreCase = true)) {
+                        celdas[diaIdx] = TurnoCelda(
+                            tipo = "Permiso",
+                            horario = "-",
+                            tipoCelda = TipoCeldaMalla.PERMISO,
+                            esDescanso = false,
+                            modificadoTrasPublicar = asig.modificadoTrasPublicar
+                        )
+                    } else if (asig.tipoTurno.equals("Vacaciones", ignoreCase = true) || asig.tipoTurno.contains("vacaciones", ignoreCase = true)) {
+                        celdas[diaIdx] = TurnoCelda(
+                            tipo = "Vacaciones",
+                            horario = "-",
+                            tipoCelda = TipoCeldaMalla.VACACIONES,
                             esDescanso = false,
                             modificadoTrasPublicar = asig.modificadoTrasPublicar
                         )
@@ -329,9 +345,9 @@ class MallaSemanalViewModel(
             } ?: empId
 
             celdas.forEachIndexed { idx, celda ->
-                if (celda.tipoCelda == TipoCeldaMalla.TURNO || celda.tipoCelda == TipoCeldaMalla.DESCANSO || celda.tipoCelda == TipoCeldaMalla.INCAPACIDAD) {
+                if (celda.tipoCelda in listOf(TipoCeldaMalla.TURNO, TipoCeldaMalla.DESCANSO, TipoCeldaMalla.INCAPACIDAD, TipoCeldaMalla.PERMISO, TipoCeldaMalla.VACACIONES)) {
                     val fechaDia = fechaLunes.plus(DatePeriod(days = idx)).toString()
-                    val turnoId = if (celda.esDescanso || celda.tipoCelda == TipoCeldaMalla.INCAPACIDAD) "" else (_uiState.value.turnosCatalogoActivos.find { it.nombre.equals(celda.tipo, ignoreCase = true) }?.id ?: "")
+                    val turnoId = if (celda.esDescanso || celda.tipoCelda != TipoCeldaMalla.TURNO) "" else (_uiState.value.turnosCatalogoActivos.find { it.nombre.equals(celda.tipo, ignoreCase = true) }?.id ?: "")
                     asignacionesAGuardar.add(
                         AsignacionTurno(
                             id = "${empId}_${fechaDia}",
@@ -477,6 +493,22 @@ class MallaSemanalViewModel(
             MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
         }
 
+        // RN-17: Rechazar asignación si el empleado tiene descanso, vacaciones, incapacidad o permiso aprobado
+        if (diaIndex in celdas.indices) {
+            val celdaActual = celdas[diaIndex]
+            if (celdaActual.tipoCelda in listOf(TipoCeldaMalla.DESCANSO, TipoCeldaMalla.VACACIONES, TipoCeldaMalla.INCAPACIDAD, TipoCeldaMalla.PERMISO)) {
+                val mensaje = when (celdaActual.tipoCelda) {
+                    TipoCeldaMalla.DESCANSO -> "No se puede asignar turno: el empleado tiene programado un descanso para este día."
+                    TipoCeldaMalla.VACACIONES -> "No se puede asignar turno: el empleado tiene vacaciones registradas para este día."
+                    TipoCeldaMalla.INCAPACIDAD -> "No se puede asignar turno: el empleado tiene una incapacidad médica registrada para este día."
+                    TipoCeldaMalla.PERMISO -> "No se puede asignar turno: el empleado tiene un permiso aprobado para este día."
+                    else -> "No se puede asignar turno: el empleado no está disponible para este día."
+                }
+                _uiState.update { it.copy(mensajeError = mensaje) }
+                return
+            }
+        }
+
         val nuevoTurno = TurnoCelda(
             tipo = turnoTemplate.nombre,
             horario = horarioFormateado,
@@ -504,7 +536,7 @@ class MallaSemanalViewModel(
         _uiState.update { it.copy(mensajeError = null) }
 
         if (diaIndex in celdas.indices) {
-            if (celdas[diaIndex].tipoCelda == TipoCeldaMalla.INCAPACIDAD) return
+            if (celdas[diaIndex].tipoCelda in listOf(TipoCeldaMalla.INCAPACIDAD, TipoCeldaMalla.PERMISO, TipoCeldaMalla.VACACIONES, TipoCeldaMalla.DESCANSO)) return
             celdas[diaIndex] = nuevoTurno
         }
 
@@ -540,12 +572,43 @@ class MallaSemanalViewModel(
         val sucursalActual = _uiState.value.sucursal
         val sucursalEmp = emp?.let { resolverSucursalEmpleadoParaSemana(it, _uiState.value.fechaInicioSemana, turnoRepository.asignaciones.value) } ?: ""
 
+        val celdas = turnosPorEmpleado.getOrPut(idEmpleado) {
+            MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
+        }
+
+        // RN-17: No se puede asignar descanso si ya tiene vacaciones, incapacidad o permiso aprobado
+        if (diaIndex in celdas.indices) {
+            val celdaActual = celdas[diaIndex]
+            if (celdaActual.tipoCelda in listOf(TipoCeldaMalla.VACACIONES, TipoCeldaMalla.INCAPACIDAD, TipoCeldaMalla.PERMISO)) {
+                val mensaje = when (celdaActual.tipoCelda) {
+                    TipoCeldaMalla.VACACIONES -> "No se puede asignar turno: el empleado tiene vacaciones registradas para este día."
+                    TipoCeldaMalla.INCAPACIDAD -> "No se puede asignar turno: el empleado tiene una incapacidad médica registrada para este día."
+                    TipoCeldaMalla.PERMISO -> "No se puede asignar turno: el empleado tiene un permiso aprobado para este día."
+                    else -> "No se puede asignar turno: el empleado no está disponible para este día."
+                }
+                _uiState.update { it.copy(mensajeError = mensaje) }
+                return
+            }
+        }
+
+        val nuevoDescanso = TurnoCelda(
+            tipo = "Descanso",
+            horario = "-",
+            tipoCelda = TipoCeldaMalla.DESCANSO,
+            esDescanso = true,
+            modificadoTrasPublicar = _uiState.value.publicado
+        )
+
         val validacion = validarAsignacionUseCase.validarAsignacion(
             empleado = emp,
             sucursalEmpleado = sucursalEmp,
             sucursalProgramacion = sucursalActual,
             fechaAsignacion = fechaDia,
-            lunesSemana = _uiState.value.fechaInicioSemana
+            lunesSemana = _uiState.value.fechaInicioSemana,
+            turnosSemanaActuales = celdas,
+            nuevoTurno = nuevoDescanso,
+            diaIndex = diaIndex,
+            todasAsignaciones = turnoRepository.asignaciones.value
         )
 
         if (validacion is ValidacionAsignacionResult.Invalido) {
@@ -555,23 +618,17 @@ class MallaSemanalViewModel(
 
         _uiState.update { it.copy(mensajeError = null) }
 
-        val celdas = turnosPorEmpleado.getOrPut(idEmpleado) {
-            MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
-        }
         if (diaIndex in celdas.indices) {
-            if (celdas[diaIndex].tipoCelda == TipoCeldaMalla.INCAPACIDAD) return
-            celdas[diaIndex] = TurnoCelda(
-                tipo = "Descanso",
-                horario = "-",
-                tipoCelda = TipoCeldaMalla.DESCANSO,
-                esDescanso = true,
-                modificadoTrasPublicar = _uiState.value.publicado
-            )
+            celdas[diaIndex] = nuevoDescanso
         }
 
         hayCambiosPendientes = true
 
         actualizarFilasPorSucursal(_uiState.value.sucursal)
+    }
+
+    fun mostrarErrorAsignacion(mensaje: String) {
+        _uiState.update { it.copy(mensajeError = mensaje) }
     }
 
     fun mostrarErrorFechaPasada() {

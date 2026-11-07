@@ -42,6 +42,7 @@ enum class TipoCeldaMalla {
     DESCANSO,
     VACACIONES,
     INCAPACIDAD,
+    PERMISO,
     SIN_ASIGNAR
 }
 
