@@ -19,6 +19,8 @@ import com.itm.gestordeturnos.domain.usecase.ValidacionAsignacionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionSoloLecturaResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionMarcacionResult
+import com.itm.gestordeturnos.domain.usecase.ValidarMarcacionAsistenciaUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionNovedadResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionSolicitudCambioResult
@@ -56,6 +58,7 @@ class SharedCommonTest {
     private val verificarCoberturaUseCase = VerificarCoberturaDiariaUseCase()
     private val calcularDescansosUseCase = CalcularDescansosTurnoUseCase()
     private val validarAsignacionUseCase = ValidarAsignacionTurnoUseCase()
+    private val validarMarcacionAsistenciaUseCase = ValidarMarcacionAsistenciaUseCase()
 
     // =========================================================================
     // 1. PRUEBAS DE COBERTURA DIARIA Y CÁLCULO DE HORAS SEMANALES
@@ -3610,6 +3613,273 @@ class SharedCommonTest {
 
         // Sigue manteniéndose en REVISADA
         assertEquals(EstadoNovedad.REVISADA, fakeRepo.novedades.value.first().estado)
+    }
+
+    // =========================================================================
+    // 26. PRUEBAS DE REGISTRO DE ASISTENCIA Y PAUSAS DE DESCANSO (RN-27)
+    // =========================================================================
+
+    @Test
+    fun validarMarcacion_bloqueaSiEmpleadoInactivo() {
+        val empleadoInactivo = Empleado(
+            id = "emp_inactivo",
+            nombre = "Carlos",
+            apellido = "Pérez",
+            estado = EstadoUsuario.INACTIVO
+        )
+        val asignacion = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_inactivo",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Turno Mañana",
+            horario = "08:00 - 16:00",
+            estado = "PUBLICADO"
+        )
+
+        val resultado = validarMarcacionAsistenciaUseCase.validarHabilitacionTurno(
+            empleado = empleadoInactivo,
+            asignacion = asignacion,
+            fechaMarcacionIso = "2026-11-07"
+        )
+
+        val invalido = assertIs<ValidacionMarcacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("inactivo", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-27)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun validarMarcacion_bloqueaSiNoHayTurnoOFechaDiferente() {
+        val empleado = Empleado(id = "emp_1", nombre = "Ana", estado = EstadoUsuario.ACTIVO)
+
+        // 1. Sin turno asignado
+        val sinTurno = validarMarcacionAsistenciaUseCase.validarHabilitacionTurno(
+            empleado = empleado,
+            asignacion = null,
+            fechaMarcacionIso = "2026-11-07"
+        )
+        val invSinTurno = assertIs<ValidacionMarcacionResult.Invalido>(sinTurno)
+        assertTrue(invSinTurno.mensaje.contains("No tienes un turno programado", ignoreCase = true))
+        assertFalse(invSinTurno.mensaje.contains("(RN-27)"))
+
+        // 2. Turno asignado para fecha diferente (ayer o mañana)
+        val asignacionOtroDia = AsignacionTurno(
+            id = "asig_otro",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-08",
+            tipoTurno = "Turno Tarde",
+            horario = "14:00 - 22:00",
+            estado = "PUBLICADO"
+        )
+        val invFecha = validarMarcacionAsistenciaUseCase.validarHabilitacionTurno(
+            empleado = empleado,
+            asignacion = asignacionOtroDia,
+            fechaMarcacionIso = "2026-11-07"
+        )
+        val invOtroDia = assertIs<ValidacionMarcacionResult.Invalido>(invFecha)
+        assertTrue(invOtroDia.mensaje.contains("Solo puedes registrar asistencia para el turno correspondiente a la fecha de hoy", ignoreCase = true))
+        assertFalse(invOtroDia.mensaje.contains("(RN-27)"))
+    }
+
+    @Test
+    fun validarMarcacion_bloqueaSiTurnoEnBorrador() {
+        val empleado = Empleado(id = "emp_1", nombre = "Ana", estado = EstadoUsuario.ACTIVO)
+        val asignacionBorrador = AsignacionTurno(
+            id = "asig_borrador",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Turno Mañana",
+            horario = "06:00 - 14:00",
+            estado = "BORRADOR"
+        )
+
+        val resultado = validarMarcacionAsistenciaUseCase.validarHabilitacionTurno(
+            empleado = empleado,
+            asignacion = asignacionBorrador,
+            fechaMarcacionIso = "2026-11-07"
+        )
+
+        val invalido = assertIs<ValidacionMarcacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("borrador", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-27)"))
+    }
+
+    @Test
+    fun validarMarcacion_bloqueaSiEsDescansoOIncapacidadOVacacionesOPermiso() {
+        val empleado = Empleado(id = "emp_1", nombre = "Ana", estado = EstadoUsuario.ACTIVO)
+
+        // Día de descanso
+        val asigDescanso = AsignacionTurno(
+            id = "asig_desc",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Descanso",
+            esDescanso = true,
+            estado = "PUBLICADO"
+        )
+        val resDesc = validarMarcacionAsistenciaUseCase.validarHabilitacionTurno(empleado, asigDescanso, "2026-11-07")
+        val invDesc = assertIs<ValidacionMarcacionResult.Invalido>(resDesc)
+        assertTrue(invDesc.mensaje.contains("día libre", ignoreCase = true))
+        assertFalse(invDesc.mensaje.contains("(RN-27)"))
+
+        // Incapacidad médica
+        val asigIncapacidad = AsignacionTurno(
+            id = "asig_incap",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Incapacidad médica",
+            estado = "PUBLICADO"
+        )
+        val resIncap = validarMarcacionAsistenciaUseCase.validarHabilitacionTurno(empleado, asigIncapacidad, "2026-11-07")
+        val invIncap = assertIs<ValidacionMarcacionResult.Invalido>(resIncap)
+        assertTrue(invIncap.mensaje.contains("incapacidad médica", ignoreCase = true))
+        assertFalse(invIncap.mensaje.contains("(RN-27)"))
+
+        // Vacaciones
+        val asigVacaciones = AsignacionTurno(
+            id = "asig_vac",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Vacaciones",
+            estado = "PUBLICADO"
+        )
+        val resVac = validarMarcacionAsistenciaUseCase.validarHabilitacionTurno(empleado, asigVacaciones, "2026-11-07")
+        val invVac = assertIs<ValidacionMarcacionResult.Invalido>(resVac)
+        assertTrue(invVac.mensaje.contains("vacaciones", ignoreCase = true))
+        assertFalse(invVac.mensaje.contains("(RN-27)"))
+
+        // Permiso especial
+        val asigPermiso = AsignacionTurno(
+            id = "asig_perm",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Permiso especial",
+            estado = "PUBLICADO"
+        )
+        val resPerm = validarMarcacionAsistenciaUseCase.validarHabilitacionTurno(empleado, asigPermiso, "2026-11-07")
+        val invPerm = assertIs<ValidacionMarcacionResult.Invalido>(resPerm)
+        assertTrue(invPerm.mensaje.contains("permiso especial", ignoreCase = true))
+        assertFalse(invPerm.mensaje.contains("(RN-27)"))
+    }
+
+    @Test
+    fun validarMarcacion_secuenciaEstrictaDeEstados() {
+        // Desde SIN_INICIAR: solo se puede pasar a EN_TURNO
+        assertIs<ValidacionMarcacionResult.Valido>(
+            validarMarcacionAsistenciaUseCase.validarTransicionEstado(EstadoAsistencia.SIN_INICIAR, EstadoAsistencia.EN_TURNO)
+        )
+        assertIs<ValidacionMarcacionResult.Invalido>(
+            validarMarcacionAsistenciaUseCase.validarTransicionEstado(EstadoAsistencia.SIN_INICIAR, EstadoAsistencia.EN_DESCANSO)
+        )
+        assertIs<ValidacionMarcacionResult.Invalido>(
+            validarMarcacionAsistenciaUseCase.validarTransicionEstado(EstadoAsistencia.SIN_INICIAR, EstadoAsistencia.FINALIZADO)
+        )
+
+        // Desde EN_TURNO: se puede pausar a EN_DESCANSO o finalizar a FINALIZADO
+        assertIs<ValidacionMarcacionResult.Valido>(
+            validarMarcacionAsistenciaUseCase.validarTransicionEstado(EstadoAsistencia.EN_TURNO, EstadoAsistencia.EN_DESCANSO)
+        )
+        assertIs<ValidacionMarcacionResult.Valido>(
+            validarMarcacionAsistenciaUseCase.validarTransicionEstado(EstadoAsistencia.EN_TURNO, EstadoAsistencia.FINALIZADO)
+        )
+        assertIs<ValidacionMarcacionResult.Invalido>(
+            validarMarcacionAsistenciaUseCase.validarTransicionEstado(EstadoAsistencia.EN_TURNO, EstadoAsistencia.SIN_INICIAR)
+        )
+
+        // Desde EN_DESCANSO: solo se puede reanudar a EN_TURNO
+        assertIs<ValidacionMarcacionResult.Valido>(
+            validarMarcacionAsistenciaUseCase.validarTransicionEstado(EstadoAsistencia.EN_DESCANSO, EstadoAsistencia.EN_TURNO)
+        )
+        assertIs<ValidacionMarcacionResult.Invalido>(
+            validarMarcacionAsistenciaUseCase.validarTransicionEstado(EstadoAsistencia.EN_DESCANSO, EstadoAsistencia.FINALIZADO)
+        )
+        assertIs<ValidacionMarcacionResult.Invalido>(
+            validarMarcacionAsistenciaUseCase.validarTransicionEstado(EstadoAsistencia.EN_DESCANSO, EstadoAsistencia.SIN_INICIAR)
+        )
+
+        // Desde FINALIZADO: estado terminal, ninguna acción posterior es válida
+        assertIs<ValidacionMarcacionResult.Invalido>(
+            validarMarcacionAsistenciaUseCase.validarTransicionEstado(EstadoAsistencia.FINALIZADO, EstadoAsistencia.EN_TURNO)
+        )
+        assertIs<ValidacionMarcacionResult.Invalido>(
+            validarMarcacionAsistenciaUseCase.validarTransicionEstado(EstadoAsistencia.FINALIZADO, EstadoAsistencia.EN_DESCANSO)
+        )
+    }
+
+    @Test
+    fun validarMarcacion_manejoDeMultiplesDescansosSinSobreescribir() {
+        val listaInicial = emptyList<PausaDescanso>()
+
+        // 1. Iniciar primer descanso a las 11:00
+        val paso1 = validarMarcacionAsistenciaUseCase.agregarInicioDescanso(listaInicial, "11:00")
+        assertEquals(1, paso1.size)
+        assertEquals("11:00", paso1.first().horaInicio)
+        assertEquals("-", paso1.first().horaFin)
+
+        // 2. Finalizar primer descanso a las 11:30
+        val paso2 = validarMarcacionAsistenciaUseCase.registrarFinDescanso(paso1, "11:30")
+        assertEquals(1, paso2.size)
+        assertEquals("11:00", paso2.first().horaInicio)
+        assertEquals("11:30", paso2.first().horaFin)
+
+        // 3. Iniciar segundo descanso a las 15:00 sin sobreescribir el primero
+        val paso3 = validarMarcacionAsistenciaUseCase.agregarInicioDescanso(paso2, "15:00")
+        assertEquals(2, paso3.size)
+        // Primer descanso preservado
+        assertEquals("11:00", paso3[0].horaInicio)
+        assertEquals("11:30", paso3[0].horaFin)
+        // Segundo descanso en curso
+        assertEquals("15:00", paso3[1].horaInicio)
+        assertEquals("-", paso3[1].horaFin)
+
+        // 4. Finalizar segundo descanso a las 15:15
+        val paso4 = validarMarcacionAsistenciaUseCase.registrarFinDescanso(paso3, "15:15")
+        assertEquals(2, paso4.size)
+        assertEquals("11:00", paso4[0].horaInicio)
+        assertEquals("11:30", paso4[0].horaFin)
+        assertEquals("15:00", paso4[1].horaInicio)
+        assertEquals("15:15", paso4[1].horaFin)
+    }
+
+    @Test
+    fun validarMarcacion_calculoMinutosDescansoAcumulado() {
+        val pausas = listOf(
+            PausaDescanso(id = "1", horaInicio = "10:00", horaFin = "10:30"), // 30 min
+            PausaDescanso(id = "2", horaInicio = "14:00", horaFin = "14:45"), // 45 min
+            PausaDescanso(id = "3", horaInicio = "17:00", horaFin = "-")      // en curso, 0 min
+        )
+
+        val minutosTotal = validarMarcacionAsistenciaUseCase.calcularMinutosDescanso(pausas)
+        assertEquals(75, minutosTotal)
+    }
+
+    @Test
+    fun registroAsistencia_retrocompatibilidadYListaPausas() {
+        // Caso 1: Registro legacy sin lista descansos pero con inicioDescanso y finDescanso
+        val legacy = RegistroAsistencia(
+            id = "reg_1",
+            empleadoId = "emp_1",
+            horaEntrada = "08:00",
+            inicioDescanso = "12:00",
+            finDescanso = "12:40",
+            horaSalida = "16:00"
+        )
+        val pausasLegacy = legacy.listaPausas
+        assertEquals(1, pausasLegacy.size)
+        assertEquals("12:00", pausasLegacy.first().horaInicio)
+        assertEquals("12:40", pausasLegacy.first().horaFin)
+
+        // Caso 2: Registro moderno con descansos explícitos
+        val moderno = RegistroAsistencia(
+            id = "reg_2",
+            empleadoId = "emp_1",
+            descansos = listOf(
+                PausaDescanso(id = "p1", horaInicio = "10:00", horaFin = "10:15"),
+                PausaDescanso(id = "p2", horaInicio = "13:00", horaFin = "13:30")
+            )
+        )
+        assertEquals(2, moderno.listaPausas.size)
+        assertEquals("10:00", moderno.listaPausas[0].horaInicio)
+        assertEquals("13:30", moderno.listaPausas[1].horaFin)
     }
 }
 

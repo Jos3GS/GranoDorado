@@ -27,6 +27,13 @@ data class NotificacionIncumplimiento(
 }
 
 @Serializable
+data class PausaDescanso(
+    val id: String = "",
+    val horaInicio: String = "-",
+    val horaFin: String = "-"
+)
+
+@Serializable
 data class RegistroAsistencia(
     val id: String = "",
     val empleadoId: String = "",
@@ -39,6 +46,7 @@ data class RegistroAsistencia(
     val horaSalida: String = "-",
     val inicioDescanso: String = "-",
     val finDescanso: String = "-",
+    val descansos: List<PausaDescanso> = emptyList(),
     val estado: String = "PENDIENTE",
     val estadoAsistencia: EstadoAsistencia = EstadoAsistencia.SIN_INICIAR,
     val tiempoEfectivoMinutos: Int = 0,
@@ -46,4 +54,13 @@ data class RegistroAsistencia(
     val esDescanso: Boolean = false,
     val registradoPorSupervisor: Boolean = false,
     val motivoSupervisor: String = ""
-)
+) {
+    val listaPausas: List<PausaDescanso>
+        get() = if (descansos.isNotEmpty()) {
+            descansos
+        } else if (inicioDescanso != "-") {
+            listOf(PausaDescanso(id = "p_1", horaInicio = inicioDescanso, horaFin = finDescanso))
+        } else {
+            emptyList()
+        }
+}

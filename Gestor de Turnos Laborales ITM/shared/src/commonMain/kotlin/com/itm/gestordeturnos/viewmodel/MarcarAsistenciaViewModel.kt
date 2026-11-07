@@ -37,6 +37,9 @@ data class MarcarAsistenciaState(
     val horaSalida: String = "-",
     val inicioDescanso: String = "-",
     val finDescanso: String = "-",
+    val descansos: List<com.itm.gestordeturnos.domain.model.PausaDescanso> = emptyList(),
+    val habilitadoParaMarcar: Boolean = true,
+    val motivoInhabilitado: String? = null,
     val esDescanso: Boolean = false,
     val tieneTurnoAsignado: Boolean = false,
     val empleadoNombre: String = "",
@@ -48,7 +51,8 @@ class MarcarAsistenciaViewModel(
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
     private val asistenciaRepository: AsistenciaRepositoryContract = AsistenciaRepository,
-    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase()
+    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase(),
+    private val validarMarcacionUseCase: com.itm.gestordeturnos.domain.usecase.ValidarMarcacionAsistenciaUseCase = com.itm.gestordeturnos.domain.usecase.ValidarMarcacionAsistenciaUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MarcarAsistenciaState())
     val uiState: StateFlow<MarcarAsistenciaState> = _uiState.asStateFlow()
@@ -137,8 +141,18 @@ class MarcarAsistenciaViewModel(
         }
         val sucursalTexto = asigHoy?.sucursalId?.ifEmpty { empSucursal } ?: empSucursal
 
+        // Validación de habilitación según RN-27
+        val validacionHabilitacion = validarMarcacionUseCase.validarHabilitacionTurno(emp, asigHoy, hoyIso)
+        val estaHabilitado = validacionHabilitacion is com.itm.gestordeturnos.domain.usecase.ValidacionMarcacionResult.Valido
+        val motivoNoHabilitado = (validacionHabilitacion as? com.itm.gestordeturnos.domain.usecase.ValidacionMarcacionResult.Invalido)?.mensaje
+
         // Si ya hay un registro de asistencia en Firestore para hoy, restaurar sus datos
         if (registroHoy != null) {
+            val listaDescansos = registroHoy.listaPausas
+            val ultimoDesc = listaDescansos.lastOrNull()
+            val iniDesc = ultimoDesc?.horaInicio ?: registroHoy.inicioDescanso
+            val finDesc = ultimoDesc?.horaFin ?: registroHoy.finDescanso
+
             _uiState.update {
                 it.copy(
                     diaTexto = diaTexto,
@@ -148,8 +162,11 @@ class MarcarAsistenciaViewModel(
                     estadoActual = registroHoy.estadoAsistencia,
                     horaEntrada = registroHoy.horaEntrada,
                     horaSalida = registroHoy.horaSalida,
-                    inicioDescanso = registroHoy.inicioDescanso,
-                    finDescanso = registroHoy.finDescanso,
+                    inicioDescanso = iniDesc,
+                    finDescanso = finDesc,
+                    descansos = listaDescansos,
+                    habilitadoParaMarcar = estaHabilitado,
+                    motivoInhabilitado = motivoNoHabilitado,
                     esDescanso = esDescanso,
                     tieneTurnoAsignado = tieneTurno,
                     empleadoNombre = empNombre,
@@ -161,9 +178,9 @@ class MarcarAsistenciaViewModel(
                                 "Marcaste a las ${registroHoy.horaEntrada} con ${registroHoy.minutosTarde} min de retraso sobre la hora programada ($horaProgIni)"
                             } else "Marcaste entrada a las ${registroHoy.horaEntrada}"
                         }
-                        EstadoAsistencia.EN_DESCANSO -> "En pausa de descanso desde las ${registroHoy.inicioDescanso}"
+                        EstadoAsistencia.EN_DESCANSO -> "En pausa de descanso desde las $iniDesc"
                         EstadoAsistencia.FINALIZADO -> "Jornada completada (${registroHoy.horaEntrada} - ${registroHoy.horaSalida})"
-                        EstadoAsistencia.SIN_INICIAR -> null
+                        EstadoAsistencia.SIN_INICIAR -> motivoNoHabilitado
                     }
                 )
             }
@@ -180,11 +197,14 @@ class MarcarAsistenciaViewModel(
                     horaSalida = "-",
                     inicioDescanso = "-",
                     finDescanso = "-",
+                    descansos = emptyList(),
+                    habilitadoParaMarcar = estaHabilitado,
+                    motivoInhabilitado = motivoNoHabilitado,
                     esDescanso = esDescanso,
                     tieneTurnoAsignado = tieneTurno,
                     empleadoNombre = empNombre,
                     fechaIso = hoyIso,
-                    mensajeAviso = if (esDescanso) "Hoy es tu día libre programado." else null
+                    mensajeAviso = if (!estaHabilitado) motivoNoHabilitado else if (esDescanso) "Hoy es tu día libre programado." else null
                 )
             }
         }
@@ -197,11 +217,23 @@ class MarcarAsistenciaViewModel(
             return
         }
 
-        val horaActual = obtenerHoraActualTexto()
         val estadoActual = _uiState.value
+        val hoyIso = estadoActual.fechaIso.ifBlank { obtenerFechaHoy().toString() }
+        val validacionHabilitacion = validarMarcacionUseCase.validarHabilitacionTurno(empleadoActivo, asignacionDeHoy, hoyIso)
+        if (validacionHabilitacion is com.itm.gestordeturnos.domain.usecase.ValidacionMarcacionResult.Invalido) {
+            _uiState.update { it.copy(mensajeAviso = validacionHabilitacion.mensaje) }
+            return
+        }
+
+        val validacionTransicion = validarMarcacionUseCase.validarTransicionEstado(estadoActual.estadoActual, EstadoAsistencia.EN_TURNO)
+        if (validacionTransicion is com.itm.gestordeturnos.domain.usecase.ValidacionMarcacionResult.Invalido) {
+            _uiState.update { it.copy(mensajeAviso = validacionTransicion.mensaje) }
+            return
+        }
+
+        val horaActual = obtenerHoraActualTexto()
         val empId = empleadoActivo?.id ?: "emp_1"
         val empNombre = estadoActual.empleadoNombre.ifBlank { "Empleado" }
-        val hoyIso = estadoActual.fechaIso.ifBlank { obtenerFechaHoy().toString() }
 
         // Calcular minutos de retraso si corresponde
         val horarioProg = estadoActual.horario
@@ -226,6 +258,7 @@ class MarcarAsistenciaViewModel(
             horaSalida = "-",
             inicioDescanso = "-",
             finDescanso = "-",
+            descansos = emptyList(),
             estado = estadoRegistro,
             estadoAsistencia = EstadoAsistencia.EN_TURNO,
             tiempoEfectivoMinutos = 0,
@@ -256,10 +289,17 @@ class MarcarAsistenciaViewModel(
             return
         }
 
-        val horaActual = obtenerHoraActualTexto()
         val estadoActual = _uiState.value
+        val validacionTransicion = validarMarcacionUseCase.validarTransicionEstado(estadoActual.estadoActual, EstadoAsistencia.EN_DESCANSO)
+        if (validacionTransicion is com.itm.gestordeturnos.domain.usecase.ValidacionMarcacionResult.Invalido) {
+            _uiState.update { it.copy(mensajeAviso = validacionTransicion.mensaje) }
+            return
+        }
+
+        val horaActual = obtenerHoraActualTexto()
         val empId = empleadoActivo?.id ?: "emp_1"
         val hoyIso = estadoActual.fechaIso.ifBlank { obtenerFechaHoy().toString() }
+        val nuevosDescansos = validarMarcacionUseCase.agregarInicioDescanso(estadoActual.descansos, horaActual)
 
         val registroActualizado = RegistroAsistencia(
             id = registroActualId.ifBlank { "${empId}_${hoyIso}" },
@@ -272,7 +312,8 @@ class MarcarAsistenciaViewModel(
             horaEntrada = estadoActual.horaEntrada,
             horaSalida = estadoActual.horaSalida,
             inicioDescanso = horaActual,
-            finDescanso = estadoActual.finDescanso,
+            finDescanso = "-",
+            descansos = nuevosDescansos,
             estado = "EN DESCANSO",
             estadoAsistencia = EstadoAsistencia.EN_DESCANSO,
             tiempoEfectivoMinutos = 0,
@@ -283,6 +324,8 @@ class MarcarAsistenciaViewModel(
             it.copy(
                 estadoActual = EstadoAsistencia.EN_DESCANSO,
                 inicioDescanso = horaActual,
+                finDescanso = "-",
+                descansos = nuevosDescansos,
                 mensajeAviso = "Descanso iniciado a las $horaActual"
             )
         }
@@ -297,10 +340,17 @@ class MarcarAsistenciaViewModel(
             return
         }
 
-        val horaActual = obtenerHoraActualTexto()
         val estadoActual = _uiState.value
+        val validacionTransicion = validarMarcacionUseCase.validarTransicionEstado(estadoActual.estadoActual, EstadoAsistencia.EN_TURNO)
+        if (validacionTransicion is com.itm.gestordeturnos.domain.usecase.ValidacionMarcacionResult.Invalido) {
+            _uiState.update { it.copy(mensajeAviso = validacionTransicion.mensaje) }
+            return
+        }
+
+        val horaActual = obtenerHoraActualTexto()
         val empId = empleadoActivo?.id ?: "emp_1"
         val hoyIso = estadoActual.fechaIso.ifBlank { obtenerFechaHoy().toString() }
+        val nuevosDescansos = validarMarcacionUseCase.registrarFinDescanso(estadoActual.descansos, horaActual)
 
         val registroActualizado = RegistroAsistencia(
             id = registroActualId.ifBlank { "${empId}_${hoyIso}" },
@@ -314,6 +364,7 @@ class MarcarAsistenciaViewModel(
             horaSalida = estadoActual.horaSalida,
             inicioDescanso = estadoActual.inicioDescanso,
             finDescanso = horaActual,
+            descansos = nuevosDescansos,
             estado = "PRESENTE",
             estadoAsistencia = EstadoAsistencia.EN_TURNO,
             tiempoEfectivoMinutos = 0,
@@ -324,6 +375,7 @@ class MarcarAsistenciaViewModel(
             it.copy(
                 estadoActual = EstadoAsistencia.EN_TURNO,
                 finDescanso = horaActual,
+                descansos = nuevosDescansos,
                 mensajeAviso = "Descanso finalizado a las $horaActual. Turno reanudado."
             )
         }
@@ -338,17 +390,34 @@ class MarcarAsistenciaViewModel(
             return
         }
 
-        val horaActual = obtenerHoraActualTexto()
         val estadoActual = _uiState.value
+        val validacionTransicion = validarMarcacionUseCase.validarTransicionEstado(estadoActual.estadoActual, EstadoAsistencia.FINALIZADO)
+        if (validacionTransicion is com.itm.gestordeturnos.domain.usecase.ValidacionMarcacionResult.Invalido) {
+            _uiState.update { it.copy(mensajeAviso = validacionTransicion.mensaje) }
+            return
+        }
+
+        val horaActual = obtenerHoraActualTexto()
         val empId = empleadoActivo?.id ?: "emp_1"
         val hoyIso = estadoActual.fechaIso.ifBlank { obtenerFechaHoy().toString() }
 
-        val minutosTrabajados = calcularMinutosTrabajados(
-            entrada = estadoActual.horaEntrada,
-            salida = horaActual,
-            inicioDesc = estadoActual.inicioDescanso,
-            finDesc = estadoActual.finDescanso
-        )
+        val minutosDescansoTotal = if (estadoActual.descansos.isNotEmpty()) {
+            validarMarcacionUseCase.calcularMinutosDescanso(estadoActual.descansos)
+        } else {
+            val dIni = parsearMinutos(estadoActual.inicioDescanso)
+            val dFin = parsearMinutos(estadoActual.finDescanso)
+            if (dIni != null && dFin != null) {
+                var d = dFin - dIni
+                if (d < 0) d += 24 * 60
+                d
+            } else 0
+        }
+
+        val ini = parsearMinutos(estadoActual.horaEntrada) ?: 0
+        val fin = parsearMinutos(horaActual) ?: 0
+        var totalBruto = fin - ini
+        if (totalBruto < 0) totalBruto += 24 * 60
+        val minutosTrabajados = maxOf(0, totalBruto - minutosDescansoTotal)
 
         val registroFinal = RegistroAsistencia(
             id = registroActualId.ifBlank { "${empId}_${hoyIso}" },
@@ -362,6 +431,7 @@ class MarcarAsistenciaViewModel(
             horaSalida = horaActual,
             inicioDescanso = estadoActual.inicioDescanso,
             finDescanso = estadoActual.finDescanso,
+            descansos = estadoActual.descansos,
             estado = "FINALIZADO",
             estadoAsistencia = EstadoAsistencia.FINALIZADO,
             tiempoEfectivoMinutos = minutosTrabajados,

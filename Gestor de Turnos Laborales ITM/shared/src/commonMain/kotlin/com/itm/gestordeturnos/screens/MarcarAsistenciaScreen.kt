@@ -98,7 +98,8 @@ fun MarcarAsistenciaScreen(viewModel: MarcarAsistenciaViewModel) {
                     Spacer(modifier = Modifier.height(24.dp))
 
                     // --- DETALLE DE MARCADORES REGISTRADOS ---
-                    if (state.horaEntrada != "-" || state.inicioDescanso != "-" || state.horaSalida != "-") {
+                    val tieneDescansos = state.descansos.isNotEmpty() || state.inicioDescanso != "-"
+                    if (state.horaEntrada != "-" || tieneDescansos || state.horaSalida != "-") {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
                             colors = CardDefaults.cardColors(containerColor = CafeSurfaceWarm),
@@ -113,7 +114,7 @@ fun MarcarAsistenciaScreen(viewModel: MarcarAsistenciaViewModel) {
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 1.sp
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -123,16 +124,69 @@ fun MarcarAsistenciaScreen(viewModel: MarcarAsistenciaViewModel) {
                                         Text("Entrada", fontSize = 11.sp, color = CafeTextSecondary)
                                         Text(state.horaEntrada, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = CafeTextPrimary)
                                     }
-                                    if (state.inicioDescanso != "-") {
-                                        Column {
-                                            Text("Descanso", fontSize = 11.sp, color = CafeTextSecondary)
-                                            val descTexto = if (state.finDescanso != "-") "${state.inicioDescanso} - ${state.finDescanso}" else "${state.inicioDescanso} (En curso)"
-                                            Text(descTexto, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = CafeTextPrimary)
-                                        }
-                                    }
-                                    Column {
+                                    Column(horizontalAlignment = Alignment.End) {
                                         Text("Salida", fontSize = 11.sp, color = CafeTextSecondary)
                                         Text(state.horaSalida, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = CafeTextPrimary)
+                                    }
+                                }
+
+                                // Listado estructurado de descansos
+                                if (tieneDescansos) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    HorizontalDivider(color = CafeBorderLight, thickness = 1.dp)
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    Text(
+                                        "PAUSAS DE DESCANSO",
+                                        color = CafeTextSecondary,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    val listaDescansos = if (state.descansos.isNotEmpty()) {
+                                        state.descansos
+                                    } else {
+                                        listOf(
+                                            com.itm.gestordeturnos.domain.model.PausaDescanso(
+                                                id = "desc_1",
+                                                horaInicio = state.inicioDescanso,
+                                                horaFin = state.finDescanso
+                                            )
+                                        )
+                                    }
+
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        listaDescansos.forEachIndexed { index, pausa ->
+                                            val finTexto = if (pausa.horaFin != "-") pausa.horaFin else "En curso"
+                                            val enCurso = pausa.horaFin == "-"
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(Color.White, RoundedCornerShape(2.dp))
+                                                    .border(BorderStroke(1.dp, CafeBorderLight), RoundedCornerShape(2.dp))
+                                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    "Descanso ${index + 1}",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = CafeTextPrimary
+                                                )
+                                                Text(
+                                                    text = "Inicio: ${pausa.horaInicio}  ·  Fin: $finTexto",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = if (enCurso) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (enCurso) CafeAccentYellow else CafeTextSecondary
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -161,6 +215,23 @@ fun MarcarAsistenciaScreen(viewModel: MarcarAsistenciaViewModel) {
 
                     // --- BOTONES DINÁMICOS SEGÚN EL ESTADO ---
                     when {
+                        !state.habilitadoParaMarcar && state.estadoActual == EstadoAsistencia.SIN_INICIAR -> {
+                            Button(
+                                onClick = { },
+                                enabled = false,
+                                colors = ButtonDefaults.buttonColors(disabledContainerColor = CafeBorderLight),
+                                shape = RoundedCornerShape(2.dp),
+                                modifier = Modifier.fillMaxWidth().height(48.dp)
+                            ) {
+                                Text(
+                                    state.motivoInhabilitado ?: "Marcación no disponible",
+                                    color = CafeTextSecondary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+
                         state.esDescanso -> {
                             Button(
                                 onClick = { },
