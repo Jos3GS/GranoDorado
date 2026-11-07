@@ -1,6 +1,7 @@
 package com.itm.gestordeturnos.domain.usecase
 
 import com.itm.gestordeturnos.domain.model.RangoDescanso
+import com.itm.gestordeturnos.domain.model.TurnoTemplate
 
 /**
  * Resultado de validación y cálculo de un turno con sus bloques de descanso.
@@ -138,14 +139,32 @@ class CalcularDescansosTurnoUseCase {
         }
     }
 
+    companion object {
+        const val HORA_MINIMA_OPERACION_MINUTOS = 360 // 06:00
+        const val HORA_MAXIMA_OPERACION_MINUTOS = 1320 // 22:00
+        const val HORA_MINIMA_STR = "06:00"
+        const val HORA_MAXIMA_STR = "22:00"
+    }
+
     fun validarYCalcularTurno(
         nombreTurno: String,
         horaInicio: String,
         horaFin: String,
-        descansos: List<RangoDescanso>
+        descansos: List<RangoDescanso>,
+        turnosExistentes: List<TurnoTemplate> = emptyList(),
+        idTurnoActual: String? = null
     ): ValidacionTurnoResult {
-        if (nombreTurno.isBlank()) {
+        val nombreLimpio = nombreTurno.trim()
+        if (nombreLimpio.isBlank()) {
             return ValidacionTurnoResult.Error("El nombre del turno es obligatorio.")
+        }
+
+        // RN-12: Un turno se compone de nombre único en el catálogo
+        val existeNombreDuplicado = turnosExistentes.any {
+            it.id != idTurnoActual && it.nombre.trim().equals(nombreLimpio, ignoreCase = true)
+        }
+        if (existeNombreDuplicado) {
+            return ValidacionTurnoResult.Error("Ya existe un turno en el catálogo con el nombre '$nombreLimpio'. El nombre debe ser único.")
         }
 
         if (horaInicio.isBlank() || horaFin.isBlank()) {
@@ -158,13 +177,28 @@ class CalcularDescansosTurnoUseCase {
             return ValidacionTurnoResult.Error("Formato de hora inválido en inicio o fin.")
         }
 
+        // RN-12: Todo turno debe estar contenido en la franja de operación de 06:00 a 22:00
+        if (inicioMin < HORA_MINIMA_OPERACION_MINUTOS) {
+            return ValidacionTurnoResult.Error(
+                "Todo turno debe iniciar dentro de la franja de operación (a partir de las $HORA_MINIMA_STR)."
+            )
+        }
+        if (finMin > HORA_MAXIMA_OPERACION_MINUTOS) {
+            return ValidacionTurnoResult.Error(
+                "Todo turno debe finalizar dentro de la franja de operación (a más tardar a las $HORA_MAXIMA_STR)."
+            )
+        }
+
+        // RN-12: con hora de fin posterior a la de inicio; ningún turno cruza la medianoche
         if (finMin <= inicioMin) {
-            return ValidacionTurnoResult.Error("La hora de fin debe ser posterior a la hora de inicio.")
+            return ValidacionTurnoResult.Error(
+                "La hora de fin debe ser posterior a la hora de inicio y ningún turno puede cruzar la medianoche."
+            )
         }
 
         val duracionTotalMin = finMin - inicioMin
 
-        // Regla 1: No exceder 10 horas al día (600 minutos)
+        // Regla: No exceder 10 horas al día (600 minutos)
         if (duracionTotalMin > 600) {
             return ValidacionTurnoResult.Error(
                 "Un turno no puede exceder las 10 horas al día (duración actual: ${formatearMinutosADuracion(duracionTotalMin)})."
@@ -185,6 +219,7 @@ class CalcularDescansosTurnoUseCase {
                     "Cada descanso debe terminar después de su inicio (${d.horaInicio} - ${d.horaFin})."
                 )
             }
+            // RN-12: Cada descanso debe estar contenido en el rango del turno
             if (dIni < inicioMin || dFn > finMin) {
                 return ValidacionTurnoResult.Error(
                     "Los descansos deben estar dentro del horario laboral ($horaInicio - $horaFin)."
@@ -195,11 +230,20 @@ class CalcularDescansosTurnoUseCase {
 
         descansosParsed.sortBy { it.inicio }
 
-        // Validar no solapamiento entre descansos
+        // RN-12: no puede solaparse con otro descanso del mismo turno
         for (i in 0 until descansosParsed.size - 1) {
             if (descansosParsed[i].fin > descansosParsed[i + 1].inicio) {
                 return ValidacionTurnoResult.Error("Hay descansos que se solapan entre sí.")
             }
+        }
+
+        // RN-12: La duración efectiva del turno, que es la duración total menos la suma de los descansos, debe ser mayor que cero
+        val totalDescansoMin = descansosParsed.sumOf { it.fin - it.inicio }
+        val minutosEfectivos = duracionTotalMin - totalDescansoMin
+        if (minutosEfectivos <= 0) {
+            return ValidacionTurnoResult.Error(
+                "La duración efectiva del turno (duración total menos descansos) debe ser mayor que cero."
+            )
         }
 
         // Validar reglas de trabajo continuo:
@@ -251,8 +295,6 @@ class CalcularDescansosTurnoUseCase {
             }
         }
 
-        val totalDescansoMin = descansosParsed.sumOf { it.fin - it.inicio }
-        val minutosEfectivos = duracionTotalMin - totalDescansoMin
         val horasEfectivasStr = formatearMinutosADuracion(minutosEfectivos)
 
         return ValidacionTurnoResult.Exito(

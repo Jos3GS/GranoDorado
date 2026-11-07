@@ -275,7 +275,9 @@ class TurnosViewModel(
                 nombreTurno = actual.nombreTurnoNuevo,
                 horaInicio = actual.horaInicioNuevo,
                 horaFin = actual.horaFinNuevo,
-                descansos = actual.descansosNuevo
+                descansos = actual.descansosNuevo,
+                turnosExistentes = actual.turnos,
+                idTurnoActual = actual.idTurnoEditando
             )
         ) {
             is ValidacionTurnoResult.Error -> {

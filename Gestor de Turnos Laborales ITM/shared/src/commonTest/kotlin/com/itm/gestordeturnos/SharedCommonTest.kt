@@ -196,6 +196,117 @@ class SharedCommonTest {
         assertTrue(error.mensaje.contains("solapan"))
     }
 
+    @Test
+    fun validarYCalcularTurno_rechazaTurnoAntesDeLas0600() {
+        val resultado = calcularDescansosUseCase.validarYCalcularTurno(
+            nombreTurno = "Madrugada",
+            horaInicio = "05:30",
+            horaFin = "13:30",
+            descansos = emptyList()
+        )
+
+        val error = assertIs<ValidacionTurnoResult.Error>(resultado)
+        assertTrue(error.mensaje.contains("06:00"))
+        assertFalse(error.mensaje.contains("(RN-12)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun validarYCalcularTurno_rechazaTurnoDespuesDeLas2200() {
+        val resultado = calcularDescansosUseCase.validarYCalcularTurno(
+            nombreTurno = "Cierre Tardio",
+            horaInicio = "15:00",
+            horaFin = "22:30",
+            descansos = emptyList()
+        )
+
+        val error = assertIs<ValidacionTurnoResult.Error>(resultado)
+        assertTrue(error.mensaje.contains("22:00"))
+        assertFalse(error.mensaje.contains("(RN-12)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun validarYCalcularTurno_rechazaTurnoQueCruzaMedianoche() {
+        val resultado = calcularDescansosUseCase.validarYCalcularTurno(
+            nombreTurno = "Nocturno Cruzado",
+            horaInicio = "20:00",
+            horaFin = "04:00",
+            descansos = emptyList()
+        )
+
+        val error = assertIs<ValidacionTurnoResult.Error>(resultado)
+        assertTrue(error.mensaje.contains("medianoche"))
+    }
+
+    @Test
+    fun validarYCalcularTurno_rechazaNombreDuplicadoEnCatalogo() {
+        val catalogoExistente = listOf(
+            TurnoTemplate(id = "t1", nombre = "Turno Mañana"),
+            TurnoTemplate(id = "t2", nombre = "Turno Tarde")
+        )
+
+        val resultado = calcularDescansosUseCase.validarYCalcularTurno(
+            nombreTurno = " turno mañana ",
+            horaInicio = "07:00",
+            horaFin = "15:00",
+            descansos = emptyList(),
+            turnosExistentes = catalogoExistente,
+            idTurnoActual = null
+        )
+
+        val error = assertIs<ValidacionTurnoResult.Error>(resultado)
+        assertTrue(error.mensaje.contains("Ya existe un turno en el catálogo"))
+    }
+
+    @Test
+    fun validarYCalcularTurno_permiteMismoNombreAlEditarElMismoTurno() {
+        val catalogoExistente = listOf(
+            TurnoTemplate(id = "t1", nombre = "Turno Mañana")
+        )
+
+        val descansos = calcularDescansosUseCase.generarDescansosAutomaticos("07:00", "15:00")
+        val resultado = calcularDescansosUseCase.validarYCalcularTurno(
+            nombreTurno = "Turno Mañana",
+            horaInicio = "07:00",
+            horaFin = "15:00",
+            descansos = descansos,
+            turnosExistentes = catalogoExistente,
+            idTurnoActual = "t1"
+        )
+
+        assertIs<ValidacionTurnoResult.Exito>(resultado)
+    }
+
+    @Test
+    fun validarYCalcularTurno_rechazaDuracionEfectivaMenorOIgualACero() {
+        val descansosQueConsumenTodoElTurno = listOf(
+            RangoDescanso(id = "d1", horaInicio = "08:00", horaFin = "09:00")
+        )
+
+        val resultado = calcularDescansosUseCase.validarYCalcularTurno(
+            nombreTurno = "Turno Cero Efectivo",
+            horaInicio = "08:00",
+            horaFin = "09:00",
+            descansos = descansosQueConsumenTodoElTurno
+        )
+
+        val error = assertIs<ValidacionTurnoResult.Error>(resultado)
+        assertTrue(error.mensaje.contains("duración efectiva") && error.mensaje.contains("mayor que cero"))
+    }
+
+    @Test
+    fun validarYCalcularTurno_turnoValidoEnFranja06a22_esExitoso() {
+        val autoDescansos = calcularDescansosUseCase.generarDescansosAutomaticos("14:00", "22:00")
+        val resultado = calcularDescansosUseCase.validarYCalcularTurno(
+            nombreTurno = "Cierre Oficial",
+            horaInicio = "14:00",
+            horaFin = "22:00",
+            descansos = autoDescansos
+        )
+
+        val exito = assertIs<ValidacionTurnoResult.Exito>(resultado)
+        assertEquals("7 h 30 min", exito.horasEfectivas)
+    }
+
     // =========================================================================
     // 3. PRUEBAS DE INTERCAMBIO DE TURNOS E INCAPACIDADES (CON FAKES DIP)
     // =========================================================================
