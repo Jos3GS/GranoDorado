@@ -1,7 +1,38 @@
 package com.itm.gestordeturnos.domain.model
 
 import kotlinx.datetime.LocalDate
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+
+/**
+ * Serializador que serializa Long como Double para compatibilidad con Firestore en Kotlin/JS.
+ * Evita el error 'Unsupported field value: a custom Long object' en Firestore Web SDK.
+ */
+object LongAsDoubleSerializer : KSerializer<Long> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("LongAsDouble", PrimitiveKind.DOUBLE)
+
+    override fun serialize(encoder: Encoder, value: Long) {
+        encoder.encodeDouble(value.toDouble())
+    }
+
+    override fun deserialize(decoder: Decoder): Long {
+        return try {
+            decoder.decodeDouble().toLong()
+        } catch (_: Throwable) {
+            try {
+                decoder.decodeLong()
+            } catch (_: Throwable) {
+                0L
+            }
+        }
+    }
+}
 
 interface Autenticable {
     fun iniciarSesion(correo: String, clave: String): Boolean
@@ -39,6 +70,7 @@ data class Empleado(
     override val id: String = "",
     override val nombre: String = "",
     val apellido: String = "",
+    @Serializable(with = LongAsDoubleSerializer::class)
     val documento: Long = 0L,
     val tipoDocumento: String = "CC",
     override val correo: String = "",
@@ -55,6 +87,7 @@ data class Empleado(
     val sucursalAnterior: String = "",
     val fechaCambioSucursal: String = "",
     val intentosFallidosLogin: Int = 0,
+    @Serializable(with = LongAsDoubleSerializer::class)
     val bloqueadoHastaEpochMillis: Long = 0L
 ) : Usuario() {
 
