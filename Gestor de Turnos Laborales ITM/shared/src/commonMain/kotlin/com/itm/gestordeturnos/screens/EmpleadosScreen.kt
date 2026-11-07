@@ -166,6 +166,12 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
+                val opcionesSucursalesFiltro = if (state.esAdminSucursal && state.sucursalAdmin.isNotBlank()) {
+                    listOf(state.sucursalAdmin)
+                } else {
+                    OPCIONES_SUCURSALES_FILTRO
+                }
+
                 // Fila de Filtros y Búsqueda
                 BarraFiltros(
                     textoBusqueda = state.textoBusqueda,
@@ -174,6 +180,7 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                     onFiltroRolCambiado = viewModel::onFiltroRolCambiado,
                     filtroSucursal = state.filtroSucursal,
                     onFiltroSucursalCambiado = viewModel::onFiltroSucursalCambiado,
+                    opcionesSucursales = opcionesSucursalesFiltro,
                     filtroEstado = state.filtroEstado,
                     onFiltroEstadoCambiado = viewModel::onFiltroEstadoCambiado,
                     isCompact = isCompact
@@ -219,6 +226,8 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                         empleado = state.empleadoEnEdicion!!,
                         esNuevo = state.esNuevoEmpleado,
                         esMismoUsuario = state.esMismoUsuarioLogueado,
+                        esAdminSucursal = state.esAdminSucursal,
+                        sucursalAdmin = state.sucursalAdmin,
                         isGuardando = state.isGuardando,
                         mensajeError = state.mensajeError,
                         onGuardar = viewModel::guardarEmpleado,
@@ -238,6 +247,7 @@ private fun BarraFiltros(
     onFiltroRolCambiado: (String) -> Unit,
     filtroSucursal: String,
     onFiltroSucursalCambiado: (String) -> Unit,
+    opcionesSucursales: List<String> = OPCIONES_SUCURSALES_FILTRO,
     filtroEstado: String,
     onFiltroEstadoCambiado: (String) -> Unit,
     isCompact: Boolean
@@ -267,7 +277,7 @@ private fun BarraFiltros(
                 Box(modifier = Modifier.weight(1f)) {
                     AppDropdown(
                         valorActual = filtroSucursal,
-                        opciones = OPCIONES_SUCURSALES_FILTRO,
+                        opciones = opcionesSucursales,
                         onSeleccion = onFiltroSucursalCambiado,
                         label = "SUCURSAL"
                     )
@@ -304,7 +314,7 @@ private fun BarraFiltros(
             Box(modifier = Modifier.width(140.dp)) {
                 AppDropdown(
                     valorActual = filtroSucursal,
-                    opciones = OPCIONES_SUCURSALES_FILTRO,
+                    opciones = opcionesSucursales,
                     onSeleccion = onFiltroSucursalCambiado,
                     label = "SUCURSAL"
                 )
@@ -715,6 +725,8 @@ private fun FormularioEmpleadoDrawer(
     empleado: Empleado,
     esNuevo: Boolean,
     esMismoUsuario: Boolean = false,
+    esAdminSucursal: Boolean = false,
+    sucursalAdmin: String = "",
     isGuardando: Boolean = false,
     mensajeError: String?,
     onGuardar: (Empleado) -> Unit,
@@ -727,7 +739,14 @@ private fun FormularioEmpleadoDrawer(
     var correo by remember(empleado) { mutableStateOf(empleado.correo) }
     var telefono by remember(empleado) { mutableStateOf(empleado.telefono) }
     var rolSeleccionado by remember(empleado) { mutableStateOf(empleado.cargo.displayName) }
-    var sucursalSeleccionada by remember(empleado) { mutableStateOf(empleado.sucursal) }
+    var sucursalSeleccionada by remember(empleado, esAdminSucursal, sucursalAdmin) {
+        val sucursal = if (esAdminSucursal && sucursalAdmin.isNotBlank()) {
+            sucursalAdmin
+        } else {
+            empleado.sucursal
+        }
+        mutableStateOf(sucursal)
+    }
     var fechaIngreso by remember(empleado) {
         val fecha = if (empleado.fechaIngreso.isNotBlank() && (!esNuevo || empleado.fechaIngreso != "15/01/2024")) {
             empleado.fechaIngreso
@@ -850,20 +869,53 @@ private fun FormularioEmpleadoDrawer(
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 } else {
+                    val opcionesRol = if (esAdminSucursal) {
+                        ROLES_FORMULARIO.filter { it != "ADMINISTRADOR GENERAL" }
+                    } else {
+                        ROLES_FORMULARIO
+                    }
                     DropdownFormulario(
                         valorActual = rolSeleccionado,
-                        opciones = ROLES_FORMULARIO,
+                        opciones = opcionesRol,
                         onSeleccion = { rolSeleccionado = it }
                     )
+                    if (esAdminSucursal) {
+                        Text(
+                            text = "Admin. de Sucursal no puede asignar Admin. General (RN-10)",
+                            fontSize = 10.sp,
+                            color = CafeTextSecondary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
                 EtiquetaCampo("SUCURSAL")
-                DropdownFormulario(
-                    valorActual = sucursalSeleccionada,
-                    opciones = SUCURSALES_FORMULARIO,
-                    onSeleccion = { sucursalSeleccionada = it }
-                )
+                if (esAdminSucursal) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .background(Color(0xFFF7F4F0), RoundedCornerShape(2.dp))
+                            .border(1.dp, Color(0xFFE2DCD5), RoundedCornerShape(2.dp))
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(sucursalSeleccionada, fontSize = 13.sp, color = CafeTextSecondary)
+                    }
+                    Text(
+                        text = if (esNuevo) "Asignado a tu sucursal (RN-10)" else "No puedes cambiar la sucursal (RN-10)",
+                        fontSize = 10.sp,
+                        color = CafeTextSecondary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                } else {
+                    DropdownFormulario(
+                        valorActual = sucursalSeleccionada,
+                        opciones = SUCURSALES_FORMULARIO,
+                        onSeleccion = { sucursalSeleccionada = it }
+                    )
+                }
             }
         }
 

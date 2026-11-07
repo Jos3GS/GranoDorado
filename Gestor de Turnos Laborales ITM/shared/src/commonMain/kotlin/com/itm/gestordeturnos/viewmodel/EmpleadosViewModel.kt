@@ -26,9 +26,12 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
 
+import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.UsuarioActual
+import com.itm.gestordeturnos.domain.usecase.ValidacionAdminSucursalEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
 import com.itm.gestordeturnos.domain.usecase.ValidarModificacionRolEstadoUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidarPermisosAdminSucursalEmpleadoUseCase
 
 data class EmpleadosState(
     val empleadosOriginales: List<Empleado> = emptyList(),
@@ -41,6 +44,8 @@ data class EmpleadosState(
     val esNuevoEmpleado: Boolean = false,
     val esMismoUsuarioLogueado: Boolean = false,
     val usuarioSesion: UsuarioActual? = null,
+    val esAdminSucursal: Boolean = false,
+    val sucursalAdmin: String = "",
     val mostrarDrawerFormulario: Boolean = false,
     val mensajeError: String? = null,
     val isGuardando: Boolean = false,
@@ -51,14 +56,26 @@ class EmpleadosViewModel(
     private val authService: AuthService = FirebaseAuthService(),
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
-    private val validarModificacionRolEstadoUseCase: ValidarModificacionRolEstadoUseCase = ValidarModificacionRolEstadoUseCase()
+    private val validarModificacionRolEstadoUseCase: ValidarModificacionRolEstadoUseCase = ValidarModificacionRolEstadoUseCase(),
+    private val validarPermisosAdminSucursalEmpleadoUseCase: ValidarPermisosAdminSucursalEmpleadoUseCase = ValidarPermisosAdminSucursalEmpleadoUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(EmpleadosState())
     val uiState: StateFlow<EmpleadosState> = _uiState.asStateFlow()
 
     init {
         val usuarioActual = SessionManager.usuarioActivo ?: authService.obtenerUsuarioActivo()
-        _uiState.update { it.copy(usuarioSesion = usuarioActual) }
+        val esAdminSuc = usuarioActual?.rol == RolUsuario.ADMINISTRADOR_SUCURSAL
+        val sucursalAdmin = usuarioActual?.sucursal.orEmpty().trim()
+        val filtroSucursalInicial = if (esAdminSuc && sucursalAdmin.isNotBlank()) sucursalAdmin else "Todas"
+
+        _uiState.update {
+            it.copy(
+                usuarioSesion = usuarioActual,
+                esAdminSucursal = esAdminSuc,
+                sucursalAdmin = sucursalAdmin,
+                filtroSucursal = filtroSucursalInicial
+            )
+        }
         observarEmpleados()
     }
 
@@ -100,7 +117,12 @@ class EmpleadosViewModel(
 
     fun onFiltroSucursalCambiado(nuevaSucursal: String) {
         _uiState.update { state ->
-            aplicarFiltros(state.copy(filtroSucursal = nuevaSucursal))
+            val sucursalFinal = if (state.esAdminSucursal && state.sucursalAdmin.isNotBlank()) {
+                state.sucursalAdmin
+            } else {
+                nuevaSucursal
+            }
+            aplicarFiltros(state.copy(filtroSucursal = sucursalFinal))
         }
     }
 
@@ -139,6 +161,14 @@ class EmpleadosViewModel(
     }
 
     fun abrirCrearEmpleado() {
+        val sesion = _uiState.value.usuarioSesion ?: SessionManager.usuarioActivo
+        val esAdminSuc = sesion?.rol == RolUsuario.ADMINISTRADOR_SUCURSAL
+        val sucursalInicial = if (esAdminSuc && !sesion.sucursal.isNullOrBlank()) {
+            sesion.sucursal.trim()
+        } else {
+            "CENTRO"
+        }
+
         val idGenerado = "emp_${Random.nextInt(10000, 99999)}"
         val nuevo = Empleado(
             id = idGenerado,
@@ -148,8 +178,8 @@ class EmpleadosViewModel(
             correo = "",
             telefono = "",
             cargo = Cargo.BARISTA,
-            sucursal = "CENTRO",
-            sucursalId = "CENTRO",
+            sucursal = sucursalInicial,
+            sucursalId = sucursalInicial,
             fechaIngreso = obtenerFechaActual(),
             estadoLaboral = EstadoEmpleado.DISPONIBLE,
             estado = EstadoUsuario.ACTIVO,
@@ -168,6 +198,15 @@ class EmpleadosViewModel(
 
     fun abrirEditarEmpleado(empleado: Empleado) {
         val sesion = _uiState.value.usuarioSesion ?: SessionManager.usuarioActivo
+
+        // RN-10: El Administrador de Sucursal solo crea y edita empleados de su sucursal
+        if (!validarPermisosAdminSucursalEmpleadoUseCase.puedeEditarEmpleado(sesion, empleado)) {
+            _uiState.update {
+                it.copy(mensajeError = "No tienes permisos para editar empleados de una sucursal distinta a la tuya (${sesion?.sucursal.orEmpty()}).")
+            }
+            return
+        }
+
         val esElMismo = sesion != null && (sesion.id == empleado.id || sesion.correo.equals(empleado.correo, ignoreCase = true))
 
         _uiState.update {
@@ -244,6 +283,20 @@ class EmpleadosViewModel(
 
         if (validacionRN07 is ValidacionPermisosEdicionResult.Invalida) {
             _uiState.update { it.copy(mensajeError = validacionRN07.mensaje) }
+            return
+        }
+
+        // Regla RN-10: El Administrador de Sucursal solo crea y edita empleados de su sucursal,
+        // sin cambiarles la sucursal ni asignarles el rol de Administrador General.
+        val validacionRN10 = validarPermisosAdminSucursalEmpleadoUseCase.validar(
+            usuarioSesion = sesion,
+            esNuevoEmpleado = estadoActual.esNuevoEmpleado,
+            empleadoOriginal = empleadoPrevio,
+            empleadoActualizado = empleadoActualizado
+        )
+
+        if (validacionRN10 is ValidacionAdminSucursalEmpleadoResult.Invalida) {
+            _uiState.update { it.copy(mensajeError = validacionRN10.mensaje) }
             return
         }
 

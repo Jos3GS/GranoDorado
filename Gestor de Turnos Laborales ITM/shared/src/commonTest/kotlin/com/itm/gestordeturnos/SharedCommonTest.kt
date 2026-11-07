@@ -9,11 +9,13 @@ import com.itm.gestordeturnos.domain.usecase.ControlInactividadSesionUseCase
 import com.itm.gestordeturnos.domain.usecase.ControlIntentosLoginUseCase
 import com.itm.gestordeturnos.domain.usecase.EvaluacionIntentoLogin
 import com.itm.gestordeturnos.domain.usecase.IntercambiarTurnosUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidacionAdminSucursalEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
 import com.itm.gestordeturnos.domain.usecase.ValidarContrasenaFirebaseAuthUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarModificacionRolEstadoUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidarPermisosAdminSucursalEmpleadoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarRecuperacionContrasenaUseCase
 import com.itm.gestordeturnos.domain.usecase.VerificarCoberturaDiariaUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -581,6 +583,215 @@ class SharedCommonTest {
         )
         val fallo = assertIs<ValidacionPermisosEdicionResult.Invalida>(resInactivarUnico)
         assertTrue(fallo.mensaje.contains("único Administrador General activo"))
+    }
+
+    // =========================================================================
+    // 9. PRUEBAS DE PERMISOS DE ADMINISTRADOR DE SUCURSAL (RN-10)
+    // =========================================================================
+
+    @Test
+    fun validarPermisosAdminSucursal_impideAsignarRolAdminGeneral() {
+        val useCase = ValidarPermisosAdminSucursalEmpleadoUseCase()
+        val sesionAdminSucursal = UsuarioActual(
+            id = "admin_suc_1",
+            correo = "admin.centro@granodorado.com",
+            sucursal = "CENTRO",
+            nombre = "Admin Centro",
+            iniciales = "AC",
+            cargo = "Administrador de Sucursal",
+            rol = RolUsuario.ADMINISTRADOR_SUCURSAL
+        )
+
+        // Intento de crear un empleado asignándole rol ADMINISTRADOR_GENERAL
+        val nuevoConRolGeneral = Empleado(
+            id = "emp_nuevo",
+            nombre = "Nuevo",
+            apellido = "Empleado",
+            documento = 123456L,
+            correo = "nuevo@granodorado.com",
+            cargo = Cargo.ADMINISTRADOR_GENERAL,
+            sucursal = "CENTRO"
+        )
+        val resCreacion = useCase.validar(
+            usuarioSesion = sesionAdminSucursal,
+            esNuevoEmpleado = true,
+            empleadoOriginal = null,
+            empleadoActualizado = nuevoConRolGeneral
+        )
+        val errorCreacion = assertIs<ValidacionAdminSucursalEmpleadoResult.Invalida>(resCreacion)
+        assertTrue(errorCreacion.mensaje.contains("no puede asignar el rol de Administrador General"))
+
+        // Intento de editar un empleado asignándole rol ADMINISTRADOR_GENERAL
+        val empleadoExistente = Empleado(
+            id = "emp_existente",
+            nombre = "Existente",
+            apellido = "Empleado",
+            documento = 654321L,
+            correo = "existente@granodorado.com",
+            cargo = Cargo.BARISTA,
+            sucursal = "CENTRO"
+        )
+        val resEdicion = useCase.validar(
+            usuarioSesion = sesionAdminSucursal,
+            esNuevoEmpleado = false,
+            empleadoOriginal = empleadoExistente,
+            empleadoActualizado = empleadoExistente.copy(cargo = Cargo.ADMINISTRADOR_GENERAL)
+        )
+        val errorEdicion = assertIs<ValidacionAdminSucursalEmpleadoResult.Invalida>(resEdicion)
+        assertTrue(errorEdicion.mensaje.contains("no puede asignar el rol de Administrador General"))
+    }
+
+    @Test
+    fun validarPermisosAdminSucursal_creacionSoloEnSuPropiaSucursal() {
+        val useCase = ValidarPermisosAdminSucursalEmpleadoUseCase()
+        val sesionAdminCentro = UsuarioActual(
+            id = "admin_suc_1",
+            correo = "admin.centro@granodorado.com",
+            sucursal = "CENTRO",
+            nombre = "Admin Centro",
+            iniciales = "AC",
+            cargo = "Administrador de Sucursal",
+            rol = RolUsuario.ADMINISTRADOR_SUCURSAL
+        )
+
+        // Intento de crear en sucursal NORTE
+        val empleadoEnNorte = Empleado(
+            id = "emp_norte",
+            nombre = "Juan",
+            apellido = "Perez",
+            documento = 987654L,
+            correo = "juan.perez@granodorado.com",
+            cargo = Cargo.BARISTA,
+            sucursal = "NORTE"
+        )
+        val resInvalido = useCase.validar(
+            usuarioSesion = sesionAdminCentro,
+            esNuevoEmpleado = true,
+            empleadoOriginal = null,
+            empleadoActualizado = empleadoEnNorte
+        )
+        val error = assertIs<ValidacionAdminSucursalEmpleadoResult.Invalida>(resInvalido)
+        assertTrue(error.mensaje.contains("solo puede crear empleados en su propia sucursal"))
+
+        // Creación válida en sucursal CENTRO
+        val empleadoEnCentro = empleadoEnNorte.copy(sucursal = "CENTRO")
+        val resValido = useCase.validar(
+            usuarioSesion = sesionAdminCentro,
+            esNuevoEmpleado = true,
+            empleadoOriginal = null,
+            empleadoActualizado = empleadoEnCentro
+        )
+        assertIs<ValidacionAdminSucursalEmpleadoResult.Valida>(resValido)
+    }
+
+    @Test
+    fun validarPermisosAdminSucursal_edicionSoloEnSuSucursalYSinCambiarSucursal() {
+        val useCase = ValidarPermisosAdminSucursalEmpleadoUseCase()
+        val sesionAdminCentro = UsuarioActual(
+            id = "admin_suc_1",
+            correo = "admin.centro@granodorado.com",
+            sucursal = "CENTRO",
+            nombre = "Admin Centro",
+            iniciales = "AC",
+            cargo = "Administrador de Sucursal",
+            rol = RolUsuario.ADMINISTRADOR_SUCURSAL
+        )
+
+        val empleadoDeSur = Empleado(
+            id = "emp_sur",
+            nombre = "Carlos",
+            apellido = "Mora",
+            documento = 112233L,
+            correo = "carlos.mora@granodorado.com",
+            cargo = Cargo.BARISTA,
+            sucursal = "SUR"
+        )
+
+        // 1. Intento de editar un empleado que pertenece a otra sucursal (SUR)
+        assertFalse(useCase.puedeEditarEmpleado(sesionAdminCentro, empleadoDeSur))
+        val resEditarOtraSucursal = useCase.validar(
+            usuarioSesion = sesionAdminCentro,
+            esNuevoEmpleado = false,
+            empleadoOriginal = empleadoDeSur,
+            empleadoActualizado = empleadoDeSur.copy(nombre = "Carlos Alberto")
+        )
+        val errorOtra = assertIs<ValidacionAdminSucursalEmpleadoResult.Invalida>(resEditarOtraSucursal)
+        assertTrue(errorOtra.mensaje.contains("no puede editar empleados de otra sucursal"))
+
+        // 2. Intento de cambiarle la sucursal a un empleado propio (CENTRO -> NORTE)
+        val empleadoDeCentro = Empleado(
+            id = "emp_centro",
+            nombre = "Mariana",
+            apellido = "Lopez",
+            documento = 445566L,
+            correo = "mariana.lopez@granodorado.com",
+            cargo = Cargo.BARISTA,
+            sucursal = "CENTRO"
+        )
+        assertTrue(useCase.puedeEditarEmpleado(sesionAdminCentro, empleadoDeCentro))
+
+        val resCambiarSucursal = useCase.validar(
+            usuarioSesion = sesionAdminCentro,
+            esNuevoEmpleado = false,
+            empleadoOriginal = empleadoDeCentro,
+            empleadoActualizado = empleadoDeCentro.copy(sucursal = "NORTE")
+        )
+        val errorCambio = assertIs<ValidacionAdminSucursalEmpleadoResult.Invalida>(resCambiarSucursal)
+        assertTrue(errorCambio.mensaje.contains("no puede cambiar la sucursal"))
+
+        // 3. Edición válida en su propia sucursal manteniendo la sede
+        val resEdicionValida = useCase.validar(
+            usuarioSesion = sesionAdminCentro,
+            esNuevoEmpleado = false,
+            empleadoOriginal = empleadoDeCentro,
+            empleadoActualizado = empleadoDeCentro.copy(telefono = "3009998877", cargo = Cargo.CAJERO)
+        )
+        assertIs<ValidacionAdminSucursalEmpleadoResult.Valida>(resEdicionValida)
+    }
+
+    @Test
+    fun validarPermisosAdminSucursal_adminGeneralTieneAlcanceGlobal() {
+        val useCase = ValidarPermisosAdminSucursalEmpleadoUseCase()
+        val sesionAdminGeneral = UsuarioActual(
+            id = "admin_gen",
+            correo = "admin.general@granodorado.com",
+            sucursal = "CENTRO",
+            nombre = "Admin General",
+            iniciales = "AG",
+            cargo = "Administrador General",
+            rol = RolUsuario.ADMINISTRADOR_GENERAL
+        )
+
+        val empleadoOriginal = Empleado(
+            id = "emp_1",
+            nombre = "Andres",
+            apellido = "Patiño",
+            documento = 778899L,
+            correo = "andres@granodorado.com",
+            cargo = Cargo.BARISTA,
+            sucursal = "NORTE"
+        )
+
+        // Puede editar cualquier empleado
+        assertTrue(useCase.puedeEditarEmpleado(sesionAdminGeneral, empleadoOriginal))
+
+        // Puede cambiar de sucursal
+        val resCambioSede = useCase.validar(
+            usuarioSesion = sesionAdminGeneral,
+            esNuevoEmpleado = false,
+            empleadoOriginal = empleadoOriginal,
+            empleadoActualizado = empleadoOriginal.copy(sucursal = "SUR")
+        )
+        assertIs<ValidacionAdminSucursalEmpleadoResult.Valida>(resCambioSede)
+
+        // Puede asignar cualquier rol (incluido Administrador General)
+        val resAsignarRol = useCase.validar(
+            usuarioSesion = sesionAdminGeneral,
+            esNuevoEmpleado = true,
+            empleadoOriginal = null,
+            empleadoActualizado = empleadoOriginal.copy(cargo = Cargo.ADMINISTRADOR_GENERAL)
+        )
+        assertIs<ValidacionAdminSucursalEmpleadoResult.Valida>(resAsignarRol)
     }
 }
 
