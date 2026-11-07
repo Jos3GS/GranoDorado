@@ -61,7 +61,8 @@ class CambiosTurnoViewModel(
     private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase(),
     private val validarSolicitudCambioUseCase: ValidarSolicitudCambioTurnoUseCase = ValidarSolicitudCambioTurnoUseCase(),
     private val validarAprobacionCambioUseCase: ValidarAprobacionCambioTurnoUseCase = ValidarAprobacionCambioTurnoUseCase(),
-    private val controlarVencimientoYCancelacionUseCase: ControlarVencimientoYCancelacionCambioUseCase = ControlarVencimientoYCancelacionCambioUseCase()
+    private val controlarVencimientoYCancelacionUseCase: ControlarVencimientoYCancelacionCambioUseCase = ControlarVencimientoYCancelacionCambioUseCase(),
+    private val registrarAuditoriaUseCase: com.itm.gestordeturnos.domain.usecase.RegistrarEventoAuditoriaUseCase = com.itm.gestordeturnos.domain.usecase.RegistrarEventoAuditoriaUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CambiosTurnoState())
     val uiState: StateFlow<CambiosTurnoState> = _uiState.asStateFlow()
@@ -498,6 +499,18 @@ class CambiosTurnoViewModel(
 
         val motivoFinal = motivo.ifBlank { "Rechazada" }
         cambiosTurnoRepository.rechazarSolicitud(solicitud.id, motivoFinal)
+
+        // RN-32: Auditoría de rechazo de cambio de turno
+        val eventoRechazo = registrarAuditoriaUseCase.construirEventoCambioTurno(
+            actor = usuario,
+            accion = com.itm.gestordeturnos.domain.model.TipoAccionAuditoria.RECHAZAR_CAMBIO_TURNO,
+            solicitudId = solicitud.id,
+            solicitante = solicitud.nombreSolicitante,
+            companero = solicitud.nombreCompanero,
+            sucursal = solicitud.sucursalNombre,
+            motivoOComentario = motivoFinal
+        )
+        registrarAuditoriaUseCase.registrarEventoEnBackground(eventoRechazo)
     }
 
     fun cancelarSolicitud(solicitud: SolicitudCambioTurno) {
@@ -521,6 +534,18 @@ class CambiosTurnoViewModel(
         }
 
         cambiosTurnoRepository.cancelarSolicitud(solicitud.id)
+
+        // RN-32: Auditoría de cancelación de solicitud de cambio
+        val eventoCancelacion = registrarAuditoriaUseCase.construirEventoCambioTurno(
+            actor = usuario,
+            accion = com.itm.gestordeturnos.domain.model.TipoAccionAuditoria.CANCELAR_CAMBIO_TURNO,
+            solicitudId = solicitud.id,
+            solicitante = solicitud.nombreSolicitante,
+            companero = solicitud.nombreCompanero,
+            sucursal = solicitud.sucursalNombre,
+            motivoOComentario = "Cancelada por el solicitante"
+        )
+        registrarAuditoriaUseCase.registrarEventoEnBackground(eventoCancelacion)
     }
 
     fun aprobarSolicitud(solicitud: SolicitudCambioTurno) {
@@ -567,5 +592,17 @@ class CambiosTurnoViewModel(
         }
 
         cambiosTurnoRepository.aprobarEIntercambiar(solicitud)
+
+        // RN-32: Auditoría de aprobación de cambio de turno
+        val eventoAprobacion = registrarAuditoriaUseCase.construirEventoCambioTurno(
+            actor = usuario,
+            accion = com.itm.gestordeturnos.domain.model.TipoAccionAuditoria.APROBAR_CAMBIO_TURNO,
+            solicitudId = solicitud.id,
+            solicitante = solicitud.nombreSolicitante,
+            companero = solicitud.nombreCompanero,
+            sucursal = solicitud.sucursalNombre,
+            motivoOComentario = "Intercambio aprobado y asignaciones actualizadas"
+        )
+        registrarAuditoriaUseCase.registrarEventoEnBackground(eventoAprobacion)
     }
 }

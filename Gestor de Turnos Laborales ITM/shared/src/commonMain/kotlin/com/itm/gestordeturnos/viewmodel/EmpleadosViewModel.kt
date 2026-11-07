@@ -57,7 +57,8 @@ class EmpleadosViewModel(
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
     private val validarModificacionRolEstadoUseCase: ValidarModificacionRolEstadoUseCase = ValidarModificacionRolEstadoUseCase(),
-    private val validarPermisosAdminSucursalEmpleadoUseCase: ValidarPermisosAdminSucursalEmpleadoUseCase = ValidarPermisosAdminSucursalEmpleadoUseCase()
+    private val validarPermisosAdminSucursalEmpleadoUseCase: ValidarPermisosAdminSucursalEmpleadoUseCase = ValidarPermisosAdminSucursalEmpleadoUseCase(),
+    private val registrarAuditoriaUseCase: com.itm.gestordeturnos.domain.usecase.RegistrarEventoAuditoriaUseCase = com.itm.gestordeturnos.domain.usecase.RegistrarEventoAuditoriaUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(EmpleadosState())
     val uiState: StateFlow<EmpleadosState> = _uiState.asStateFlow()
@@ -365,6 +366,16 @@ class EmpleadosViewModel(
             }
 
             empleadoRepository.guardarEmpleado(empleadoFinal, esNuevo)
+
+            // RN-32: Registrar evento de auditoría conservando valor anterior y nuevo
+            val actorAuditoria = sesion ?: SessionManager.usuarioActivo
+            val eventoAudit = registrarAuditoriaUseCase.construirEventoEmpleado(
+                actor = actorAuditoria,
+                esNuevo = esNuevo,
+                empleadoAnterior = empleadoPrevio,
+                empleadoNuevo = empleadoFinal
+            )
+            registrarAuditoriaUseCase.registrarEventoEnBackground(eventoAudit)
 
             _uiState.update { state ->
                 state.copy(

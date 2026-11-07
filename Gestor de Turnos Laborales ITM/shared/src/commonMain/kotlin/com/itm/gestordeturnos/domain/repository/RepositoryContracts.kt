@@ -98,3 +98,14 @@ interface AsistenciaRepositoryContract {
     ): Result<Unit>
     fun actualizarNotificaciones(lista: List<NotificacionIncumplimiento>)
 }
+
+/**
+ * Contrato de dominio para el repositorio de Auditoría y Trazabilidad (RN-32, DIP).
+ */
+interface AuditoriaRepositoryContract {
+    val eventos: StateFlow<List<EventoAuditoria>>
+    fun iniciarSincronizacionFirestore(forzar: Boolean = false)
+    fun detenerSincronizacion()
+    suspend fun registrarEvento(evento: EventoAuditoria): Result<Unit>
+    fun registrarEventoEnBackground(evento: EventoAuditoria)
+}

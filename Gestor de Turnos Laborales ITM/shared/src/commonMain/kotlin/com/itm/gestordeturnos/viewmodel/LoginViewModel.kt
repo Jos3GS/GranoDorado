@@ -46,7 +46,8 @@ data class LoginState(
 class LoginViewModel(
     private val authService: AuthService = FirebaseAuthService(),
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
-    private val turnoRepository: TurnoRepositoryContract = TurnoRepository
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
+    private val registrarAuditoriaUseCase: com.itm.gestordeturnos.domain.usecase.RegistrarEventoAuditoriaUseCase = com.itm.gestordeturnos.domain.usecase.RegistrarEventoAuditoriaUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(LoginState())
     val uiState: StateFlow<LoginState> = _uiState.asStateFlow()
@@ -98,6 +99,15 @@ class LoginViewModel(
                     SessionManager.usuarioActivo = resultado.usuario
                     empleadoRepository.iniciarSincronizacionFirestore()
                     turnoRepository.iniciarSincronizacionFirestore()
+
+                    // RN-32: Auditoría de acceso exitoso
+                    val eventoSuccess = registrarAuditoriaUseCase.construirEventoLogin(
+                        correo = email,
+                        exitoso = true,
+                        usuario = resultado.usuario
+                    )
+                    registrarAuditoriaUseCase.registrarEventoEnBackground(eventoSuccess)
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -110,6 +120,15 @@ class LoginViewModel(
                     }
                 }
                 is AuthResult.Error -> {
+                    // RN-32: Auditoría de intento de acceso fallido
+                    val eventoError = registrarAuditoriaUseCase.construirEventoLogin(
+                        correo = email,
+                        exitoso = false,
+                        usuario = null,
+                        motivoFallo = resultado.mensaje
+                    )
+                    registrarAuditoriaUseCase.registrarEventoEnBackground(eventoError)
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,

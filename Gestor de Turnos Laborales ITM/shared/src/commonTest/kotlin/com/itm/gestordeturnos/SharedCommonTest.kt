@@ -40,6 +40,11 @@ import com.itm.gestordeturnos.domain.usecase.ValidarPermisosAdminSucursalEmplead
 import com.itm.gestordeturnos.domain.usecase.CalcularJornadaAsistenciaUseCase
 import com.itm.gestordeturnos.domain.usecase.ControlarIncumplimientosAsistenciaUseCase
 import com.itm.gestordeturnos.domain.usecase.JornadaEvaluada
+import com.itm.gestordeturnos.domain.model.EventoAuditoria
+import com.itm.gestordeturnos.domain.model.TipoAccionAuditoria
+import com.itm.gestordeturnos.domain.repository.AuditoriaRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.FiltrarAuditoriaUseCase
+import com.itm.gestordeturnos.domain.usecase.RegistrarEventoAuditoriaUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarRecuperacionContrasenaUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarSolicitudCambioTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.VerificarCoberturaDiariaUseCase
@@ -67,6 +72,9 @@ class SharedCommonTest {
     private val validarMarcaSupervisorUseCase = ValidarMarcaSupervisorUseCase()
     private val calcularJornadaUseCase = CalcularJornadaAsistenciaUseCase()
     private val controlarIncumplimientosUseCase = ControlarIncumplimientosAsistenciaUseCase()
+    private val fakeAuditoriaRepository = FakeAuditoriaRepository()
+    private val registrarAuditoriaUseCase = RegistrarEventoAuditoriaUseCase(fakeAuditoriaRepository)
+    private val filtrarAuditoriaUseCase = FiltrarAuditoriaUseCase()
 
     // =========================================================================
     // 1. PRUEBAS DE COBERTURA DIARIA Y CÁLCULO DE HORAS SEMANALES
@@ -4487,6 +4495,188 @@ class SharedCommonTest {
         val id = controlarIncumplimientosUseCase.generarIdAlertaRetraso(asig.empleadoId, asig.fechaIso)
         assertFalse(id.contains("RN-31"), "Los identificadores no deben exponer identificadores técnicos de regla")
     }
+
+    // =========================================================================
+    // 31. PRUEBAS DE TRAZABILIDAD Y REGISTRO DE EVENTOS DE AUDITORÍA (RN-32)
+    // =========================================================================
+
+    @Test
+    fun rn32_registroLoginExitosoYFallido_auditaIntentosDeAcceso() = runBlocking {
+        // 1. Intento fallido
+        val eventoFallido = registrarAuditoriaUseCase.construirEventoLogin(
+            correo = "carlos@empresa.com",
+            exitoso = false,
+            motivoFallo = "Credenciales incorrectas"
+        )
+        registrarAuditoriaUseCase.registrarEvento(eventoFallido)
+
+        assertEquals(TipoAccionAuditoria.LOGIN_FALLIDO, eventoFallido.tipoAccion)
+        assertEquals("Credenciales incorrectas", eventoFallido.valorNuevo)
+        assertTrue(fakeAuditoriaRepository.eventos.value.any { it.id == eventoFallido.id })
+
+        // 2. Intento exitoso
+        val adminUser = UsuarioActual(
+            id = "admin_1",
+            nombre = "Carlos Admin",
+            correo = "carlos@empresa.com",
+            sucursal = "CENTRO",
+            iniciales = "CA",
+            cargo = "Administrador General",
+            rol = RolUsuario.ADMINISTRADOR_GENERAL
+        )
+        val eventoExitoso = registrarAuditoriaUseCase.construirEventoLogin(
+            correo = "carlos@empresa.com",
+            exitoso = true,
+            usuario = adminUser
+        )
+        registrarAuditoriaUseCase.registrarEvento(eventoExitoso)
+
+        assertEquals(TipoAccionAuditoria.LOGIN_EXITOSO, eventoExitoso.tipoAccion)
+        assertEquals("Sesión iniciada exitosamente", eventoExitoso.valorNuevo)
+        assertEquals("ADMINISTRADOR_GENERAL", eventoExitoso.rol)
+    }
+
+    @Test
+    fun rn32_creacionYModificacionEmpleado_preservaValorAnteriorYValorNuevo() = runBlocking {
+        val admin = UsuarioActual(id = "adm_1", nombre = "Diana Jefe", correo = "diana@empresa.com", sucursal = "CENTRO", iniciales = "DJ", cargo = "Admin", rol = RolUsuario.ADMINISTRADOR_GENERAL)
+
+        // 1. Creación
+        val empNuevo = Empleado(id = "emp_99", nombre = "Laura", apellido = "Mora", correo = "laura@empresa.com", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val eventoCreacion = registrarAuditoriaUseCase.construirEventoEmpleado(
+            actor = admin,
+            esNuevo = true,
+            empleadoAnterior = null,
+            empleadoNuevo = empNuevo
+        )
+        registrarAuditoriaUseCase.registrarEvento(eventoCreacion)
+
+        assertEquals(TipoAccionAuditoria.CREAR_EMPLEADO, eventoCreacion.tipoAccion)
+        assertEquals("-", eventoCreacion.valorAnterior)
+        assertTrue(eventoCreacion.valorNuevo.contains("BARISTA", ignoreCase = true))
+
+        // 2. Modificación (cambio de sucursal y estado)
+        val empModificado = empNuevo.copy(sucursal = "NORTE", estado = EstadoUsuario.INACTIVO)
+        val eventoModificacion = registrarAuditoriaUseCase.construirEventoEmpleado(
+            actor = admin,
+            esNuevo = false,
+            empleadoAnterior = empNuevo,
+            empleadoNuevo = empModificado
+        )
+        registrarAuditoriaUseCase.registrarEvento(eventoModificacion)
+
+        assertEquals(TipoAccionAuditoria.MODIFICAR_EMPLEADO, eventoModificacion.tipoAccion)
+        assertTrue(eventoModificacion.valorAnterior.contains("CENTRO"), "Valor anterior debe preservar CENTRO")
+        assertTrue(eventoModificacion.valorNuevo.contains("NORTE"), "Valor nuevo debe reflejar NORTE")
+        assertTrue(eventoModificacion.valorNuevo.contains("INACTIVO"), "Valor nuevo debe reflejar INACTIVO")
+    }
+
+    @Test
+    fun rn32_creacionYEdicionTurno_preservaParametrosAnterioresYNuevos() = runBlocking {
+        val admin = UsuarioActual(id = "adm_1", nombre = "Diana Jefe", correo = "diana@empresa.com", sucursal = "CENTRO", iniciales = "DJ", cargo = "Admin", rol = RolUsuario.ADMINISTRADOR_GENERAL)
+
+        val turnoPrevio = TurnoTemplate(id = "t_1", nombre = "Apertura Temprana", horaInicio = "06:00", horaFin = "14:00")
+        val turnoEditado = turnoPrevio.copy(horaInicio = "06:30", horaFin = "14:30")
+
+        val eventoTurno = registrarAuditoriaUseCase.construirEventoTurno(
+            actor = admin,
+            esNuevo = false,
+            turnoAnterior = turnoPrevio,
+            turnoNuevo = turnoEditado
+        )
+        registrarAuditoriaUseCase.registrarEvento(eventoTurno)
+
+        assertEquals(TipoAccionAuditoria.MODIFICAR_TURNO, eventoTurno.tipoAccion)
+        assertTrue(eventoTurno.valorAnterior.contains("06:00-14:00"))
+        assertTrue(eventoTurno.valorNuevo.contains("06:30-14:30"))
+    }
+
+    @Test
+    fun rn32_publicacionMallaSemanal_auditaCambioDeBorradorAPublicada() = runBlocking {
+        val admin = UsuarioActual(id = "adm_1", nombre = "Diana Jefe", correo = "diana@empresa.com", sucursal = "CENTRO", iniciales = "DJ", cargo = "Admin", rol = RolUsuario.ADMINISTRADOR_SUCURSAL)
+
+        val eventoMalla = registrarAuditoriaUseCase.construirEventoPublicacionMalla(
+            actor = admin,
+            semanaTexto = "09/11/2026 - 15/11/2026",
+            sucursal = "CENTRO",
+            totalAsignaciones = 35
+        )
+        registrarAuditoriaUseCase.registrarEvento(eventoMalla)
+
+        assertEquals(TipoAccionAuditoria.PUBLICAR_MALLA, eventoMalla.tipoAccion)
+        assertEquals("BORRADOR", eventoMalla.valorAnterior)
+        assertEquals("PUBLICADA", eventoMalla.valorNuevo)
+        assertTrue(eventoMalla.detalles.contains("35 turnos"))
+    }
+
+    @Test
+    fun rn32_resolucionCambiosTurno_auditaAprobacionRechazoYCancelacion() = runBlocking {
+        val admin = UsuarioActual(id = "adm_1", nombre = "Diana Jefe", correo = "diana@empresa.com", sucursal = "CENTRO", iniciales = "DJ", cargo = "Admin", rol = RolUsuario.ADMINISTRADOR_SUCURSAL)
+
+        // Aprobación
+        val evAprobacion = registrarAuditoriaUseCase.construirEventoCambioTurno(
+            actor = admin,
+            accion = TipoAccionAuditoria.APROBAR_CAMBIO_TURNO,
+            solicitudId = "sol_42",
+            solicitante = "Carlos Ruiz",
+            companero = "María López",
+            sucursal = "CENTRO",
+            motivoOComentario = "Aprobada por necesidad de cobertura"
+        )
+        registrarAuditoriaUseCase.registrarEvento(evAprobacion)
+
+        assertEquals(TipoAccionAuditoria.APROBAR_CAMBIO_TURNO, evAprobacion.tipoAccion)
+        assertEquals("ACEPTADA_COMPANERO", evAprobacion.valorAnterior)
+        assertEquals("APROBADA", evAprobacion.valorNuevo)
+
+        // Rechazo
+        val evRechazo = registrarAuditoriaUseCase.construirEventoCambioTurno(
+            actor = admin,
+            accion = TipoAccionAuditoria.RECHAZAR_CAMBIO_TURNO,
+            solicitudId = "sol_43",
+            solicitante = "Carlos Ruiz",
+            companero = "María López",
+            sucursal = "CENTRO",
+            motivoOComentario = "Conflicto con turno siguiente"
+        )
+        registrarAuditoriaUseCase.registrarEvento(evRechazo)
+
+        assertEquals(TipoAccionAuditoria.RECHAZAR_CAMBIO_TURNO, evRechazo.tipoAccion)
+        assertEquals("RECHAZADA", evRechazo.valorNuevo)
+    }
+
+    @Test
+    fun rn32_filtrarAuditoria_permiteConsultarPorTipoSucursalFechaYTexto() {
+        val lista = listOf(
+            EventoAuditoria(id = "1", fechaHoraIso = "2026-11-07 10:00:00", sucursal = "CENTRO", tipoAccion = TipoAccionAuditoria.LOGIN_EXITOSO, usuarioNombre = "Diana", detalles = "Ingreso normal"),
+            EventoAuditoria(id = "2", fechaHoraIso = "2026-11-07 11:00:00", sucursal = "NORTE", tipoAccion = TipoAccionAuditoria.LOGIN_FALLIDO, usuarioNombre = "Pedro", detalles = "Clave errónea"),
+            EventoAuditoria(id = "3", fechaHoraIso = "2026-11-08 12:00:00", sucursal = "CENTRO", tipoAccion = TipoAccionAuditoria.PUBLICAR_MALLA, usuarioNombre = "Diana", detalles = "Malla semanal 40 turnos")
+        )
+
+        // Filtrar por sucursal
+        val centro = filtrarAuditoriaUseCase.filtrar(lista, sucursal = "CENTRO")
+        assertEquals(2, centro.size)
+
+        // Filtrar por tipo de acción
+        val fallidos = filtrarAuditoriaUseCase.filtrar(lista, tipoAccion = TipoAccionAuditoria.LOGIN_FALLIDO)
+        assertEquals(1, fallidos.size)
+        assertEquals("2", fallidos.first().id)
+
+        // Filtrar por fecha
+        val soloHoy = filtrarAuditoriaUseCase.filtrar(lista, filtroFecha = "2026-11-07")
+        assertEquals(2, soloHoy.size)
+
+        // Filtrar por texto libre
+        val busqueda = filtrarAuditoriaUseCase.filtrar(lista, filtroTexto = "Malla semanal")
+        assertEquals(1, busqueda.size)
+        assertEquals("3", busqueda.first().id)
+    }
+
+    @Test
+    fun rn32_eventosAuditoria_noContienenIdentificadoresTecnicosDeRegla() {
+        val ev = registrarAuditoriaUseCase.construirEventoLogin("test@empresa.com", false, motivoFallo = "Contraseña inválida")
+        assertFalse(ev.valorNuevo.contains("RN-32"), "No debe exponer identificadores técnicos de regla")
+        assertFalse(ev.detalles.contains("RN-32"), "No debe exponer identificadores técnicos de regla")
+    }
 }
 
 // =========================================================================
@@ -4599,6 +4789,29 @@ private class FakeNovedadRepository(
         actual.removeAll { it.id == idNovedad }
         _novedades.value = actual
         return Result.success(Unit)
+    }
+}
+
+private class FakeAuditoriaRepository(
+    eventosIniciales: List<EventoAuditoria> = emptyList()
+) : AuditoriaRepositoryContract {
+    private val _eventos = MutableStateFlow(eventosIniciales)
+    override val eventos: StateFlow<List<EventoAuditoria>> = _eventos
+
+    override fun iniciarSincronizacionFirestore(forzar: Boolean) {}
+    override fun detenerSincronizacion() {}
+
+    override suspend fun registrarEvento(evento: EventoAuditoria): Result<Unit> {
+        val actual = _eventos.value.toMutableList()
+        actual.add(0, evento)
+        _eventos.value = actual
+        return Result.success(Unit)
+    }
+
+    override fun registrarEventoEnBackground(evento: EventoAuditoria) {
+        val actual = _eventos.value.toMutableList()
+        actual.add(0, evento)
+        _eventos.value = actual
     }
 }
 

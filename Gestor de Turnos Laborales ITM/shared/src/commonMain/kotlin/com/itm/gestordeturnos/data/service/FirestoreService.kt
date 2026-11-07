@@ -3,6 +3,7 @@ package com.itm.gestordeturnos.data.service
 import com.itm.gestordeturnos.data.mock.MockDataProviders
 import com.itm.gestordeturnos.domain.model.AsignacionTurno
 import com.itm.gestordeturnos.domain.model.Empleado
+import com.itm.gestordeturnos.domain.model.EventoAuditoria
 import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.model.NotificacionIncumplimiento
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
@@ -431,6 +432,47 @@ object FirestoreService {
             } else false
         } catch (_: Exception) {
             false
+        }
+    }
+
+    // --- Auditoría y Trazabilidad (RN-32) ---
+    fun observarEventosAuditoria(): Flow<List<EventoAuditoria>> {
+        val firestore = db ?: return emptyFlow()
+        return firestore.collection("auditoria").snapshots
+            .map { snapshot ->
+                snapshot.documents.mapNotNull { doc ->
+                    runCatching {
+                        val ev = doc.data<EventoAuditoria>()
+                        if (ev.id.isBlank()) ev.copy(id = doc.id) else ev
+                    }.getOrNull()
+                }
+            }
+            .catch { emit(emptyList()) }
+    }
+
+    suspend fun obtenerEventosAuditoria(): List<EventoAuditoria> {
+        val firestore = db ?: return emptyList()
+        return try {
+            firestore.collection("auditoria").get().documents.mapNotNull { doc ->
+                runCatching {
+                    val ev = doc.data<EventoAuditoria>()
+                    if (ev.id.isBlank()) ev.copy(id = doc.id) else ev
+                }.getOrNull()
+            }
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    suspend fun guardarEventoAuditoria(evento: EventoAuditoria): Result<Unit> {
+        val firestore = db ?: return Result.failure(IllegalStateException("Firebase Firestore no está inicializado"))
+        return try {
+            val id = evento.id.ifBlank { "audit_${kotlin.time.Clock.System.now().toEpochMilliseconds()}_${Random.nextInt(1000, 9999)}" }
+            val normalizado = evento.copy(id = id)
+            firestore.collection("auditoria").document(id).set(normalizado)
+            Result.success(Unit)
+        } catch (e: Throwable) {
+            Result.failure(e)
         }
     }
 }

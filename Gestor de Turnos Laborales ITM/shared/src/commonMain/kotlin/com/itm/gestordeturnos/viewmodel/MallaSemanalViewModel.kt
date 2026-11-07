@@ -99,7 +99,8 @@ class MallaSemanalViewModel(
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
     private val verificarCoberturaUseCase: VerificarCoberturaDiariaUseCase = VerificarCoberturaDiariaUseCase(),
     private val validarAsignacionUseCase: ValidarAsignacionTurnoUseCase = ValidarAsignacionTurnoUseCase(),
-    private val consultarHorarioUseCase: ConsultarHorarioEmpleadoUseCase = ConsultarHorarioEmpleadoUseCase()
+    private val consultarHorarioUseCase: ConsultarHorarioEmpleadoUseCase = ConsultarHorarioEmpleadoUseCase(),
+    private val registrarAuditoriaUseCase: com.itm.gestordeturnos.domain.usecase.RegistrarEventoAuditoriaUseCase = com.itm.gestordeturnos.domain.usecase.RegistrarEventoAuditoriaUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MallaSemanalState())
     val uiState: StateFlow<MallaSemanalState> = _uiState.asStateFlow()
@@ -431,6 +432,19 @@ class MallaSemanalViewModel(
         }
         guardarCambiosSiHayPendientes(forzarPublicada = true)
         actualizarFilasPorSucursal(_uiState.value.sucursal)
+
+        // RN-32: Registrar auditoría de publicación de la malla semanal
+        val actor = SessionManager.usuarioActivo
+        val totalTurnos = _uiState.value.filas.sumOf { fila ->
+            fila.turnos.count { !it.esDescanso && it.tipo.isNotBlank() }
+        }
+        val eventoMalla = registrarAuditoriaUseCase.construirEventoPublicacionMalla(
+            actor = actor,
+            semanaTexto = _uiState.value.rangoSemana,
+            sucursal = _uiState.value.sucursal,
+            totalAsignaciones = totalTurnos
+        )
+        registrarAuditoriaUseCase.registrarEventoEnBackground(eventoMalla)
     }
 
     fun seleccionarFechaSemana(fecha: LocalDate) {

@@ -158,7 +158,8 @@ class MainViewModel(
                 OpcionMenu("Malla semanal", "malla"),
                 OpcionMenu("Novedades", "novedades"),
                 OpcionMenu("Cambios de turno", "cambios"),
-                OpcionMenu("Asistencia", "asistencia")
+                OpcionMenu("Asistencia", "asistencia"),
+                OpcionMenu("Auditoría", "auditoria")
             )
             RolUsuario.ADMINISTRADOR_SUCURSAL -> listOf(
                 OpcionMenu("Panel", "panel"),
@@ -166,7 +167,8 @@ class MainViewModel(
                 OpcionMenu("Malla semanal", "malla"),
                 OpcionMenu("Novedades", "novedades"),
                 OpcionMenu("Cambios de turno", "cambios"),
-                OpcionMenu("Asistencia", "asistencia")
+                OpcionMenu("Asistencia", "asistencia"),
+                OpcionMenu("Auditoría", "auditoria")
             )
             RolUsuario.EMPLEADO -> listOf(
                 OpcionMenu("Mi horario", "mi_horario"),

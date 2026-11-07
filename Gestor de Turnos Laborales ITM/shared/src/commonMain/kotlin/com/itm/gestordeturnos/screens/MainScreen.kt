@@ -49,6 +49,7 @@ import com.itm.gestordeturnos.CafeDarkBrown
 import com.itm.gestordeturnos.components.DrawerMenuItem
 import com.itm.gestordeturnos.components.UserProfileInfo
 import com.itm.gestordeturnos.viewmodel.AsistenciaViewModel
+import com.itm.gestordeturnos.viewmodel.AuditoriaViewModel
 import com.itm.gestordeturnos.viewmodel.CambiosTurnoViewModel
 import com.itm.gestordeturnos.viewmodel.EmpleadosViewModel
 import com.itm.gestordeturnos.viewmodel.MainViewModel
@@ -258,6 +259,7 @@ fun DashboardNavHost(navController: NavHostController, usuario: UsuarioActual?, 
         composable("asistencia") { AsistenciaScreen(viewModel = viewModel { AsistenciaViewModel() }) }
         composable("reportar_novedad") { ReportarNovedadScreen(viewModel = viewModel{ ReportarNovedadViewModel() }) }
         composable("marcar_asistencia") { MarcarAsistenciaScreen(viewModel = viewModel { MarcarAsistenciaViewModel() }) }
+        composable("auditoria") { AuditoriaScreen(viewModel = viewModel { AuditoriaViewModel() }) }
         composable("cambiar_contrasena") {
             CambiarContrasenaScreen(
                 viewModel = viewModel { com.itm.gestordeturnos.viewmodel.CambiarContrasenaViewModel() },
