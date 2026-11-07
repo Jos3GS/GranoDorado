@@ -13,6 +13,8 @@ import com.itm.gestordeturnos.domain.model.RegistroAsistencia
 import com.itm.gestordeturnos.domain.repository.AsistenciaRepositoryContract
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,7 +47,8 @@ data class MarcarAsistenciaState(
 class MarcarAsistenciaViewModel(
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
-    private val asistenciaRepository: AsistenciaRepositoryContract = AsistenciaRepository
+    private val asistenciaRepository: AsistenciaRepositoryContract = AsistenciaRepository,
+    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MarcarAsistenciaState())
     val uiState: StateFlow<MarcarAsistenciaState> = _uiState.asStateFlow()
@@ -188,6 +191,12 @@ class MarcarAsistenciaViewModel(
     }
 
     fun marcarEntrada() {
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(empleadoActivo, "asistencia")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeAviso = validacionActivo.mensaje) }
+            return
+        }
+
         val horaActual = obtenerHoraActualTexto()
         val estadoActual = _uiState.value
         val empId = empleadoActivo?.id ?: "emp_1"
@@ -241,6 +250,12 @@ class MarcarAsistenciaViewModel(
     }
 
     fun iniciarDescanso() {
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(empleadoActivo, "asistencia")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeAviso = validacionActivo.mensaje) }
+            return
+        }
+
         val horaActual = obtenerHoraActualTexto()
         val estadoActual = _uiState.value
         val empId = empleadoActivo?.id ?: "emp_1"
@@ -276,6 +291,12 @@ class MarcarAsistenciaViewModel(
     }
 
     fun finalizarDescanso() {
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(empleadoActivo, "asistencia")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeAviso = validacionActivo.mensaje) }
+            return
+        }
+
         val horaActual = obtenerHoraActualTexto()
         val estadoActual = _uiState.value
         val empId = empleadoActivo?.id ?: "emp_1"
@@ -311,6 +332,12 @@ class MarcarAsistenciaViewModel(
     }
 
     fun marcarSalida() {
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(empleadoActivo, "asistencia")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeAviso = validacionActivo.mensaje) }
+            return
+        }
+
         val horaActual = obtenerHoraActualTexto()
         val estadoActual = _uiState.value
         val empId = empleadoActivo?.id ?: "emp_1"

@@ -11,9 +11,11 @@ import com.itm.gestordeturnos.domain.usecase.EvaluacionIntentoLogin
 import com.itm.gestordeturnos.domain.usecase.IntercambiarTurnosUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionAdminSucursalEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
 import com.itm.gestordeturnos.domain.usecase.ValidarContrasenaFirebaseAuthUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarModificacionRolEstadoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarPermisosAdminSucursalEmpleadoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarRecuperacionContrasenaUseCase
@@ -792,6 +794,95 @@ class SharedCommonTest {
             empleadoActualizado = empleadoOriginal.copy(cargo = Cargo.ADMINISTRADOR_GENERAL)
         )
         assertIs<ValidacionAdminSucursalEmpleadoResult.Valida>(resAsignarRol)
+    }
+
+    // =========================================================================
+    // 10. PRUEBAS DE BLOQUEO DE ACCIONES A EMPLEADOS INACTIVOS (RN-11)
+    // =========================================================================
+
+    @Test
+    fun validarEstadoEmpleadoActivo_cuandoEmpleadoActivo_permiteAccionesOperativas() {
+        val useCase = ValidarEstadoEmpleadoActivoUseCase()
+        val empleadoActivo = Empleado(
+            id = "emp_activo_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            documento = 102030L,
+            correo = "carlos.ruiz@granodorado.com",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        assertIs<ValidacionEstadoEmpleadoResult.Activo>(useCase.validar(empleadoActivo, "cambio_turno"))
+        assertIs<ValidacionEstadoEmpleadoResult.Activo>(useCase.validar(empleadoActivo, "novedad"))
+        assertIs<ValidacionEstadoEmpleadoResult.Activo>(useCase.validar(empleadoActivo, "asistencia"))
+        assertIs<ValidacionEstadoEmpleadoResult.Activo>(useCase.validar(empleadoActivo, "clave"))
+    }
+
+    @Test
+    fun validarEstadoEmpleadoActivo_cuandoEmpleadoInactivo_bloqueaAccionesConMensajeEspecifico() {
+        val useCase = ValidarEstadoEmpleadoActivoUseCase()
+        val empleadoInactivo = Empleado(
+            id = "emp_inactivo_1",
+            nombre = "Laura",
+            apellido = "Mejia",
+            documento = 405060L,
+            correo = "laura.mejia@granodorado.com",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.INACTIVO
+        )
+
+        // 1. Bloqueo de cambio de turno
+        val resCambio = useCase.validar(empleadoInactivo, "cambio_turno")
+        val errorCambio = assertIs<ValidacionEstadoEmpleadoResult.Inactivo>(resCambio)
+        assertTrue(errorCambio.mensaje.contains("No puedes solicitar ni gestionar cambios de turno"))
+
+        // 2. Bloqueo de reporte de novedad
+        val resNovedad = useCase.validar(empleadoInactivo, "novedad")
+        val errorNovedad = assertIs<ValidacionEstadoEmpleadoResult.Inactivo>(resNovedad)
+        assertTrue(errorNovedad.mensaje.contains("No puedes reportar ni modificar novedades"))
+
+        // 3. Bloqueo de marcas de asistencia
+        val resAsistencia = useCase.validar(empleadoInactivo, "asistencia")
+        val errorAsistencia = assertIs<ValidacionEstadoEmpleadoResult.Inactivo>(resAsistencia)
+        assertTrue(errorAsistencia.mensaje.contains("No puedes registrar marcas de asistencia"))
+
+        // 4. Bloqueo de cambio de contraseña
+        val resClave = useCase.validar(empleadoInactivo, "clave")
+        val errorClave = assertIs<ValidacionEstadoEmpleadoResult.Inactivo>(resClave)
+        assertTrue(errorClave.mensaje.contains("No puedes cambiar tu contraseña"))
+    }
+
+    @Test
+    fun validarEstadoEmpleadoActivo_conservaDocumentoCorreoEHistorialAlInactivarYReactivar() {
+        val empleadoInicial = Empleado(
+            id = "emp_historial_1",
+            nombre = "Andres",
+            apellido = "Gomez",
+            documento = 99887766L,
+            correo = "andres.gomez@granodorado.com",
+            telefono = "3001112233",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO,
+            fechaIngreso = "10/01/2024",
+            sucursal = "CENTRO"
+        )
+
+        // Se inactiva el empleado
+        val empleadoInactivado = empleadoInicial.copy(estado = EstadoUsuario.INACTIVO)
+        assertEquals(empleadoInicial.id, empleadoInactivado.id)
+        assertEquals(empleadoInicial.documento, empleadoInactivado.documento)
+        assertEquals(empleadoInicial.correo, empleadoInactivado.correo)
+        assertEquals(empleadoInicial.fechaIngreso, empleadoInactivado.fechaIngreso)
+        assertEquals(EstadoUsuario.INACTIVO, empleadoInactivado.estado)
+
+        // Se reactiva el empleado
+        val empleadoReactivado = empleadoInactivado.copy(estado = EstadoUsuario.ACTIVO)
+        assertEquals(empleadoInicial.id, empleadoReactivado.id)
+        assertEquals(empleadoInicial.documento, empleadoReactivado.documento)
+        assertEquals(empleadoInicial.correo, empleadoReactivado.correo)
+        assertEquals(empleadoInicial.fechaIngreso, empleadoReactivado.fechaIngreso)
+        assertEquals(EstadoUsuario.ACTIVO, empleadoReactivado.estado)
     }
 }
 

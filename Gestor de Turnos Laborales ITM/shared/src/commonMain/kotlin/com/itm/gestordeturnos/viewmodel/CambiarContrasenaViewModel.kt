@@ -2,10 +2,14 @@ package com.itm.gestordeturnos.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itm.gestordeturnos.data.repository.EmpleadoRepository
 import com.itm.gestordeturnos.data.service.AuthService
 import com.itm.gestordeturnos.data.service.FirebaseAuthService
+import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidarContrasenaFirebaseAuthUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +28,9 @@ data class CambiarContrasenaState(
 
 class CambiarContrasenaViewModel(
     private val authService: AuthService = FirebaseAuthService(),
-    private val validadorClave: ValidarContrasenaFirebaseAuthUseCase = ValidarContrasenaFirebaseAuthUseCase()
+    private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
+    private val validadorClave: ValidarContrasenaFirebaseAuthUseCase = ValidarContrasenaFirebaseAuthUseCase(),
+    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase(empleadoRepository)
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CambiarContrasenaState())
@@ -43,6 +49,13 @@ class CambiarContrasenaViewModel(
     }
 
     fun cambiarContrasena(onExito: (() -> Unit)? = null) {
+        val usuario = SessionManager.usuarioActivo
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validarPorIdOCorreo(usuario?.id, usuario?.correo, "clave")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeError = validacionActivo.mensaje) }
+            return
+        }
+
         val estado = _uiState.value
         val validacion = validadorClave.validar(
             claveActual = estado.claveActual,

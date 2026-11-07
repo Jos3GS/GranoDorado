@@ -13,6 +13,8 @@ import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,7 +54,8 @@ data class ReportarNovedadState(
 class ReportarNovedadViewModel(
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
-    private val novedadRepository: NovedadRepositoryContract = NovedadRepository
+    private val novedadRepository: NovedadRepositoryContract = NovedadRepository,
+    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReportarNovedadState())
     val uiState: StateFlow<ReportarNovedadState> = _uiState.asStateFlow()
@@ -345,6 +348,14 @@ class ReportarNovedadViewModel(
         }
 
         val emp = resolverEmpleado(listaEmpleados)
+
+        // RN-11: El empleado no puede realizar acciones si está inactivo
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(emp, "novedad")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(errorMensaje = validacionActivo.mensaje) }
+            return
+        }
+
         val empId = emp?.id ?: (SessionManager.usuarioActivo?.id ?: "emp_1")
         val empNombre = emp?.let {
             if (it.apellido.isNotBlank()) "${it.nombre} ${it.apellido}".trim() else it.nombre

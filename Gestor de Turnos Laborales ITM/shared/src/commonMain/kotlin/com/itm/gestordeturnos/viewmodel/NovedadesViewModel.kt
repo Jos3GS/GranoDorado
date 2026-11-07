@@ -14,6 +14,8 @@ import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -116,7 +118,8 @@ data class NovedadesState(
 class NovedadesViewModel(
     private val novedadRepository: NovedadRepositoryContract = NovedadRepository,
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
-    private val turnoRepository: TurnoRepositoryContract = TurnoRepository
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
+    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(NovedadesState())
     val uiState: StateFlow<NovedadesState> = _uiState.asStateFlow()
@@ -206,7 +209,14 @@ class NovedadesViewModel(
     }
 
     fun revisarNovedadConComentario(idNovedad: String, comentario: String) {
-        val revisor = SessionManager.usuarioActivo?.let {
+        val usuario = SessionManager.usuarioActivo
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validarPorUsuario(usuario, _uiState.value.empleados, "novedad")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeError = validacionActivo.mensaje) }
+            return
+        }
+
+        val revisor = usuario?.let {
             if (it.nombre.isNotBlank()) "${it.nombre} (${it.rol.titulo})" else it.rol.titulo
         } ?: "Administrador"
 
@@ -232,6 +242,13 @@ class NovedadesViewModel(
         horaReal: String,
         descripcion: String
     ): Boolean {
+        val usuario = SessionManager.usuarioActivo
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validarPorUsuario(usuario, _uiState.value.empleados, "novedad")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeError = validacionActivo.mensaje) }
+            return false
+        }
+
         if (descripcion.isBlank()) {
             _uiState.update { it.copy(mensajeError = "La descripción de la novedad es obligatoria (CA-14.2).") }
             return false

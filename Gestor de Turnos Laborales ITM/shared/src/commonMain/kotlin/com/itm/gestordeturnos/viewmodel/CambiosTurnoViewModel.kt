@@ -17,6 +17,8 @@ import com.itm.gestordeturnos.domain.model.TurnoSeleccionable
 import com.itm.gestordeturnos.domain.repository.CambiosTurnoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,7 +45,8 @@ data class CambiosTurnoState(
 class CambiosTurnoViewModel(
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
-    private val cambiosTurnoRepository: CambiosTurnoRepositoryContract = CambiosTurnoRepository
+    private val cambiosTurnoRepository: CambiosTurnoRepositoryContract = CambiosTurnoRepository,
+    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CambiosTurnoState())
     val uiState: StateFlow<CambiosTurnoState> = _uiState.asStateFlow()
@@ -275,6 +278,14 @@ class CambiosTurnoViewModel(
 
         val usuario = SessionManager.usuarioActivo
         val emp = resolverEmpleado(usuario, empleadoRepository.empleados.value)
+
+        // RN-11: El empleado no puede realizar acciones si está inactivo
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(emp, "cambio_turno")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeFeedback = validacionActivo.mensaje) }
+            return
+        }
+
         val empId = emp?.id ?: usuario?.id ?: "emp_1"
         val empNombre = emp?.let {
             if (it.apellido.isNotBlank()) "${it.nombre} ${it.apellido}".trim() else it.nombre
@@ -312,10 +323,26 @@ class CambiosTurnoViewModel(
     }
 
     fun aceptarSolicitud(solicitud: SolicitudCambioTurno) {
+        val usuario = SessionManager.usuarioActivo
+        val emp = resolverEmpleado(usuario, empleadoRepository.empleados.value)
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(emp, "cambio_turno")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeFeedback = validacionActivo.mensaje) }
+            return
+        }
+
         cambiosTurnoRepository.aceptarPorCompanero(solicitud.id)
     }
 
     fun rechazarSolicitud(solicitud: SolicitudCambioTurno, motivo: String) {
+        val usuario = SessionManager.usuarioActivo
+        val emp = resolverEmpleado(usuario, empleadoRepository.empleados.value)
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(emp, "cambio_turno")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeFeedback = validacionActivo.mensaje) }
+            return
+        }
+
         val motivoFinal = motivo.ifBlank { "Rechazada" }
         cambiosTurnoRepository.rechazarSolicitud(solicitud.id, motivoFinal)
     }
@@ -325,6 +352,14 @@ class CambiosTurnoViewModel(
     }
 
     fun aprobarSolicitud(solicitud: SolicitudCambioTurno) {
+        val usuario = SessionManager.usuarioActivo
+        val emp = resolverEmpleado(usuario, empleadoRepository.empleados.value)
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(emp, "cambio_turno")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeFeedback = validacionActivo.mensaje) }
+            return
+        }
+
         cambiosTurnoRepository.aprobarEIntercambiar(solicitud)
     }
 }
