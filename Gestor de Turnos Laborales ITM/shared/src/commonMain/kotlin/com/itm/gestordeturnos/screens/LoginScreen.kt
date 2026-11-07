@@ -188,12 +188,26 @@ fun FormularioLogin(
                     .border(1.dp, Color(0xFFF5C6CB), RoundedCornerShape(2.dp))
                     .padding(12.dp)
             ) {
-                Text(state.mensajeError, color = Color(0xFF8B3A3A), fontSize = 12.sp)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(state.mensajeError, color = Color(0xFF8B3A3A), fontSize = 12.sp)
+                    if (!state.cuentaBloqueada && state.intentosFallidos in 1..4) {
+                        Text(
+                            text = "Intentos fallidos: ${state.intentosFallidos} de 5",
+                            color = Color(0xFF8B3A3A).copy(alpha = 0.85f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
         }
 
         PrimarySolidButton(
-            text = if (state.isLoading) "Iniciando sesión..." else "Iniciar sesión",
+            text = when {
+                state.isLoading -> "Iniciando sesión..."
+                state.cuentaBloqueada -> "Cuenta bloqueada (${state.minutosRestantesBloqueo} min)"
+                else -> "Iniciar sesión"
+            },
             onClick = onLoginClick,
             enabled = !state.isLoading
         )

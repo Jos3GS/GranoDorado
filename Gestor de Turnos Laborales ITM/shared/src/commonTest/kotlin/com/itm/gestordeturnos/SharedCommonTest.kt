@@ -5,6 +5,8 @@ import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import com.itm.gestordeturnos.domain.usecase.AplicarIncapacidadEnTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.CalcularDescansosTurnoUseCase
+import com.itm.gestordeturnos.domain.usecase.ControlIntentosLoginUseCase
+import com.itm.gestordeturnos.domain.usecase.EvaluacionIntentoLogin
 import com.itm.gestordeturnos.domain.usecase.IntercambiarTurnosUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
 import com.itm.gestordeturnos.domain.usecase.VerificarCoberturaDiariaUseCase
@@ -295,6 +297,64 @@ class SharedCommonTest {
         assertEquals("Incapacidad", asigActualizada.tipoTurno)
         assertEquals("-", asigActualizada.horario)
         assertTrue(asigActualizada.modificadoTrasPublicar)
+    }
+
+    // =========================================================================
+    // 4. PRUEBAS DE CONTROL DE INTENTOS Y BLOQUEO DE LOGIN (RN-02)
+    // =========================================================================
+
+    @Test
+    fun controlIntentosLogin_bloqueaCuentaPor15MinutosAlQuintoIntentoYDesbloqueaTrasExpirar() {
+        var relojSimulado = 1_000_000L
+        val useCase = ControlIntentosLoginUseCase(relojMillis = { relojSimulado })
+        val correo = "Camila.Rios@granodorado.com"
+
+        // Intentos 1 al 4: devuelve FallidoRegistrado con el mensaje unificado de RN-02
+        for (intento in 1..4) {
+            val res = useCase.registrarIntentoFallido(correo)
+            val fallo = assertIs<EvaluacionIntentoLogin.FallidoRegistrado>(res)
+            assertEquals(intento, fallo.intentosAcumulados)
+            assertEquals(5 - intento, fallo.intentosRestantes)
+            assertEquals(
+                "Los datos de acceso son errados o la cuenta está inactiva.",
+                fallo.mensaje
+            )
+        }
+
+        // 5to intento consecutivo (incluso con variación de mayúsculas): activa bloqueo de 15 minutos
+        val quintoIntento = useCase.registrarIntentoFallido(correo.lowercase())
+        val bloqueo = assertIs<EvaluacionIntentoLogin.CuentaBloqueada>(quintoIntento)
+        assertEquals(15, bloqueo.minutosRestantes)
+        assertTrue(bloqueo.mensaje.contains("bloqueada temporalmente"))
+
+        // Avanzar 10 minutos (sigue bloqueada con 5 minutos restantes)
+        relojSimulado += 10 * 60_000L
+        val verificacionDuranteBloqueo = useCase.verificarAntesDeIntentar(correo)
+        val sigueBloqueada = assertIs<EvaluacionIntentoLogin.CuentaBloqueada>(verificacionDuranteBloqueo)
+        assertEquals(5, sigueBloqueada.minutosRestantes)
+
+        // Avanzar otros 5 minutos + 1 ms (total > 15 minutos): el bloqueo expira y permite intentar
+        relojSimulado += (5 * 60_000L) + 1L
+        val verificacionPostBloqueo = useCase.verificarAntesDeIntentar(correo)
+        assertIs<EvaluacionIntentoLogin.Permitido>(verificacionPostBloqueo)
+    }
+
+    @Test
+    fun controlIntentosLogin_reiniciaContadorTrasLoginExitosoOCambioDeClave() {
+        val useCase = ControlIntentosLoginUseCase(relojMillis = { 1_000_000L })
+        val correo = "barista@granodorado.com"
+
+        repeat(4) { useCase.registrarIntentoFallido(correo) }
+        assertEquals(4, useCase.obtenerEstado(correo).intentosFallidos)
+
+        // Se reinicia el contador por login exitoso o solicitud de cambio de contraseña
+        useCase.reiniciarContador(correo)
+        assertEquals(0, useCase.obtenerEstado(correo).intentosFallidos)
+
+        // El siguiente fallo vuelve a contar desde 1
+        val nuevoFallo = useCase.registrarIntentoFallido(correo)
+        val fallo = assertIs<EvaluacionIntentoLogin.FallidoRegistrado>(nuevoFallo)
+        assertEquals(1, fallo.intentosAcumulados)
     }
 }
 

@@ -36,6 +36,9 @@ data class LoginState(
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
     val mensajeError: String? = null,
+    val intentosFallidos: Int = 0,
+    val cuentaBloqueada: Boolean = false,
+    val minutosRestantesBloqueo: Int = 0,
     val feedbackRecuperacion: FeedbackRecuperacion? = null,
     val isRecuperandoClave: Boolean = false
 )
@@ -49,7 +52,14 @@ class LoginViewModel(
     val uiState: StateFlow<LoginState> = _uiState.asStateFlow()
 
     fun onEmailChanged(nuevoEmail: String) {
-        _uiState.update { it.copy(email = nuevoEmail, mensajeError = null) }
+        _uiState.update {
+            it.copy(
+                email = nuevoEmail,
+                mensajeError = null,
+                cuentaBloqueada = false,
+                minutosRestantesBloqueo = 0
+            )
+        }
     }
 
     fun onPasswordChanged(nuevoPassword: String) {
@@ -78,10 +88,27 @@ class LoginViewModel(
                     SessionManager.usuarioActivo = resultado.usuario
                     empleadoRepository.iniciarSincronizacionFirestore()
                     turnoRepository.iniciarSincronizacionFirestore()
-                    _uiState.update { it.copy(isLoading = false, isSuccess = true, mensajeError = null) }
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isSuccess = true,
+                            mensajeError = null,
+                            intentosFallidos = 0,
+                            cuentaBloqueada = false,
+                            minutosRestantesBloqueo = 0
+                        )
+                    }
                 }
                 is AuthResult.Error -> {
-                    _uiState.update { it.copy(isLoading = false, mensajeError = resultado.mensaje) }
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            mensajeError = resultado.mensaje,
+                            intentosFallidos = resultado.intentosFallidos,
+                            cuentaBloqueada = resultado.bloqueada,
+                            minutosRestantesBloqueo = resultado.minutosRestantesBloqueo
+                        )
+                    }
                 }
             }
         }
@@ -97,10 +124,27 @@ class LoginViewModel(
                     SessionManager.usuarioActivo = resultado.usuario
                     empleadoRepository.iniciarSincronizacionFirestore()
                     turnoRepository.iniciarSincronizacionFirestore()
-                    _uiState.update { it.copy(isLoading = false, isSuccess = true, mensajeError = null) }
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isSuccess = true,
+                            mensajeError = null,
+                            intentosFallidos = 0,
+                            cuentaBloqueada = false,
+                            minutosRestantesBloqueo = 0
+                        )
+                    }
                 }
                 is AuthResult.Error -> {
-                    _uiState.update { it.copy(isLoading = false, mensajeError = resultado.mensaje) }
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            mensajeError = resultado.mensaje,
+                            intentosFallidos = resultado.intentosFallidos,
+                            cuentaBloqueada = resultado.bloqueada,
+                            minutosRestantesBloqueo = resultado.minutosRestantesBloqueo
+                        )
+                    }
                 }
             }
         }
@@ -108,6 +152,7 @@ class LoginViewModel(
 
     /**
      * Inicia el proceso de recuperación de contraseña en Firebase Auth.
+     * Si el envío es exitoso, reinicia el estado de intentos fallidos/bloqueo en UI (RN-02).
      */
     fun recuperarContrasena() {
         val emailIngresado = _uiState.value.email.trim()
@@ -151,7 +196,11 @@ class LoginViewModel(
             _uiState.update {
                 it.copy(
                     isRecuperandoClave = false,
-                    feedbackRecuperacion = feedback
+                    feedbackRecuperacion = feedback,
+                    intentosFallidos = if (resultado.isSuccess) 0 else it.intentosFallidos,
+                    cuentaBloqueada = if (resultado.isSuccess) false else it.cuentaBloqueada,
+                    minutosRestantesBloqueo = if (resultado.isSuccess) 0 else it.minutosRestantesBloqueo,
+                    mensajeError = if (resultado.isSuccess) null else it.mensajeError
                 )
             }
         }
