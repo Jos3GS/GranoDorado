@@ -20,8 +20,10 @@ import com.itm.gestordeturnos.domain.repository.CambiosTurnoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.ValidacionAprobacionCambioResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionSolicitudCambioResult
+import com.itm.gestordeturnos.domain.usecase.ValidarAprobacionCambioTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarSolicitudCambioTurnoUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,7 +46,9 @@ data class CambiosTurnoState(
     val motivo: String = "",
     val turnosPropios: List<TurnoSeleccionable> = emptyList(),
     val turnosCompaneros: List<TurnoCompaneroSeleccionable> = emptyList(),
-    val mensajeFeedback: String? = null
+    val mensajeFeedback: String? = null,
+    val usuarioActualId: String = "",
+    val usuarioActualNombre: String = ""
 )
 
 class CambiosTurnoViewModel(
@@ -53,7 +57,8 @@ class CambiosTurnoViewModel(
     private val cambiosTurnoRepository: CambiosTurnoRepositoryContract = CambiosTurnoRepository,
     private val novedadRepository: NovedadRepositoryContract = NovedadRepository,
     private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase(),
-    private val validarSolicitudCambioUseCase: ValidarSolicitudCambioTurnoUseCase = ValidarSolicitudCambioTurnoUseCase()
+    private val validarSolicitudCambioUseCase: ValidarSolicitudCambioTurnoUseCase = ValidarSolicitudCambioTurnoUseCase(),
+    private val validarAprobacionCambioUseCase: ValidarAprobacionCambioTurnoUseCase = ValidarAprobacionCambioTurnoUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CambiosTurnoState())
     val uiState: StateFlow<CambiosTurnoState> = _uiState.asStateFlow()
@@ -119,7 +124,9 @@ class CambiosTurnoViewModel(
                     actual.copy(
                         solicitudes = solicitudesFiltradas,
                         turnosPropios = propiosFinales,
-                        turnosCompaneros = companerosFinales
+                        turnosCompaneros = companerosFinales,
+                        usuarioActualId = empId,
+                        usuarioActualNombre = empNombre
                     )
                 }
             }
@@ -411,6 +418,11 @@ class CambiosTurnoViewModel(
             return
         }
 
+        if (solicitud.estado != EstadoSolicitudCambio.PENDIENTE) {
+            _uiState.update { it.copy(mensajeFeedback = "La solicitud ya no se encuentra pendiente de aceptación.") }
+            return
+        }
+
         cambiosTurnoRepository.aceptarPorCompanero(solicitud.id)
     }
 
@@ -421,6 +433,32 @@ class CambiosTurnoViewModel(
         if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
             _uiState.update { it.copy(mensajeFeedback = validacionActivo.mensaje) }
             return
+        }
+
+        val esAdmin = usuario?.rol != null && usuario.rol != RolUsuario.EMPLEADO
+        val empId = emp?.id ?: usuario?.id ?: ""
+        val empNombre = emp?.let { "${it.nombre} ${it.apellido}".trim() } ?: usuario?.nombre ?: ""
+        val esCompanero = empId == solicitud.empleadoCompaneroId ||
+                empNombre.equals(solicitud.nombreCompanero, ignoreCase = true) ||
+                (emp != null && emp.nombre.equals(solicitud.nombreCompanero, ignoreCase = true))
+
+        if (esAdmin && (!esCompanero || solicitud.estado == EstadoSolicitudCambio.ACEPTADA_COMPANERO)) {
+            val adminParaValidar = emp ?: Empleado(
+                id = usuario?.id ?: "admin",
+                nombre = usuario?.nombre ?: "Administrador",
+                apellido = "",
+                correo = usuario?.correo ?: "",
+                sucursal = usuario?.sucursal ?: solicitud.sucursalNombre
+            )
+            val resultadoRechazo = validarAprobacionCambioUseCase.validarRechazoAdministrador(
+                administrador = adminParaValidar,
+                rolAdministrador = usuario?.rol,
+                solicitud = solicitud
+            )
+            if (resultadoRechazo is ValidacionAprobacionCambioResult.Invalido) {
+                _uiState.update { it.copy(mensajeFeedback = resultadoRechazo.mensaje) }
+                return
+            }
         }
 
         val motivoFinal = motivo.ifBlank { "Rechazada" }
@@ -437,6 +475,29 @@ class CambiosTurnoViewModel(
         val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(emp, "cambio_turno")
         if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
             _uiState.update { it.copy(mensajeFeedback = validacionActivo.mensaje) }
+            return
+        }
+
+        // RN-20: Revalidación completa de aprobación por administrador
+        val adminParaValidar = emp ?: Empleado(
+            id = usuario?.id ?: "admin",
+            nombre = usuario?.nombre ?: "Administrador",
+            apellido = "",
+            correo = usuario?.correo ?: "",
+            sucursal = usuario?.sucursal ?: solicitud.sucursalNombre
+        )
+
+        val resultadoAprobacion = validarAprobacionCambioUseCase.validarAprobacion(
+            administrador = adminParaValidar,
+            rolAdministrador = usuario?.rol,
+            solicitud = solicitud,
+            empleados = empleadoRepository.empleados.value,
+            todasAsignaciones = turnoRepository.asignaciones.value,
+            todasSolicitudes = cambiosTurnoRepository.solicitudes.value
+        )
+
+        if (resultadoAprobacion is ValidacionAprobacionCambioResult.Invalido) {
+            _uiState.update { it.copy(mensajeFeedback = resultadoAprobacion.mensaje) }
             return
         }
 

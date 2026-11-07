@@ -130,6 +130,8 @@ fun CambiosTurnoScreen(viewModel: CambiosTurnoViewModel, isRolAdmin: Boolean) {
                         SolicitudCambioCard(
                             solicitud = solicitud,
                             isRolAdmin = isRolAdmin,
+                            usuarioActualId = state.usuarioActualId,
+                            usuarioActualNombre = state.usuarioActualNombre,
                             onAprobar = { viewModel.aprobarSolicitud(it) },
                             onRechazar = { sol, mot -> viewModel.rechazarSolicitud(sol, mot) },
                             onAceptar = { viewModel.aceptarSolicitud(it) },

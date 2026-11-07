@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Button
@@ -1390,6 +1391,8 @@ fun EmpeladoCard(empleado: Empleado) = EmpleadoCard(empleado)
 fun SolicitudCambioCard(
     solicitud: SolicitudCambio,
     isRolAdmin: Boolean,
+    usuarioActualId: String = "",
+    usuarioActualNombre: String = "",
     onAprobar: ((SolicitudCambio) -> Unit)? = null,
     onRechazar: ((SolicitudCambio, String) -> Unit)? = null,
     onAceptar: ((SolicitudCambio) -> Unit)? = null,
@@ -1492,34 +1495,141 @@ fun SolicitudCambioCard(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                // 5. BOTONES Y ACCIONES DINÁMICAS
+                // 5. BOTONES Y ACCIONES DINÁMICAS (RN-20)
+                val esSolicitante = solicitud.esRemitente ||
+                    (usuarioActualId.isNotBlank() && solicitud.empleadoSolicitanteId == usuarioActualId) ||
+                    (usuarioActualNombre.isNotBlank() && solicitud.nombreSolicitante.equals(usuarioActualNombre, ignoreCase = true))
+
+                val esCompanero = (!esSolicitante) && (
+                    (usuarioActualId.isNotBlank() && solicitud.empleadoCompaneroId == usuarioActualId) ||
+                    (usuarioActualNombre.isNotBlank() && solicitud.nombreCompanero.equals(usuarioActualNombre, ignoreCase = true))
+                )
+
+                val esParticipante = esSolicitante || esCompanero
+
                 if (isRolAdmin) {
-                    if (solicitud.estado == EstadoSolicitudCambio.PENDIENTE || solicitud.estado == EstadoSolicitudCambio.ACEPTADA_COMPANERO) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = if (isCompact) Arrangement.SpaceBetween else Arrangement.Start
-                        ) {
-                            Button(
-                                onClick = { onAprobar?.invoke(solicitud) },
-                                colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
-                                shape = RoundedCornerShape(4.dp),
-                                modifier = if (isCompact) Modifier.weight(1f) else Modifier
+                    if (esParticipante) {
+                        // RN-20: Ningún administrador puede resolver una solicitud en la que participe como solicitante o como compañero.
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFFFEF3C7), RoundedCornerShape(4.dp))
+                                    .border(1.dp, Color(0xFFF59E0B), RoundedCornerShape(4.dp))
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(if (isCompact) "Aprobar" else "Aprobar e intercambiar")
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = "Conflicto de interés",
+                                    tint = Color(0xFFB45309),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Participas en esta solicitud como ${if (esSolicitante) "solicitante" else "compañero"}. Por política de control, debe ser resuelta por otro administrador.",
+                                    color = Color(0xFF92400E),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
                             }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            OutlinedButton(
-                                onClick = { mostrarDialogoRechazo = true },
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeTextPrimary),
-                                border = BorderStroke(1.dp, CafeBorderColor),
-                                shape = RoundedCornerShape(4.dp),
-                                modifier = if (isCompact) Modifier.weight(1f) else Modifier
-                            ) {
-                                Text("Rechazar")
+
+                            // Permitir acciones de colaborador si aplica
+                            if (esSolicitante && (solicitud.estado == EstadoSolicitudCambio.PENDIENTE || solicitud.estado == EstadoSolicitudCambio.ACEPTADA_COMPANERO)) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Cancelar solicitud",
+                                    color = CafeTextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.clickable { onCancelar?.invoke(solicitud) }
+                                )
+                            } else if (esCompanero && solicitud.estado == EstadoSolicitudCambio.PENDIENTE) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = if (isCompact) Arrangement.SpaceBetween else Arrangement.Start
+                                ) {
+                                    Button(
+                                        onClick = { onAceptar?.invoke(solicitud) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                                        shape = RoundedCornerShape(4.dp),
+                                        modifier = if (isCompact) Modifier.weight(1f) else Modifier
+                                    ) {
+                                        Text("Aceptar (como compañero)", fontWeight = FontWeight.Medium)
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    OutlinedButton(
+                                        onClick = { onRechazar?.invoke(solicitud, "Rechazada por el compañero") },
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeTextPrimary),
+                                        border = BorderStroke(1.dp, CafeBorderColor),
+                                        shape = RoundedCornerShape(4.dp),
+                                        modifier = if (isCompact) Modifier.weight(1f) else Modifier
+                                    ) {
+                                        Text("Rechazar")
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // El administrador es neutral y puede resolverla según el flujo de RN-20
+                        when (solicitud.estado) {
+                            EstadoSolicitudCambio.PENDIENTE -> {
+                                // RN-20: Toda solicitud pasa primero por la aceptación del compañero
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color(0xFFF3F4F6), RoundedCornerShape(4.dp))
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Schedule,
+                                        contentDescription = "En espera",
+                                        tint = Color(0xFF6B7280),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "En espera de aceptación por parte del compañero. La administración podrá resolverla una vez sea aceptada.",
+                                        color = Color(0xFF4B5563),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                            EstadoSolicitudCambio.ACEPTADA_COMPANERO -> {
+                                // RN-20: Ya aceptada por compañero, lista para resolución administrativa
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = if (isCompact) Arrangement.SpaceBetween else Arrangement.Start
+                                ) {
+                                    Button(
+                                        onClick = { onAprobar?.invoke(solicitud) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CafeDarkBrown),
+                                        shape = RoundedCornerShape(4.dp),
+                                        modifier = if (isCompact) Modifier.weight(1f) else Modifier
+                                    ) {
+                                        Text(if (isCompact) "Aprobar" else "Aprobar e intercambiar")
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    OutlinedButton(
+                                        onClick = { mostrarDialogoRechazo = true },
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CafeTextPrimary),
+                                        border = BorderStroke(1.dp, CafeBorderColor),
+                                        shape = RoundedCornerShape(4.dp),
+                                        modifier = if (isCompact) Modifier.weight(1f) else Modifier
+                                    ) {
+                                        Text("Rechazar")
+                                    }
+                                }
+                            }
+                            else -> {
+                                // Estados terminales (APROBADA, RECHAZADA, CANCELADA, VENCIDA) no muestran botones de acción
                             }
                         }
                     }
                 } else {
+                    // Modo colaborador (EMPLEADO)
                     if (solicitud.esRemitente) {
                         if (solicitud.estado == EstadoSolicitudCambio.PENDIENTE || solicitud.estado == EstadoSolicitudCambio.ACEPTADA_COMPANERO) {
                             Text(

@@ -12,6 +12,7 @@ import com.itm.gestordeturnos.domain.usecase.ControlIntentosLoginUseCase
 import com.itm.gestordeturnos.domain.usecase.EvaluacionIntentoLogin
 import com.itm.gestordeturnos.domain.usecase.IntercambiarTurnosUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionAdminSucursalEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionAprobacionCambioResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionAsignacionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionSoloLecturaResult
@@ -19,6 +20,7 @@ import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionSolicitudCambioResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
+import com.itm.gestordeturnos.domain.usecase.ValidarAprobacionCambioTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarAsignacionTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarContrasenaFirebaseAuthUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
@@ -2224,6 +2226,224 @@ class SharedCommonTest {
         assertFalse(useCase.esTurnoElegibleParaIntercambio(turnoBorrador, "emp_1", emptyList()), "Está en borrador")
         assertFalse(useCase.esTurnoElegibleParaIntercambio(turnoPasado, "emp_1", emptyList()), "Fecha en el pasado")
         assertFalse(useCase.esTurnoElegibleParaIntercambio(turnoConSolicitud, "emp_1", listOf(solicitud)), "Ya tiene solicitud en curso")
+    }
+
+    // =========================================================================
+    // 22. PRUEBAS DE FLUJO DE APROBACIÓN Y RESOLUCIÓN DE INTERCAMBIOS (RN-20)
+    // =========================================================================
+
+    @Test
+    fun rn20_aprobacionRechazada_siSolicitudNoHaSidoAceptadaPorElCompanero() {
+        val useCase = ValidarAprobacionCambioTurnoUseCase()
+        val admin = Empleado(id = "admin_1", nombre = "Supervisor", apellido = "General", sucursal = "CENTRO", cargo = Cargo.ADMINISTRADOR_SUCURSAL, estado = EstadoUsuario.ACTIVO)
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+
+        val turno1 = AsignacionTurno(id = "asig_1", empleadoId = "emp_1", fechaIso = "2029-10-15", tipoTurno = "Apertura", horario = "06:00 - 14:00", sucursalId = "CENTRO", estado = "PUBLICADA")
+        val turno2 = AsignacionTurno(id = "asig_2", empleadoId = "emp_2", fechaIso = "2029-10-18", tipoTurno = "Cierre", horario = "14:00 - 22:00", sucursalId = "CENTRO", estado = "PUBLICADA")
+
+        val solicitudPendiente = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.PENDIENTE,
+            empleadoSolicitanteId = "emp_1",
+            nombreSolicitante = "Carlos Ruiz",
+            empleadoCompaneroId = "emp_2",
+            nombreCompanero = "María López",
+            turnoEntregaId = "asig_1",
+            turnoRecibeId = "asig_2",
+            sucursalNombre = "CENTRO"
+        )
+
+        val resultado = useCase.validarAprobacion(
+            administrador = admin,
+            rolAdministrador = RolUsuario.ADMINISTRADOR_SUCURSAL,
+            solicitud = solicitudPendiente,
+            empleados = listOf(emp1, emp2, admin),
+            todasAsignaciones = listOf(turno1, turno2),
+            todasSolicitudes = listOf(solicitudPendiente),
+            fechaActual = LocalDate(2026, 1, 1),
+            horaActualMinutos = 0
+        )
+
+        val invalido = assertIs<ValidacionAprobacionCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("aceptada primero por el compañero", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-20"))
+    }
+
+    @Test
+    fun rn20_aprobacionRechazada_siAdministradorEsElSolicitante_conflictoDeInteres() {
+        val useCase = ValidarAprobacionCambioTurnoUseCase()
+        // El administrador Carlos también es el solicitante
+        val adminSolicitante = Empleado(id = "emp_admin_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.ADMINISTRADOR_SUCURSAL, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+
+        val turno1 = AsignacionTurno(id = "asig_1", empleadoId = "emp_admin_1", fechaIso = "2029-10-15", tipoTurno = "Apertura", horario = "06:00 - 14:00", sucursalId = "CENTRO", estado = "PUBLICADA")
+        val turno2 = AsignacionTurno(id = "asig_2", empleadoId = "emp_2", fechaIso = "2029-10-18", tipoTurno = "Cierre", horario = "14:00 - 22:00", sucursalId = "CENTRO", estado = "PUBLICADA")
+
+        val solicitudAceptada = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.ACEPTADA_COMPANERO,
+            empleadoSolicitanteId = "emp_admin_1",
+            nombreSolicitante = "Carlos Ruiz",
+            empleadoCompaneroId = "emp_2",
+            nombreCompanero = "María López",
+            turnoEntregaId = "asig_1",
+            turnoRecibeId = "asig_2",
+            sucursalNombre = "CENTRO"
+        )
+
+        val resultado = useCase.validarAprobacion(
+            administrador = adminSolicitante,
+            rolAdministrador = RolUsuario.ADMINISTRADOR_SUCURSAL,
+            solicitud = solicitudAceptada,
+            empleados = listOf(adminSolicitante, emp2),
+            todasAsignaciones = listOf(turno1, turno2),
+            todasSolicitudes = listOf(solicitudAceptada),
+            fechaActual = LocalDate(2026, 1, 1),
+            horaActualMinutos = 0
+        )
+
+        val invalido = assertIs<ValidacionAprobacionCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("no puede resolver una solicitud en la que participe", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-20"))
+    }
+
+    @Test
+    fun rn20_aprobacionRechazada_siAdministradorEsElCompanero_conflictoDeInteres() {
+        val useCase = ValidarAprobacionCambioTurnoUseCase()
+        // La administradora María también es la compañera en la solicitud
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val adminCompanero = Empleado(id = "emp_admin_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.ADMINISTRADOR_SUCURSAL, estado = EstadoUsuario.ACTIVO)
+
+        val turno1 = AsignacionTurno(id = "asig_1", empleadoId = "emp_1", fechaIso = "2029-10-15", tipoTurno = "Apertura", horario = "06:00 - 14:00", sucursalId = "CENTRO", estado = "PUBLICADA")
+        val turno2 = AsignacionTurno(id = "asig_2", empleadoId = "emp_admin_2", fechaIso = "2029-10-18", tipoTurno = "Cierre", horario = "14:00 - 22:00", sucursalId = "CENTRO", estado = "PUBLICADA")
+
+        val solicitudAceptada = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.ACEPTADA_COMPANERO,
+            empleadoSolicitanteId = "emp_1",
+            nombreSolicitante = "Carlos Ruiz",
+            empleadoCompaneroId = "emp_admin_2",
+            nombreCompanero = "María López",
+            turnoEntregaId = "asig_1",
+            turnoRecibeId = "asig_2",
+            sucursalNombre = "CENTRO"
+        )
+
+        val resultado = useCase.validarAprobacion(
+            administrador = adminCompanero,
+            rolAdministrador = RolUsuario.ADMINISTRADOR_SUCURSAL,
+            solicitud = solicitudAceptada,
+            empleados = listOf(emp1, adminCompanero),
+            todasAsignaciones = listOf(turno1, turno2),
+            todasSolicitudes = listOf(solicitudAceptada),
+            fechaActual = LocalDate(2026, 1, 1),
+            horaActualMinutos = 0
+        )
+
+        val invalido = assertIs<ValidacionAprobacionCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("no puede resolver una solicitud en la que participe", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-20"))
+    }
+
+    @Test
+    fun rn20_rechazoAdministrativoRechazado_siAdministradorParticipaEnLaSolicitud() {
+        val useCase = ValidarAprobacionCambioTurnoUseCase()
+        val adminParticipante = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.ADMINISTRADOR_SUCURSAL, estado = EstadoUsuario.ACTIVO)
+
+        val solicitud = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.ACEPTADA_COMPANERO,
+            empleadoSolicitanteId = "emp_1",
+            nombreSolicitante = "Carlos Ruiz",
+            empleadoCompaneroId = "emp_2",
+            nombreCompanero = "María López"
+        )
+
+        val resultado = useCase.validarRechazoAdministrador(
+            administrador = adminParticipante,
+            rolAdministrador = RolUsuario.ADMINISTRADOR_SUCURSAL,
+            solicitud = solicitud
+        )
+
+        val invalido = assertIs<ValidacionAprobacionCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("no puede resolver una solicitud en la que participe", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-20"))
+    }
+
+    @Test
+    fun rn20_aprobacionRechazada_siReglasDeProgramacionDejaronDeCumplirseAlMomentoDeAprobar() {
+        val useCase = ValidarAprobacionCambioTurnoUseCase()
+        val adminNeutral = Empleado(id = "admin_boss", nombre = "Diana", apellido = "Jefe", sucursal = "CENTRO", cargo = Cargo.ADMINISTRADOR_SUCURSAL, estado = EstadoUsuario.ACTIVO)
+        // El compañero María fue desactivado antes de que el administrador aprobara
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2Inactivo = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.INACTIVO)
+
+        val turno1 = AsignacionTurno(id = "asig_1", empleadoId = "emp_1", fechaIso = "2029-10-15", tipoTurno = "Apertura", horario = "06:00 - 14:00", sucursalId = "CENTRO", estado = "PUBLICADA")
+        val turno2 = AsignacionTurno(id = "asig_2", empleadoId = "emp_2", fechaIso = "2029-10-18", tipoTurno = "Cierre", horario = "14:00 - 22:00", sucursalId = "CENTRO", estado = "PUBLICADA")
+
+        val solicitudAceptada = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.ACEPTADA_COMPANERO,
+            empleadoSolicitanteId = "emp_1",
+            nombreSolicitante = "Carlos Ruiz",
+            empleadoCompaneroId = "emp_2",
+            nombreCompanero = "María López",
+            turnoEntregaId = "asig_1",
+            turnoRecibeId = "asig_2",
+            sucursalNombre = "CENTRO"
+        )
+
+        val resultado = useCase.validarAprobacion(
+            administrador = adminNeutral,
+            rolAdministrador = RolUsuario.ADMINISTRADOR_SUCURSAL,
+            solicitud = solicitudAceptada,
+            empleados = listOf(emp1, emp2Inactivo, adminNeutral),
+            todasAsignaciones = listOf(turno1, turno2),
+            todasSolicitudes = listOf(solicitudAceptada),
+            fechaActual = LocalDate(2026, 1, 1),
+            horaActualMinutos = 0
+        )
+
+        val invalido = assertIs<ValidacionAprobacionCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("inactivo", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-20"))
+    }
+
+    @Test
+    fun rn20_aprobacionExitosa_cuandoCompaneroAceptoAdminEsNeutralYReglasCumplen() {
+        val useCase = ValidarAprobacionCambioTurnoUseCase()
+        val adminNeutral = Empleado(id = "admin_boss", nombre = "Diana", apellido = "Jefe", sucursal = "CENTRO", cargo = Cargo.ADMINISTRADOR_SUCURSAL, estado = EstadoUsuario.ACTIVO)
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+
+        val turno1 = AsignacionTurno(id = "asig_1", empleadoId = "emp_1", fechaIso = "2029-10-15", tipoTurno = "Apertura", horario = "06:00 - 14:00", sucursalId = "CENTRO", estado = "PUBLICADA")
+        val turno2 = AsignacionTurno(id = "asig_2", empleadoId = "emp_2", fechaIso = "2029-10-18", tipoTurno = "Cierre", horario = "14:00 - 22:00", sucursalId = "CENTRO", estado = "PUBLICADA")
+
+        val solicitudAceptada = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.ACEPTADA_COMPANERO,
+            empleadoSolicitanteId = "emp_1",
+            nombreSolicitante = "Carlos Ruiz",
+            empleadoCompaneroId = "emp_2",
+            nombreCompanero = "María López",
+            turnoEntregaId = "asig_1",
+            turnoRecibeId = "asig_2",
+            sucursalNombre = "CENTRO"
+        )
+
+        val resultado = useCase.validarAprobacion(
+            administrador = adminNeutral,
+            rolAdministrador = RolUsuario.ADMINISTRADOR_SUCURSAL,
+            solicitud = solicitudAceptada,
+            empleados = listOf(emp1, emp2, adminNeutral),
+            todasAsignaciones = listOf(turno1, turno2),
+            todasSolicitudes = listOf(solicitudAceptada),
+            fechaActual = LocalDate(2026, 1, 1),
+            horaActualMinutos = 0
+        )
+
+        assertIs<ValidacionAprobacionCambioResult.Valido>(resultado)
     }
 }
 
