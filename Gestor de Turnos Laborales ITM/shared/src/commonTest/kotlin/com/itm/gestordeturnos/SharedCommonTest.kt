@@ -3201,6 +3201,214 @@ class SharedCommonTest {
         val invSalida = assertIs<ValidacionNovedadResult.Invalido>(resSalidaIncoherente)
         assertTrue(invSalida.mensaje.contains("anterior a la hora de finalización", ignoreCase = true))
     }
+
+    // =========================================================================
+    // 25. PRUEBAS DE COHERENCIA HORARIA Y LÍMITES OPERATIVOS (RN-24)
+    // =========================================================================
+
+    @Test
+    fun rn24_ampliacionDeTurnoRechazada_siHoraRealSuperaLimiteOperativo2200() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Turno de Cierre: 14:00 - 22:00
+        // Se reporta ampliación hasta las 22:30 (supera las 22:00)
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Ampliación del turno",
+            descripcion = "Horas extra por limpieza profunda",
+            fechaReferencia = "2026-11-06",
+            horaReal = "22:30",
+            horarioProgramado = "14:00 - 22:00",
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 1380
+        )
+
+        val invalido = assertIs<ValidacionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("límite operativo de las 22:00", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-24"))
+    }
+
+    @Test
+    fun rn24_llegadaTardeRechazada_siHoraRealEsAnteriorALaAperturaOperativa0600() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Hora real absurda reportada: 05:45 (antes de la apertura operativa de las 06:00)
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Llegada tarde",
+            descripcion = "Llegada",
+            fechaReferencia = "2026-11-06",
+            horaReal = "05:45",
+            horarioProgramado = "06:00 - 14:00",
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 600
+        )
+
+        val invalido = assertIs<ValidacionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("apertura operativa (06:00)", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-24"))
+    }
+
+    @Test
+    fun rn24_ampliacionDeTurnoRechazada_siHoraRealNoSuperaFinProgramado() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Turno: 08:00 - 16:00. Reporta ampliación de turno pero con hora real 15:50 o 16:00
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Ampliación del turno",
+            descripcion = "Intento inválido de ampliación",
+            fechaReferencia = "2026-11-06",
+            horaReal = "16:00",
+            horarioProgramado = "08:00 - 16:00",
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 1000
+        )
+
+        val invalido = assertIs<ValidacionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("posterior a la hora de finalización", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-24"))
+    }
+
+    @Test
+    fun rn24_formularioSupervisorAplicaLasMismasValidacionesDeCoherenciaYLimite2200() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_2",
+            nombre = "Laura",
+            apellido = "Mejía",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        val turnoCierre = AsignacionTurno(
+            id = "asig_20",
+            empleadoId = "emp_2",
+            fechaIso = "2026-11-06",
+            horario = "14:00 - 22:00"
+        )
+
+        // El supervisor intenta registrar una ampliación de jornada a las 22:45
+        val resExceso22 = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Ampliación del turno",
+            descripcion = "Supervisor registra horas extras nocturnas",
+            fechaReferencia = "2026-11-06",
+            horaReal = "22:45",
+            horarioProgramado = "14:00 - 22:00",
+            asignacionTurno = turnoCierre,
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 1380
+        )
+        val invExceso = assertIs<ValidacionNovedadResult.Invalido>(resExceso22)
+        assertTrue(invExceso.mensaje.contains("22:00"))
+
+        // El supervisor intenta registrar salida antes con hora igual o posterior al fin (22:00)
+        val resSalidaIncoherente = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Salida antes de la hora",
+            descripcion = "Supervisor registra salida",
+            fechaReferencia = "2026-11-06",
+            horaReal = "22:00",
+            horarioProgramado = "14:00 - 22:00",
+            asignacionTurno = turnoCierre,
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 1380
+        )
+        val invSalida = assertIs<ValidacionNovedadResult.Invalido>(resSalidaIncoherente)
+        assertTrue(invSalida.mensaje.contains("anterior a la hora de finalización"))
+    }
+
+    @Test
+    fun rn24_novedadesSinHoraReal_comoIncapacidadOAusencia_noExigenHoraNiLimiteOperativo() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Ausencia injustificada sin hora real debe ser válida si está dentro del plazo
+        val resultadoAusencia = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Ausencia injustificada",
+            descripcion = "El colaborador no se presentó a su jornada laboral",
+            fechaReferencia = "2026-11-06",
+            horaReal = "",
+            horarioProgramado = "08:00 - 16:00",
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 1000
+        )
+        assertIs<ValidacionNovedadResult.Valido>(resultadoAusencia)
+
+        // Incapacidad médica sin hora real debe ser válida
+        val resultadoIncapacidad = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Incapacidad médica",
+            descripcion = "Certificado de incapacidad EPS remitido",
+            fechaReferencia = "2026-11-06",
+            horaReal = "",
+            horarioProgramado = "08:00 - 16:00",
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 1000
+        )
+        assertIs<ValidacionNovedadResult.Valido>(resultadoIncapacidad)
+    }
+
+    @Test
+    fun rn24_ampliacionDeTurnoValida_dentroDelLimiteOperativo() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Turno: 08:00 - 16:00. Ampliación hasta las 18:00 (18:00 <= 22:00)
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Ampliación del turno",
+            descripcion = "Apoyo en cierre de inventario",
+            fechaReferencia = "2026-11-06",
+            horaReal = "18:00",
+            horarioProgramado = "08:00 - 16:00",
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 1100
+        )
+
+        assertIs<ValidacionNovedadResult.Valido>(resultado)
+    }
 }
 
 // =========================================================================

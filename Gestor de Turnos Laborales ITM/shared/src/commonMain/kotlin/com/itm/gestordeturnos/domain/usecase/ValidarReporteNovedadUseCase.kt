@@ -16,12 +16,17 @@ sealed interface ValidacionNovedadResult {
 }
 
 /**
- * Caso de uso de dominio para la regla de negocio RN-23:
- * "Toda novedad debe asociarse a un turno específico y reportar el tipo y descripción obligatorios.
- * No se admiten dos novedades del mismo tipo sobre el mismo turno por el mismo empleado.
- * El plazo máximo para reportar novedades es de 48 horas posteriores a la finalización del turno;
- * y si el turno corresponde al día actual, no es posible reportar novedades de ejecución
- * antes de que la hora de inicio del turno haya iniciado."
+ * Caso de uso de dominio para las reglas de negocio RN-23 y RN-24:
+ *
+ * - RN-23: Toda novedad debe asociarse a un turno específico y reportar tipo y descripción obligatorios.
+ *   No se admiten dos novedades del mismo tipo sobre el mismo turno por el mismo empleado.
+ *   El plazo máximo para reportar novedades es de 48 horas exactas posteriores a la finalización del turno;
+ *   y si el turno corresponde al día actual, no es posible reportar incidencias de jornada antes del inicio del turno.
+ *
+ * - RN-24: En novedades que requieren hora real (llegada tarde, salida antes, ampliación de turno),
+ *   se valida la coherencia con el turno programado (llegada tarde > inicio, salida antes < fin,
+ *   ampliación > fin) y que la hora real reportada se mantenga estrictamente dentro de los límites
+ *   operativos del establecimiento (06:00 a 22:00).
  */
 class ValidarReporteNovedadUseCase {
 
@@ -151,7 +156,7 @@ class ValidarReporteNovedadUseCase {
             return ValidacionNovedadResult.Invalido("El plazo máximo para registrar novedades es de 48 horas posteriores a la finalización del turno.")
         }
 
-        // 7. Validación de coherencia si requiere hora real
+        // 7. Validación de coherencia si requiere hora real (RN-24)
         val requiereHoraReal = tipoNovedad in listOf("Llegada tarde", "Salida antes de la hora", "Ampliación del turno")
         if (requiereHoraReal) {
             if (horaReal.isBlank()) {
@@ -159,6 +164,17 @@ class ValidarReporteNovedadUseCase {
             }
             val realMin = parsearMinutos(horaReal)
                 ?: return ValidacionNovedadResult.Invalido("El formato de la hora real es inválido (debe ser HH:mm).")
+
+            // Regla RN-24: El horario operativo del establecimiento es de 06:00 (360m) a 22:00 (1320m)
+            val horaMinOperativa = 6 * 60 // 06:00
+            val horaMaxOperativa = 22 * 60 // 22:00
+
+            if (realMin < horaMinOperativa) {
+                return ValidacionNovedadResult.Invalido("La hora real no puede ser anterior a la apertura operativa (06:00).")
+            }
+            if (realMin > horaMaxOperativa) {
+                return ValidacionNovedadResult.Invalido("La hora real no puede superar el límite operativo de las 22:00.")
+            }
 
             if (rangoHoras != null) {
                 when (tipoNovedad) {
