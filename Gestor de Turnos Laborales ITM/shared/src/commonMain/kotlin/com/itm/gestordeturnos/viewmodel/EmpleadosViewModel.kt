@@ -26,6 +26,10 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
 
+import com.itm.gestordeturnos.domain.model.UsuarioActual
+import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
+import com.itm.gestordeturnos.domain.usecase.ValidarModificacionRolEstadoUseCase
+
 data class EmpleadosState(
     val empleadosOriginales: List<Empleado> = emptyList(),
     val empleadosFiltrados: List<Empleado> = emptyList(),
@@ -35,6 +39,8 @@ data class EmpleadosState(
     val filtroEstado: String = "Todos",
     val empleadoEnEdicion: Empleado? = null,
     val esNuevoEmpleado: Boolean = false,
+    val esMismoUsuarioLogueado: Boolean = false,
+    val usuarioSesion: UsuarioActual? = null,
     val mostrarDrawerFormulario: Boolean = false,
     val mensajeError: String? = null,
     val isGuardando: Boolean = false,
@@ -44,12 +50,15 @@ data class EmpleadosState(
 class EmpleadosViewModel(
     private val authService: AuthService = FirebaseAuthService(),
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
-    private val turnoRepository: TurnoRepositoryContract = TurnoRepository
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
+    private val validarModificacionRolEstadoUseCase: ValidarModificacionRolEstadoUseCase = ValidarModificacionRolEstadoUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(EmpleadosState())
     val uiState: StateFlow<EmpleadosState> = _uiState.asStateFlow()
 
     init {
+        val usuarioActual = SessionManager.usuarioActivo ?: authService.obtenerUsuarioActivo()
+        _uiState.update { it.copy(usuarioSesion = usuarioActual) }
         observarEmpleados()
     }
 
@@ -150,6 +159,7 @@ class EmpleadosViewModel(
             it.copy(
                 empleadoEnEdicion = nuevo,
                 esNuevoEmpleado = true,
+                esMismoUsuarioLogueado = false,
                 mostrarDrawerFormulario = true,
                 mensajeError = null
             )
@@ -157,10 +167,14 @@ class EmpleadosViewModel(
     }
 
     fun abrirEditarEmpleado(empleado: Empleado) {
+        val sesion = _uiState.value.usuarioSesion ?: SessionManager.usuarioActivo
+        val esElMismo = sesion != null && (sesion.id == empleado.id || sesion.correo.equals(empleado.correo, ignoreCase = true))
+
         _uiState.update {
             it.copy(
                 empleadoEnEdicion = empleado,
                 esNuevoEmpleado = false,
+                esMismoUsuarioLogueado = esElMismo,
                 mostrarDrawerFormulario = true,
                 mensajeError = null
             )
@@ -172,6 +186,7 @@ class EmpleadosViewModel(
             it.copy(
                 mostrarDrawerFormulario = false,
                 empleadoEnEdicion = null,
+                esMismoUsuarioLogueado = false,
                 mensajeError = null
             )
         }
@@ -212,26 +227,25 @@ class EmpleadosViewModel(
             return
         }
 
-        // Regla CA-04.5: Proteger último Administrador General activo
-        if (!estadoActual.esNuevoEmpleado) {
-            val empleadoPrevio = estadoActual.empleadosOriginales.find { it.id == empleadoActualizado.id }
-            val eraAdminGeneralActivo = empleadoPrevio?.cargo == Cargo.ADMINISTRADOR_GENERAL && empleadoPrevio.estado == EstadoUsuario.ACTIVO
-            val dejaraDeSerlo = empleadoActualizado.cargo != Cargo.ADMINISTRADOR_GENERAL || empleadoActualizado.estado != EstadoUsuario.ACTIVO
-
-            if (eraAdminGeneralActivo && dejaraDeSerlo) {
-                val otrosAdminGeneralActivos = estadoActual.empleadosOriginales.count {
-                    it.cargo == Cargo.ADMINISTRADOR_GENERAL && it.estado == EstadoUsuario.ACTIVO && it.id != empleadoActualizado.id
-                }
-                if (otrosAdminGeneralActivos == 0) {
-                    _uiState.update { it.copy(mensajeError = "No se puede inactivar o cambiar el rol del único Administrador General activo del sistema.") }
-                    return
-                }
-            }
-        }
-
         val empleadoPrevio = if (!estadoActual.esNuevoEmpleado) {
             estadoActual.empleadosOriginales.find { it.id == empleadoActualizado.id }
         } else null
+
+        // Regla RN-07: Ningún usuario puede modificar su propio rol ni estado,
+        // y el sistema no permite quedarse sin al menos un usuario activo con rol de Administrador General.
+        val sesion = estadoActual.usuarioSesion ?: SessionManager.usuarioActivo
+        val validacionRN07 = validarModificacionRolEstadoUseCase.validar(
+            usuarioActualId = sesion?.id,
+            usuarioActualCorreo = sesion?.correo,
+            empleadoOriginal = empleadoPrevio,
+            empleadoActualizado = empleadoActualizado,
+            todosLosEmpleados = estadoActual.empleadosOriginales
+        )
+
+        if (validacionRN07 is ValidacionPermisosEdicionResult.Invalida) {
+            _uiState.update { it.copy(mensajeError = validacionRN07.mensaje) }
+            return
+        }
 
         val sucursalCambio = empleadoPrevio != null &&
             !empleadoPrevio.sucursal.equals(empleadoActualizado.sucursal, ignoreCase = true)

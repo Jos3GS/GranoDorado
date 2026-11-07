@@ -218,6 +218,7 @@ fun EmpleadosScreen(viewModel: EmpleadosViewModel) {
                     FormularioEmpleadoDrawer(
                         empleado = state.empleadoEnEdicion!!,
                         esNuevo = state.esNuevoEmpleado,
+                        esMismoUsuario = state.esMismoUsuarioLogueado,
                         isGuardando = state.isGuardando,
                         mensajeError = state.mensajeError,
                         onGuardar = viewModel::guardarEmpleado,
@@ -713,6 +714,7 @@ private object UtcDatePickerFormatter : DatePickerFormatter {
 private fun FormularioEmpleadoDrawer(
     empleado: Empleado,
     esNuevo: Boolean,
+    esMismoUsuario: Boolean = false,
     isGuardando: Boolean = false,
     mensajeError: String?,
     onGuardar: (Empleado) -> Unit,
@@ -829,11 +831,31 @@ private fun FormularioEmpleadoDrawer(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(modifier = Modifier.weight(1f)) {
                 EtiquetaCampo("ROL")
-                DropdownFormulario(
-                    valorActual = rolSeleccionado,
-                    opciones = ROLES_FORMULARIO,
-                    onSeleccion = { rolSeleccionado = it }
-                )
+                if (esMismoUsuario) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .background(Color(0xFFF7F4F0), RoundedCornerShape(2.dp))
+                            .border(1.dp, Color(0xFFE2DCD5), RoundedCornerShape(2.dp))
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(rolSeleccionado, fontSize = 13.sp, color = CafeTextSecondary)
+                    }
+                    Text(
+                        text = "No puedes modificar tu propio rol (RN-07)",
+                        fontSize = 10.sp,
+                        color = CafeTextSecondary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                } else {
+                    DropdownFormulario(
+                        valorActual = rolSeleccionado,
+                        opciones = ROLES_FORMULARIO,
+                        onSeleccion = { rolSeleccionado = it }
+                    )
+                }
             }
             Column(modifier = Modifier.weight(1f)) {
                 EtiquetaCampo("SUCURSAL")
@@ -877,11 +899,31 @@ private fun FormularioEmpleadoDrawer(
             }
             Column(modifier = Modifier.weight(1f)) {
                 EtiquetaCampo("ESTADO DE ACCESO")
-                DropdownFormulario(
-                    valorActual = estadoAcceso,
-                    opciones = ESTADOS_FORMULARIO,
-                    onSeleccion = { estadoAcceso = it }
-                )
+                if (esMismoUsuario) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .background(Color(0xFFF7F4F0), RoundedCornerShape(2.dp))
+                            .border(1.dp, Color(0xFFE2DCD5), RoundedCornerShape(2.dp))
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(estadoAcceso, fontSize = 13.sp, color = CafeTextSecondary)
+                    }
+                    Text(
+                        text = "No puedes modificar tu propio estado (RN-07)",
+                        fontSize = 10.sp,
+                        color = CafeTextSecondary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                } else {
+                    DropdownFormulario(
+                        valorActual = estadoAcceso,
+                        opciones = ESTADOS_FORMULARIO,
+                        onSeleccion = { estadoAcceso = it }
+                    )
+                }
             }
         }
 

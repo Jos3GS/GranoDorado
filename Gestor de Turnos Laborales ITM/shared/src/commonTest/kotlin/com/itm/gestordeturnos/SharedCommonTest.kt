@@ -10,8 +10,10 @@ import com.itm.gestordeturnos.domain.usecase.ControlIntentosLoginUseCase
 import com.itm.gestordeturnos.domain.usecase.EvaluacionIntentoLogin
 import com.itm.gestordeturnos.domain.usecase.IntercambiarTurnosUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
 import com.itm.gestordeturnos.domain.usecase.ValidarContrasenaFirebaseAuthUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidarModificacionRolEstadoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarRecuperacionContrasenaUseCase
 import com.itm.gestordeturnos.domain.usecase.VerificarCoberturaDiariaUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -492,6 +494,93 @@ class SharedCommonTest {
         // Caso 3: Cuenta activa -> elegible para envío
         val resActivo = useCase.evaluarElegibilidad("maria.activa@granodorado.com")
         assertTrue(resActivo.isSuccess, "Una cuenta activa sí es elegible para recibir correo de recuperación")
+    }
+
+    // =========================================================================
+    // 8. PRUEBAS DE PROTECCIÓN DE PROPIO ROL/ESTADO Y ÚLTIMO ADMIN GENERAL (RN-07)
+    // =========================================================================
+
+    @Test
+    fun validarModificacionRolEstado_impideModificarPropioRolOEstado() {
+        val useCase = ValidarModificacionRolEstadoUseCase()
+        val miUsuario = Empleado(
+            id = "emp_yo",
+            nombre = "Carlos",
+            correo = "carlos.admin@granodorado.com",
+            cargo = Cargo.ADMINISTRADOR_GENERAL,
+            estado = EstadoUsuario.ACTIVO
+        )
+        val otroAdmin = Empleado(
+            id = "emp_otro",
+            nombre = "Laura",
+            correo = "laura.admin@granodorado.com",
+            cargo = Cargo.ADMINISTRADOR_GENERAL,
+            estado = EstadoUsuario.ACTIVO
+        )
+        val todos = listOf(miUsuario, otroAdmin)
+
+        // Caso 1: Intentar cambiar mi propio rol (ej: a BARISTA)
+        val resCambioRol = useCase.validar(
+            usuarioActualId = "emp_yo",
+            usuarioActualCorreo = "carlos.admin@granodorado.com",
+            empleadoOriginal = miUsuario,
+            empleadoActualizado = miUsuario.copy(cargo = Cargo.BARISTA),
+            todosLosEmpleados = todos
+        )
+        val falloRol = assertIs<ValidacionPermisosEdicionResult.Invalida>(resCambioRol)
+        assertTrue(falloRol.mensaje.contains("propio rol"))
+
+        // Caso 2: Intentar cambiar mi propio estado a INACTIVO
+        val resCambioEstado = useCase.validar(
+            usuarioActualId = "emp_yo",
+            usuarioActualCorreo = "carlos.admin@granodorado.com",
+            empleadoOriginal = miUsuario,
+            empleadoActualizado = miUsuario.copy(estado = EstadoUsuario.INACTIVO),
+            todosLosEmpleados = todos
+        )
+        val falloEstado = assertIs<ValidacionPermisosEdicionResult.Invalida>(resCambioEstado)
+        assertTrue(falloEstado.mensaje.contains("propio rol ni estado"))
+
+        // Caso 3: Modificar mis datos personales sin alterar rol ni estado (permitido)
+        val resDatosPersonales = useCase.validar(
+            usuarioActualId = "emp_yo",
+            usuarioActualCorreo = "carlos.admin@granodorado.com",
+            empleadoOriginal = miUsuario,
+            empleadoActualizado = miUsuario.copy(telefono = "3009998877"),
+            todosLosEmpleados = todos
+        )
+        assertIs<ValidacionPermisosEdicionResult.Valida>(resDatosPersonales)
+    }
+
+    @Test
+    fun validarModificacionRolEstado_impideQuedarseSinAlMenosUnAdminGeneralActivo() {
+        val useCase = ValidarModificacionRolEstadoUseCase()
+        val unicoAdminGeneral = Empleado(
+            id = "emp_admin_unico",
+            nombre = "Admin Único",
+            correo = "admin.unico@granodorado.com",
+            cargo = Cargo.ADMINISTRADOR_GENERAL,
+            estado = EstadoUsuario.ACTIVO
+        )
+        val empleadoComun = Empleado(
+            id = "emp_comun",
+            nombre = "Barista 1",
+            correo = "barista1@granodorado.com",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+        val todos = listOf(unicoAdminGeneral, empleadoComun)
+
+        // Intentar inactivar al único Administrador General activo (incluso si lo intenta otro usuario con permisos)
+        val resInactivarUnico = useCase.validar(
+            usuarioActualId = "otro_usuario",
+            usuarioActualCorreo = "otro@granodorado.com",
+            empleadoOriginal = unicoAdminGeneral,
+            empleadoActualizado = unicoAdminGeneral.copy(estado = EstadoUsuario.INACTIVO),
+            todosLosEmpleados = todos
+        )
+        val fallo = assertIs<ValidacionPermisosEdicionResult.Invalida>(resInactivarUnico)
+        assertTrue(fallo.mensaje.contains("único Administrador General activo"))
     }
 }
 
