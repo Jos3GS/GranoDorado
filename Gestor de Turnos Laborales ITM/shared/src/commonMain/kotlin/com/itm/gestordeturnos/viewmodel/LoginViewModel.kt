@@ -185,17 +185,23 @@ class LoginViewModel(
             val feedback = if (resultado.isSuccess) {
                 FeedbackRecuperacion.Exito(
                     titulo = "Correo enviado con éxito",
-                    mensaje = "Hemos enviado las instrucciones para restablecer tu contraseña a $emailIngresado. Revisa tu bandeja de entrada y la carpeta de spam."
+                    mensaje = "Hemos enviado las instrucciones para restablecer tu contraseña a $emailIngresado. Revisa tu bandeja de entrada y la carpeta de spam (el enlace tiene una vigencia de 60 minutos)."
                 )
             } else {
                 val errorMsg = resultado.exceptionOrNull()?.message ?: ""
                 val detalle = when {
+                    errorMsg.contains("inactiva", ignoreCase = true) ||
+                    errorMsg.contains("deshabilitada", ignoreCase = true) ->
+                        "Esta cuenta se encuentra inactiva o deshabilitada. Por políticas de seguridad no puede recibir correos de recuperación. Contacta al administrador."
                     errorMsg.contains("invalid-email", ignoreCase = true) ->
                         "El formato del correo electrónico ingresado no es válido."
-                    errorMsg.contains("user-not-found", ignoreCase = true) ->
+                    errorMsg.contains("user-not-found", ignoreCase = true) ||
+                    errorMsg.contains("no se encontró ninguna cuenta", ignoreCase = true) ->
                         "No se encontró ninguna cuenta asociada a '$emailIngresado'."
+                    errorMsg.contains("too-many-requests", ignoreCase = true) ->
+                        "Has superado el límite de intentos permitidos por el servicio. Intenta nuevamente más tarde."
                     else ->
-                        "No se encontró ninguna cuenta asociada a '$emailIngresado' o hubo un error al procesar la solicitud."
+                        errorMsg.ifBlank { "No se encontró ninguna cuenta asociada a '$emailIngresado' o hubo un error al procesar la solicitud." }
                 }
                 FeedbackRecuperacion.ErrorNoEncontrado(
                     titulo = "No se pudo enviar",

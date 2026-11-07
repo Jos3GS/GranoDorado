@@ -181,6 +181,20 @@ class FirebaseAuthService(
 
     override suspend fun recuperarContrasena(correo: String): Result<Unit> {
         val correoNormalizado = correo.trim()
+
+        // RN-05: Una cuenta inactiva o deshabilitada no recibirá correos de recuperación.
+        val empleado = empleadoRepository.buscarPorCorreo(correoNormalizado)
+        if (empleado != null && empleado.estado != EstadoUsuario.ACTIVO) {
+            return Result.failure(
+                IllegalStateException("La cuenta de este colaborador se encuentra inactiva o deshabilitada. No recibirá correos de recuperación.")
+            )
+        }
+        if (empleado == null) {
+            return Result.failure(
+                IllegalStateException("No se encontró ninguna cuenta asociada a '$correoNormalizado'.")
+            )
+        }
+
         val authInstance = auth
         val resultado = try {
             if (authInstance != null) {

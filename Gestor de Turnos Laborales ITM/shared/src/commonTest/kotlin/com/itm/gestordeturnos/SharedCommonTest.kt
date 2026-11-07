@@ -12,6 +12,7 @@ import com.itm.gestordeturnos.domain.usecase.IntercambiarTurnosUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
 import com.itm.gestordeturnos.domain.usecase.ValidarContrasenaFirebaseAuthUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidarRecuperacionContrasenaUseCase
 import com.itm.gestordeturnos.domain.usecase.VerificarCoberturaDiariaUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -453,6 +454,44 @@ class SharedCommonTest {
         )
 
         assertIs<ValidacionClaveResult.Valida>(resultado)
+    }
+
+    // =========================================================================
+    // 7. PRUEBAS DE RECUPERACIÓN DE CLAVE Y CUENTAS INACTIVAS (RN-05)
+    // =========================================================================
+
+    @Test
+    fun validarRecuperacionContrasena_rechazaEnvioACuentasInactivasODeshabilitadas() = runBlocking {
+        val fakeRepo = FakeEmpleadoRepository(
+            empleadosIniciales = listOf(
+                Empleado(
+                    id = "emp_inactivo",
+                    nombre = "Pedro",
+                    correo = "pedro.inactivo@granodorado.com",
+                    estado = EstadoUsuario.INACTIVO
+                ),
+                Empleado(
+                    id = "emp_activo",
+                    nombre = "María",
+                    correo = "maria.activa@granodorado.com",
+                    estado = EstadoUsuario.ACTIVO
+                )
+            )
+        )
+        val useCase = ValidarRecuperacionContrasenaUseCase(fakeRepo)
+
+        // Caso 1: Cuenta inactiva -> debe fallar y no enviar correo (RN-05)
+        val resInactivo = useCase.evaluarElegibilidad("pedro.inactivo@granodorado.com")
+        assertTrue(resInactivo.isFailure, "Una cuenta inactiva no debe recibir correos de recuperación")
+        assertTrue(resInactivo.exceptionOrNull()?.message?.contains("inactiva") == true)
+
+        // Caso 2: Cuenta no registrada -> debe fallar
+        val resNoExiste = useCase.evaluarElegibilidad("desconocido@granodorado.com")
+        assertTrue(resNoExiste.isFailure, "Una cuenta no registrada no debe recibir correos")
+
+        // Caso 3: Cuenta activa -> elegible para envío
+        val resActivo = useCase.evaluarElegibilidad("maria.activa@granodorado.com")
+        assertTrue(resActivo.isSuccess, "Una cuenta activa sí es elegible para recibir correo de recuperación")
     }
 }
 
