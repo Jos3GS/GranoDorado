@@ -15,6 +15,8 @@ import com.itm.gestordeturnos.domain.model.TurnoCelda
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.ValidacionAsignacionResult
+import com.itm.gestordeturnos.domain.usecase.ValidarAsignacionTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.VerificarCoberturaDiariaUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -84,13 +86,16 @@ data class MallaSemanalState(
     val diasSemana: List<DiaColumnaMalla> = generarDiasSemanaIniciales(fechaInicioSemana),
     val filas: List<FilaMalla> = emptyList(),
     val turnosCatalogoActivos: List<TurnoTemplate> = emptyList(),
-    val publicado: Boolean = false
+    val publicado: Boolean = false,
+    val esSemanaPasada: Boolean = false,
+    val mensajeError: String? = null
 )
 
 class MallaSemanalViewModel(
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
-    private val verificarCoberturaUseCase: VerificarCoberturaDiariaUseCase = VerificarCoberturaDiariaUseCase()
+    private val verificarCoberturaUseCase: VerificarCoberturaDiariaUseCase = VerificarCoberturaDiariaUseCase(),
+    private val validarAsignacionUseCase: ValidarAsignacionTurnoUseCase = ValidarAsignacionTurnoUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MallaSemanalState())
     val uiState: StateFlow<MallaSemanalState> = _uiState.asStateFlow()
@@ -253,10 +258,19 @@ class MallaSemanalViewModel(
                 }
             }
 
+            val esPasada = !validarAsignacionUseCase.esSemanaModificable(lunes)
+            val estadoTexto = when {
+                esPasada && algunaPublicada -> "PUBLICADA - SEMANA PASADA (SOLO LECTURA)"
+                esPasada -> "HISTÓRICO - SEMANA PASADA (SOLO LECTURA)"
+                algunaPublicada -> "PUBLICADA - VISIBLE PARA LOS EMPLEADOS"
+                else -> "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
+            }
+
             _uiState.update {
                 it.copy(
                     publicado = algunaPublicada,
-                    estadoMalla = if (algunaPublicada) "PUBLICADA - VISIBLE PARA LOS EMPLEADOS" else "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
+                    esSemanaPasada = esPasada,
+                    estadoMalla = estadoTexto
                 )
             }
         } else if (lunes == LocalDate(2026, 9, 14) && todasAsigs.isEmpty() && perteneceASucursalNombre(sucursalActual, "Centro")) {
@@ -264,18 +278,22 @@ class MallaSemanalViewModel(
             MockDataProviders.inicialFilasMalla().forEach { fila ->
                 turnosPorEmpleado[fila.idEmpleado] = fila.turnos.map { it.copy(modificadoTrasPublicar = false) }.toMutableList()
             }
+            val esPasada = !validarAsignacionUseCase.esSemanaModificable(lunes)
             _uiState.update {
                 it.copy(
                     publicado = false,
-                    estadoMalla = "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
+                    esSemanaPasada = esPasada,
+                    estadoMalla = if (esPasada) "HISTÓRICO - SEMANA PASADA (SOLO LECTURA)" else "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
                 )
             }
         } else {
             // Semana limpia sin asignaciones previas: inicia en estado BORRADOR
+            val esPasada = !validarAsignacionUseCase.esSemanaModificable(lunes)
             _uiState.update {
                 it.copy(
                     publicado = false,
-                    estadoMalla = "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
+                    esSemanaPasada = esPasada,
+                    estadoMalla = if (esPasada) "HISTÓRICO - SEMANA PASADA (SOLO LECTURA)" else "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
                 )
             }
         }
@@ -350,6 +368,11 @@ class MallaSemanalViewModel(
     }
 
     fun publicarSemana() {
+        if (!validarAsignacionUseCase.esSemanaModificable(_uiState.value.fechaInicioSemana)) {
+            _uiState.update { it.copy(mensajeError = "Solo se permiten ajustes y publicación en la semana actual o en semanas futuras.") }
+            return
+        }
+
         // Al publicar la semana oficial inicial, se limpia el indicador de modificado en los turnos de la semana
         turnosPorEmpleado.values.forEach { listaCeldas ->
             listaCeldas.forEachIndexed { i, celda ->
@@ -439,6 +462,26 @@ class MallaSemanalViewModel(
         diaIndex: Int,
         turnoTemplate: TurnoTemplate
     ) {
+        val fechaDia = _uiState.value.fechaInicioSemana.plus(DatePeriod(days = diaIndex))
+        val emp = todosLosEmpleados.find { it.id == idEmpleado }
+        val sucursalActual = _uiState.value.sucursal
+        val sucursalEmp = emp?.let { resolverSucursalEmpleadoParaSemana(it, _uiState.value.fechaInicioSemana, turnoRepository.asignaciones.value) } ?: ""
+
+        val validacion = validarAsignacionUseCase.validarAsignacion(
+            empleado = emp,
+            sucursalEmpleado = sucursalEmp,
+            sucursalProgramacion = sucursalActual,
+            fechaAsignacion = fechaDia,
+            lunesSemana = _uiState.value.fechaInicioSemana
+        )
+
+        if (validacion is ValidacionAsignacionResult.Invalido) {
+            _uiState.update { it.copy(mensajeError = validacion.mensaje) }
+            return
+        }
+
+        _uiState.update { it.copy(mensajeError = null) }
+
         val horarioFormateado = if (turnoTemplate.horaInicio.isNotBlank() && turnoTemplate.horaFin.isNotBlank()) {
             "${turnoTemplate.horaInicio}-${turnoTemplate.horaFin}"
         } else {
@@ -485,6 +528,26 @@ class MallaSemanalViewModel(
         idEmpleado: String,
         diaIndex: Int
     ) {
+        val fechaDia = _uiState.value.fechaInicioSemana.plus(DatePeriod(days = diaIndex))
+        val emp = todosLosEmpleados.find { it.id == idEmpleado }
+        val sucursalActual = _uiState.value.sucursal
+        val sucursalEmp = emp?.let { resolverSucursalEmpleadoParaSemana(it, _uiState.value.fechaInicioSemana, turnoRepository.asignaciones.value) } ?: ""
+
+        val validacion = validarAsignacionUseCase.validarAsignacion(
+            empleado = emp,
+            sucursalEmpleado = sucursalEmp,
+            sucursalProgramacion = sucursalActual,
+            fechaAsignacion = fechaDia,
+            lunesSemana = _uiState.value.fechaInicioSemana
+        )
+
+        if (validacion is ValidacionAsignacionResult.Invalido) {
+            _uiState.update { it.copy(mensajeError = validacion.mensaje) }
+            return
+        }
+
+        _uiState.update { it.copy(mensajeError = null) }
+
         val celdas = turnosPorEmpleado.getOrPut(idEmpleado) {
             MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
         }
@@ -504,6 +567,18 @@ class MallaSemanalViewModel(
         actualizarFilasPorSucursal(_uiState.value.sucursal)
     }
 
+    fun mostrarErrorFechaPasada() {
+        if (!validarAsignacionUseCase.esSemanaModificable(_uiState.value.fechaInicioSemana)) {
+            _uiState.update { it.copy(mensajeError = "Solo se permiten ajustes en la semana actual o en semanas futuras.") }
+        } else {
+            _uiState.update { it.copy(mensajeError = "No se pueden crear ni ajustar asignaciones con fecha anterior a la fecha actual.") }
+        }
+    }
+
+    fun limpiarMensajeError() {
+        _uiState.update { it.copy(mensajeError = null) }
+    }
+
     override fun onCleared() {
         super.onCleared()
         guardarCambiosSiHayPendientes()
@@ -511,11 +586,14 @@ class MallaSemanalViewModel(
 
     private fun actualizarSemana(lunes: LocalDate) {
         val rangoTexto = formatearRangoSemana(lunes)
+        val esPasada = !validarAsignacionUseCase.esSemanaModificable(lunes)
 
         _uiState.update {
             it.copy(
                 fechaInicioSemana = lunes,
-                rangoSemana = rangoTexto
+                rangoSemana = rangoTexto,
+                esSemanaPasada = esPasada,
+                mensajeError = null
             )
         }
 

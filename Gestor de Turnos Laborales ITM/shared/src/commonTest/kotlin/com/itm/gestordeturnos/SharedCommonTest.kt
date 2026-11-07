@@ -10,10 +10,12 @@ import com.itm.gestordeturnos.domain.usecase.ControlIntentosLoginUseCase
 import com.itm.gestordeturnos.domain.usecase.EvaluacionIntentoLogin
 import com.itm.gestordeturnos.domain.usecase.IntercambiarTurnosUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionAdminSucursalEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionAsignacionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
+import com.itm.gestordeturnos.domain.usecase.ValidarAsignacionTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarContrasenaFirebaseAuthUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarModificacionRolEstadoUseCase
@@ -39,6 +41,7 @@ class SharedCommonTest {
 
     private val verificarCoberturaUseCase = VerificarCoberturaDiariaUseCase()
     private val calcularDescansosUseCase = CalcularDescansosTurnoUseCase()
+    private val validarAsignacionUseCase = ValidarAsignacionTurnoUseCase()
 
     // =========================================================================
     // 1. PRUEBAS DE COBERTURA DIARIA Y CÁLCULO DE HORAS SEMANALES
@@ -994,6 +997,160 @@ class SharedCommonTest {
         assertEquals(empleadoInicial.correo, empleadoReactivado.correo)
         assertEquals(empleadoInicial.fechaIngreso, empleadoReactivado.fechaIngreso)
         assertEquals(EstadoUsuario.ACTIVO, empleadoReactivado.estado)
+    }
+
+    // =========================================================================
+    // 8. PRUEBAS DE ASIGNACIÓN DE TURNOS Y PROGRAMACIÓN (RN-15)
+    // =========================================================================
+
+    @Test
+    fun validarAsignacion_rechazaEmpleadoInactivo() {
+        val empleadoInactivo = Empleado(
+            id = "emp_inactivo",
+            nombre = "Carlos",
+            apellido = "Pérez",
+            estado = EstadoUsuario.INACTIVO,
+            sucursal = "Centro"
+        )
+
+        val resultado = validarAsignacionUseCase.validarAsignacion(
+            empleado = empleadoInactivo,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = LocalDate(2026, 11, 10),
+            fechaActual = LocalDate(2026, 11, 6)
+        )
+
+        val invalido = assertIs<ValidacionAsignacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("Activo"))
+        assertFalse(invalido.mensaje.contains("(RN-15)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun validarAsignacion_rechazaEmpleadoDeOtraSucursal() {
+        val empleadoNorte = Empleado(
+            id = "emp_norte",
+            nombre = "Laura",
+            apellido = "Gómez",
+            estado = EstadoUsuario.ACTIVO,
+            sucursal = "Norte"
+        )
+
+        val resultado = validarAsignacionUseCase.validarAsignacion(
+            empleado = empleadoNorte,
+            sucursalEmpleado = "Norte",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = LocalDate(2026, 11, 10),
+            fechaActual = LocalDate(2026, 11, 6)
+        )
+
+        val invalido = assertIs<ValidacionAsignacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("sucursal"))
+        assertFalse(invalido.mensaje.contains("(RN-15)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun validarAsignacion_rechazaFechaAnteriorAFechaActual() {
+        val empleadoActivo = Empleado(
+            id = "emp_1",
+            nombre = "Ana",
+            apellido = "Torres",
+            estado = EstadoUsuario.ACTIVO,
+            sucursal = "Centro"
+        )
+
+        val fechaActual = LocalDate(2026, 11, 6) // Viernes
+        val fechaAyer = LocalDate(2026, 11, 5)   // Jueves
+
+        val resultado = validarAsignacionUseCase.validarAsignacion(
+            empleado = empleadoActivo,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = fechaAyer,
+            lunesSemana = LocalDate(2026, 11, 2),
+            fechaActual = fechaActual
+        )
+
+        val invalido = assertIs<ValidacionAsignacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("anterior a la fecha actual"))
+        assertFalse(invalido.mensaje.contains("(RN-15)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun validarAsignacion_rechazaSemanaPasada() {
+        val empleadoActivo = Empleado(
+            id = "emp_1",
+            nombre = "Ana",
+            apellido = "Torres",
+            estado = EstadoUsuario.ACTIVO,
+            sucursal = "Centro"
+        )
+
+        val fechaActual = LocalDate(2026, 11, 6)       // Semana actual (lunes 2026-11-02)
+        val lunesSemanaPasada = LocalDate(2026, 10, 26) // Semana pasada
+
+        val resultado = validarAsignacionUseCase.validarAsignacion(
+            empleado = empleadoActivo,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = LocalDate(2026, 10, 28),
+            lunesSemana = lunesSemanaPasada,
+            fechaActual = fechaActual
+        )
+
+        val invalido = assertIs<ValidacionAsignacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("semana actual") || invalido.mensaje.contains("semanas futuras"))
+        assertFalse(invalido.mensaje.contains("(RN-15)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun validarAsignacion_permiteFechaActualYSemanasFuturas() {
+        val empleadoActivo = Empleado(
+            id = "emp_1",
+            nombre = "Ana",
+            apellido = "Torres",
+            estado = EstadoUsuario.ACTIVO,
+            sucursal = "Centro"
+        )
+
+        val fechaActual = LocalDate(2026, 11, 6)
+
+        // Asignación en la misma fecha actual
+        val resHoy = validarAsignacionUseCase.validarAsignacion(
+            empleado = empleadoActivo,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = fechaActual,
+            lunesSemana = LocalDate(2026, 11, 2),
+            fechaActual = fechaActual
+        )
+        assertIs<ValidacionAsignacionResult.Valido>(resHoy)
+
+        // Asignación en una semana futura
+        val resFuturo = validarAsignacionUseCase.validarAsignacion(
+            empleado = empleadoActivo,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = LocalDate(2026, 11, 16),
+            lunesSemana = LocalDate(2026, 11, 16),
+            fechaActual = fechaActual
+        )
+        assertIs<ValidacionAsignacionResult.Valido>(resFuturo)
+    }
+
+    @Test
+    fun esSemanaModificable_detectaCorrectamenteSemanasPasadasYFuturas() {
+        val fechaActual = LocalDate(2026, 11, 6) // Lunes actual: 2026-11-02
+
+        // Semana pasada
+        assertFalse(validarAsignacionUseCase.esSemanaModificable(LocalDate(2026, 10, 26), fechaActual))
+
+        // Semana actual
+        assertTrue(validarAsignacionUseCase.esSemanaModificable(LocalDate(2026, 11, 2), fechaActual))
+
+        // Semana futura
+        assertTrue(validarAsignacionUseCase.esSemanaModificable(LocalDate(2026, 11, 9), fechaActual))
+        assertTrue(validarAsignacionUseCase.esSemanaModificable(LocalDate(2026, 11, 16), fechaActual))
     }
 }
 

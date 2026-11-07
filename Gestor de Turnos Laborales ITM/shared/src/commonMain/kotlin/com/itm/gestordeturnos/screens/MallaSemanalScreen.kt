@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -60,6 +61,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itm.gestordeturnos.CafeBackgroundLight
 import com.itm.gestordeturnos.CafeDarkBrown
+import com.itm.gestordeturnos.CafeStatusErrorBg
+import com.itm.gestordeturnos.CafeStatusErrorText
 import com.itm.gestordeturnos.components.MallaEmployeeRow
 import com.itm.gestordeturnos.components.MallaHeaderRow
 import com.itm.gestordeturnos.components.MallaLeyenda
@@ -67,12 +70,14 @@ import com.itm.gestordeturnos.components.ModalAsignarTurno
 import com.itm.gestordeturnos.domain.model.FilaMalla
 import com.itm.gestordeturnos.domain.model.TurnoCelda
 import com.itm.gestordeturnos.viewmodel.MallaSemanalViewModel
+import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.todayIn
 
 @OptIn(ExperimentalMaterial3Api::class)
 private object MallaUtcDatePickerFormatter : DatePickerFormatter {
@@ -324,6 +329,42 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                     }
                 }
 
+                if (state.mensajeError != null) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(CafeStatusErrorBg, RoundedCornerShape(6.dp))
+                            .border(1.dp, Color(0xFFFCA5A5), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = state.mensajeError ?: "",
+                                color = CafeStatusErrorText,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { viewModel.limpiarMensajeError() },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cerrar mensaje",
+                                    tint = CafeStatusErrorText,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // ==========================================
@@ -468,9 +509,15 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                                     colDiaWidth = colDiaWidth,
                                     colTotalWidth = colTotalWidth,
                                     onCeldaClick = { f, diaIdx, turno ->
+                                        val fechaDia = state.fechaInicioSemana.plus(DatePeriod(days = diaIdx))
+                                        val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
+                                        if (fechaDia < hoy) {
+                                            viewModel.mostrarErrorFechaPasada()
+                                            return@MallaEmployeeRow
+                                        }
                                         if (turno.tipoCelda != com.itm.gestordeturnos.domain.model.TipoCeldaMalla.INCAPACIDAD &&
                                             turno.tipoCelda != com.itm.gestordeturnos.domain.model.TipoCeldaMalla.VACACIONES) {
-                                        celdaSeleccionada = Triple(f, diaIdx, turno)
+                                            celdaSeleccionada = Triple(f, diaIdx, turno)
                                         }
                                     }
                                 )
