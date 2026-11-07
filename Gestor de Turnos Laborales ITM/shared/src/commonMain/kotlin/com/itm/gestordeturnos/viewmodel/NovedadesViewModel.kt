@@ -15,7 +15,9 @@ import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionNovedadResult
 import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidarReporteNovedadUseCase
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -119,7 +121,8 @@ class NovedadesViewModel(
     private val novedadRepository: NovedadRepositoryContract = NovedadRepository,
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
-    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase()
+    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase(),
+    private val validarReporteNovedadUseCase: ValidarReporteNovedadUseCase = ValidarReporteNovedadUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(NovedadesState())
     val uiState: StateFlow<NovedadesState> = _uiState.asStateFlow()
@@ -249,18 +252,25 @@ class NovedadesViewModel(
             return false
         }
 
-        if (descripcion.isBlank()) {
-            _uiState.update { it.copy(mensajeError = "La descripción de la novedad es obligatoria (CA-14.2).") }
-            return false
+        // Resolver turno de la fecha si existe en asignaciones
+        val asig = _uiState.value.asignaciones.find {
+            it.empleadoId == empleado.id && it.fechaIso == fechaIso
         }
 
-        val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
-        val fechaObj = try { LocalDate.parse(fechaIso) } catch (_: Throwable) { hoy }
-        val diffDias = hoy.toEpochDays() - fechaObj.toEpochDays()
+        // Validación de reglas de negocio para reporte de novedades (RN-11, RN-23, RN-24)
+        val validacionNovedad = validarReporteNovedadUseCase.validarReporteNovedad(
+            empleado = empleado,
+            tipoNovedad = tipoNovedad,
+            descripcion = descripcion,
+            fechaReferencia = fechaIso,
+            horaReal = horaReal,
+            horarioProgramado = asig?.horario ?: "",
+            asignacionTurno = asig,
+            novedadesExistentes = _uiState.value.novedades
+        )
 
-        // CA-14.6: Plazo máximo de 48 horas hacia atrás
-        if (diffDias > 2) {
-            _uiState.update { it.copy(mensajeError = "No es posible registrar novedades para turnos con más de 48 horas de antigüedad (CA-14.6).") }
+        if (validacionNovedad is ValidacionNovedadResult.Invalido) {
+            _uiState.update { it.copy(mensajeError = validacionNovedad.mensaje) }
             return false
         }
 
@@ -268,23 +278,6 @@ class NovedadesViewModel(
             "${empleado.nombre} ${empleado.apellido}".trim()
         } else {
             empleado.nombre
-        }
-
-        // CA-14.3: Evitar registros duplicados de novedad para el mismo empleado, fecha y tipo
-        val yaExiste = _uiState.value.novedades.any { nov ->
-            (nov.empleadoId == empleado.id || nov.empleado.equals(empNombreCompleto, ignoreCase = true)) &&
-            nov.tipo.equals(tipoNovedad, ignoreCase = true) &&
-            (nov.fechaReferencia == fechaIso || nov.detalleTurno.contains(fechaIso))
-        }
-
-        if (yaExiste) {
-            _uiState.update { it.copy(mensajeError = "Ya existe una novedad registrada de tipo '$tipoNovedad' para este empleado y fecha (CA-14.3).") }
-            return false
-        }
-
-        // Resolver turno de la fecha si existe en asignaciones
-        val asig = _uiState.value.asignaciones.find {
-            it.empleadoId == empleado.id && it.fechaIso == fechaIso
         }
         val detalleTurnoTexto = when {
             asig != null && asig.esDescanso -> "Descanso · $fechaIso"
@@ -302,6 +295,7 @@ class NovedadesViewModel(
 
         val diferenciaTexto = if (horaReal.isNotBlank()) "Hora real: $horaReal" else ""
 
+        val hoyIso = Clock.System.todayIn(TimeZone.currentSystemDefault()).toString()
         val nuevaNovedad = Novedad(
             id = "nov_sup_${Clock.System.now().toEpochMilliseconds()}",
             tipo = tipoNovedad,
@@ -317,7 +311,7 @@ class NovedadesViewModel(
             colorVorde = color,
             asignacionTurnoId = asig?.id ?: "",
             fechaReferencia = fechaIso,
-            fechaCreacionIso = hoy.toString(),
+            fechaCreacionIso = hoyIso,
             reportadoPorSupervisor = true
         )
 

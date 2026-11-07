@@ -14,7 +14,9 @@ import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionNovedadResult
 import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidarReporteNovedadUseCase
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,7 +57,8 @@ class ReportarNovedadViewModel(
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
     private val novedadRepository: NovedadRepositoryContract = NovedadRepository,
-    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase()
+    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase(),
+    private val validarReporteNovedadUseCase: ValidarReporteNovedadUseCase = ValidarReporteNovedadUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReportarNovedadState())
     val uiState: StateFlow<ReportarNovedadState> = _uiState.asStateFlow()
@@ -297,69 +300,37 @@ class ReportarNovedadViewModel(
 
     fun guardarNovedad() {
         val actual = _uiState.value
-        if (actual.tipoNovedad == "Selecciona...") {
-            _uiState.update { it.copy(errorMensaje = "Por favor selecciona el tipo de novedad.") }
-            return
-        }
-        if (actual.descripcion.isBlank()) {
-            _uiState.update { it.copy(errorMensaje = "La descripción de la novedad es obligatoria (CA-11.4).") }
-            return
-        }
-
-        val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
-        val fechaRef = actual.fechaReferencia.ifBlank { hoy.toString() }
-        val fechaObj = try { LocalDate.parse(fechaRef) } catch (_: Throwable) { hoy }
-        val diffDias = hoy.toEpochDays() - fechaObj.toEpochDays()
-
-        // CA-11.4: Plazo de 48 horas hacia atrás
-        if (actual.requiereHoraReal) {
-            if (diffDias < 0) {
-                _uiState.update { it.copy(errorMensaje = "No se pueden reportar novedades de horarios sobre turnos futuros.") }
-                return
-            }
-            if (diffDias > 2) {
-                _uiState.update { it.copy(errorMensaje = "El plazo máximo para reportar novedades es de 48 horas posteriores al turno (CA-11.4).") }
-                return
-            }
-            if (actual.horaReal.isBlank()) {
-                _uiState.update { it.copy(errorMensaje = "Por favor ingresa la hora real para calcular la diferencia (CA-11.3).") }
-                return
-            }
-
-            // CA-11.3: Validación de coherencia
-            val partesHorario = actual.horarioProgramado.split("-")
-            if (partesHorario.size == 2) {
-                val iniProg = parsearMinutos(partesHorario[0].trim())
-                val finProg = parsearMinutos(partesHorario[1].trim())
-                val real = parsearMinutos(actual.horaReal)
-                if (real != null && finProg != null && actual.tipoNovedad == "Salida antes de la hora" && real >= finProg) {
-                    _uiState.update { it.copy(errorMensaje = "La salida antes de tiempo debe ser anterior a la hora programada (${partesHorario[1].trim()}).") }
-                    return
-                }
-                if (real != null && finProg != null && actual.tipoNovedad == "Ampliación del turno" && real <= finProg) {
-                    _uiState.update { it.copy(errorMensaje = "La ampliación de turno debe ser posterior a la hora programada (${partesHorario[1].trim()}).") }
-                    return
-                }
-                if (real != null && iniProg != null && actual.tipoNovedad == "Llegada tarde" && real <= iniProg) {
-                    _uiState.update { it.copy(errorMensaje = "La llegada tarde debe ser posterior a la hora de inicio (${partesHorario[0].trim()}).") }
-                    return
-                }
-            }
-        }
-
         val emp = resolverEmpleado(listaEmpleados)
-
-        // RN-11: El empleado no puede realizar acciones si está inactivo
-        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(emp, "novedad")
-        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
-            _uiState.update { it.copy(errorMensaje = validacionActivo.mensaje) }
-            return
-        }
-
         val empId = emp?.id ?: (SessionManager.usuarioActivo?.id ?: "emp_1")
         val empNombre = emp?.let {
             if (it.apellido.isNotBlank()) "${it.nombre} ${it.apellido}".trim() else it.nombre
         } ?: (SessionManager.usuarioActivo?.nombre ?: "Empleado")
+
+        val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
+        val fechaRef = actual.fechaReferencia.ifBlank { hoy.toString() }
+
+        val asig = todasLasAsignaciones.find { a ->
+            (a.empleadoId == empId || (a.empleadoNombre.isNotBlank() && a.empleadoNombre.equals(empNombre, ignoreCase = true))) &&
+            a.fechaIso == fechaRef
+        }
+
+        // Validación de reglas de negocio para reporte de novedades (RN-11, RN-23, RN-24)
+        val resultadoValidacion = validarReporteNovedadUseCase.validarReporteNovedad(
+            empleado = emp,
+            tipoNovedad = actual.tipoNovedad,
+            descripcion = actual.descripcion,
+            fechaReferencia = fechaRef,
+            horaReal = actual.horaReal,
+            horarioProgramado = actual.horarioProgramado,
+            asignacionTurno = asig,
+            novedadesExistentes = novedadRepository.novedades.value
+        )
+
+        if (resultadoValidacion is ValidacionNovedadResult.Invalido) {
+            _uiState.update { it.copy(errorMensaje = resultadoValidacion.mensaje) }
+            return
+        }
+
         val empSucursal = emp?.sucursal ?: (SessionManager.usuarioActivo?.sucursal ?: "CENTRO")
 
         val colorBorde = when (actual.tipoNovedad) {

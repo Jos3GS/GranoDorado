@@ -19,9 +19,11 @@ import com.itm.gestordeturnos.domain.usecase.ValidacionAsignacionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionSoloLecturaResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionNovedadResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionSolicitudCambioResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
+import com.itm.gestordeturnos.domain.usecase.ValidarReporteNovedadUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarAprobacionCambioTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarAsignacionTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarContrasenaFirebaseAuthUseCase
@@ -2850,6 +2852,354 @@ class SharedCommonTest {
         assertEquals(EstadoSolicitudCambio.VENCIDA, mapActualizadas["sol_aceptada_expirada"]?.estado)
         assertEquals(EstadoSolicitudCambio.PENDIENTE, mapActualizadas["sol_futura"]?.estado)
         assertEquals(EstadoSolicitudCambio.APROBADA, mapActualizadas["sol_aprobada_pasada"]?.estado)
+    }
+
+    // =========================================================================
+    // 24. PRUEBAS DE REGLAS DE REPORTE DE NOVEDADES (RN-23)
+    // =========================================================================
+
+    @Test
+    fun rn23_rechazaNovedadSiColaboradorEstaInactivo() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empInactivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.INACTIVO
+        )
+
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empInactivo,
+            tipoNovedad = "Llegada tarde",
+            descripcion = "Retraso en transporte público",
+            fechaReferencia = "2026-11-06",
+            horaReal = "08:15",
+            horarioProgramado = "08:00 - 16:00"
+        )
+
+        val invalido = assertIs<ValidacionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("inactiva", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-23"))
+    }
+
+    @Test
+    fun rn23_rechazaNovedadSiTipoODescripcionEstanVacios() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Caso 1: Tipo en "Selecciona..."
+        val resTipoInvalido = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Selecciona...",
+            descripcion = "Descripción válida",
+            fechaReferencia = "2026-11-06"
+        )
+        val invTipo = assertIs<ValidacionNovedadResult.Invalido>(resTipoInvalido)
+        assertTrue(invTipo.mensaje.contains("selecciona el tipo", ignoreCase = true))
+
+        // Caso 2: Descripción en blanco
+        val resDescVacia = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Incapacidad médica",
+            descripcion = "   ",
+            fechaReferencia = "2026-11-06"
+        )
+        val invDesc = assertIs<ValidacionNovedadResult.Invalido>(resDescVacia)
+        assertTrue(invDesc.mensaje.contains("descripción", ignoreCase = true))
+        assertFalse(invDesc.mensaje.contains("CA-11.4"))
+        assertFalse(invDesc.mensaje.contains("RN-23"))
+    }
+
+    @Test
+    fun rn23_rechazaSegundaNovedadDelMismoTipoParaElMismoTurnoOFecha() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        val novedadPrevia = Novedad(
+            id = "nov_1",
+            tipo = "Llegada tarde",
+            descripcion = "Primer retraso",
+            empleadoId = "emp_1",
+            empleado = "Carlos Ruiz",
+            fechaReferencia = "2026-11-06",
+            asignacionTurnoId = "asig_10"
+        )
+
+        val turno = AsignacionTurno(
+            id = "asig_10",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-06",
+            horario = "08:00 - 16:00"
+        )
+
+        // Intento de reportar otra novedad de "Llegada tarde" para el mismo turno/fecha
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Llegada tarde",
+            descripcion = "Segundo intento de llegada tarde",
+            fechaReferencia = "2026-11-06",
+            horaReal = "08:20",
+            horarioProgramado = "08:00 - 16:00",
+            asignacionTurno = turno,
+            novedadesExistentes = listOf(novedadPrevia),
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 600
+        )
+
+        val invalido = assertIs<ValidacionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("Ya existe una novedad registrada de tipo 'Llegada tarde'", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("CA-14.3"))
+        assertFalse(invalido.mensaje.contains("RN-23"))
+    }
+
+    @Test
+    fun rn23_permiteNovedadesDeDistintoTipoParaElMismoTurno() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Ya existe una llegada tarde
+        val novedadPrevia = Novedad(
+            id = "nov_1",
+            tipo = "Llegada tarde",
+            descripcion = "Primer retraso",
+            empleadoId = "emp_1",
+            empleado = "Carlos Ruiz",
+            fechaReferencia = "2026-11-06",
+            asignacionTurnoId = "asig_10"
+        )
+
+        val turno = AsignacionTurno(
+            id = "asig_10",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-06",
+            horario = "08:00 - 16:00"
+        )
+
+        // Se reporta una novedad de distinto tipo ("Ampliación del turno") sobre el mismo turno
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Ampliación del turno",
+            descripcion = "Se cubrió cierre por alto flujo de clientes",
+            fechaReferencia = "2026-11-06",
+            horaReal = "18:00",
+            horarioProgramado = "08:00 - 16:00",
+            asignacionTurno = turno,
+            novedadesExistentes = listOf(novedadPrevia),
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 1100
+        )
+
+        assertIs<ValidacionNovedadResult.Valido>(resultado)
+    }
+
+    @Test
+    fun rn23_rechazaNovedadSobreTurnosFuturos() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Fecha actual es 2026-11-06, se intenta reportar novedad sobre turno de 2026-11-07
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Llegada tarde",
+            descripcion = "Previsión de retraso",
+            fechaReferencia = "2026-11-07",
+            horaReal = "08:30",
+            horarioProgramado = "08:00 - 16:00",
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 600
+        )
+
+        val invalido = assertIs<ValidacionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("futuros", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-23"))
+    }
+
+    @Test
+    fun rn23_rechazaNovedadSiTurnoDeHoyAunNoHaIniciado() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Turno hoy de 08:00 a 16:00 (inicio: 480 min). Hora actual: 07:30 (450 min).
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Llegada tarde",
+            descripcion = "Intento antes de que empiece",
+            fechaReferencia = "2026-11-07",
+            horaReal = "08:15",
+            horarioProgramado = "08:00 - 16:00",
+            fechaActual = LocalDate(2026, 11, 7),
+            horaActualMinutos = 450
+        )
+
+        val invalido = assertIs<ValidacionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("aún no ha iniciado", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-23"))
+    }
+
+    @Test
+    fun rn23_permiteNovedadSiTurnoDeHoyYaInicio() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Turno hoy de 08:00 a 16:00 (inicio: 480 min). Hora actual: 08:30 (510 min).
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Llegada tarde",
+            descripcion = "Llegada con retraso confirmada",
+            fechaReferencia = "2026-11-07",
+            horaReal = "08:25",
+            horarioProgramado = "08:00 - 16:00",
+            fechaActual = LocalDate(2026, 11, 7),
+            horaActualMinutos = 510
+        )
+
+        assertIs<ValidacionNovedadResult.Valido>(resultado)
+    }
+
+    @Test
+    fun rn23_rechazaNovedadSiHanPasadoMasDe48HorasExactasDesdeFinDelTurno() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Turno finalizó el 2026-11-05 a las 14:00 (840 min).
+        // 48 horas exactas se cumplen el 2026-11-07 a las 14:00 (840 min).
+        // Hora actual: 2026-11-07 a las 14:05 (845 min) -> 48h y 5min han pasado.
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Llegada tarde",
+            descripcion = "Reporte extemporáneo",
+            fechaReferencia = "2026-11-05",
+            horaReal = "06:30",
+            horarioProgramado = "06:00 - 14:00",
+            fechaActual = LocalDate(2026, 11, 7),
+            horaActualMinutos = 845
+        )
+
+        val invalido = assertIs<ValidacionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("48 horas", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("CA-11.4"))
+        assertFalse(invalido.mensaje.contains("RN-23"))
+    }
+
+    @Test
+    fun rn23_permiteNovedadDentroDeLas48HorasExactasDesdeFinDelTurno() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Turno finalizó el 2026-11-05 a las 14:00 (840 min).
+        // Hora actual: 2026-11-07 a las 13:50 (830 min) -> 47 horas y 50 minutos (dentro del límite de 48h).
+        val resultado = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Llegada tarde",
+            descripcion = "Reporte dentro del límite de 48h",
+            fechaReferencia = "2026-11-05",
+            horaReal = "06:30",
+            horarioProgramado = "06:00 - 14:00",
+            fechaActual = LocalDate(2026, 11, 7),
+            horaActualMinutos = 830
+        )
+
+        assertIs<ValidacionNovedadResult.Valido>(resultado)
+    }
+
+    @Test
+    fun rn23_rechazaIncoherenciaEnHorasReales() {
+        val useCase = ValidarReporteNovedadUseCase()
+        val empActivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Turno 08:00 - 16:00
+        // Llegada tarde reportada a las 07:55 (anterior a la hora de inicio 08:00)
+        val resLlegadaIncoherente = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Llegada tarde",
+            descripcion = "Marcaje",
+            fechaReferencia = "2026-11-06",
+            horaReal = "07:55",
+            horarioProgramado = "08:00 - 16:00",
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 600
+        )
+        val invLlegada = assertIs<ValidacionNovedadResult.Invalido>(resLlegadaIncoherente)
+        assertTrue(invLlegada.mensaje.contains("posterior a la hora de inicio", ignoreCase = true))
+
+        // Salida antes de tiempo reportada a las 16:30 (posterior a la hora de fin 16:00)
+        val resSalidaIncoherente = useCase.validarReporteNovedad(
+            empleado = empActivo,
+            tipoNovedad = "Salida antes de la hora",
+            descripcion = "Marcaje",
+            fechaReferencia = "2026-11-06",
+            horaReal = "16:30",
+            horarioProgramado = "08:00 - 16:00",
+            fechaActual = LocalDate(2026, 11, 6),
+            horaActualMinutos = 1100
+        )
+        val invSalida = assertIs<ValidacionNovedadResult.Invalido>(resSalidaIncoherente)
+        assertTrue(invSalida.mensaje.contains("anterior a la hora de finalización", ignoreCase = true))
     }
 }
 
