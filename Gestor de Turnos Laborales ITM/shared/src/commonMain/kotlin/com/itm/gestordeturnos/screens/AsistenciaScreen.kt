@@ -352,17 +352,20 @@ private fun FilaAsistencia(registro: RegistroAsistencia, onRegistrarMarca: (Regi
             Text(registro.horaSalida, color = CafeTextPrimary, fontSize = 14.sp)
             if (registro.salidaPorSupervisor) {
                 Text("Manual", color = CafeAccentYellow, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            } else if (registro.estado == "PENDIENTE DE CIERRE") {
+                Text("Sin salida", color = Color(0xFFE65100), fontSize = 10.sp, fontWeight = FontWeight.Medium)
             }
         }
 
         // Columna Estado (Tokens semánticos de Theme)
-        Box(modifier = Modifier.weight(1.5f)) {
+        Column(modifier = Modifier.weight(1.5f)) {
             val bgEstado = when (registro.estado) {
                 "PRESENTE" -> CafeStatusSuccessBg
                 "TARDE" -> CafeStatusWarningBg
                 "EN DESCANSO" -> CafeStatusInfoBg
                 "FINALIZADO" -> Color(0xFFF0F0F0)
                 "PENDIENTE" -> Color(0xFFF5F5F5)
+                "PENDIENTE DE CIERRE" -> Color(0xFFFFF3E0)
                 else -> CafeStatusErrorBg
             }
             val textEstado = when (registro.estado) {
@@ -371,11 +374,21 @@ private fun FilaAsistencia(registro: RegistroAsistencia, onRegistrarMarca: (Regi
                 "EN DESCANSO" -> CafeStatusInfoText
                 "FINALIZADO" -> CafeTextSecondary
                 "PENDIENTE" -> CafeTextSecondary
+                "PENDIENTE DE CIERRE" -> Color(0xFFE65100)
                 else -> CafeStatusErrorText
             }
 
             Box(modifier = Modifier.background(bgEstado, RoundedCornerShape(2.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
                 Text(registro.estado, color = textEstado, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            }
+            if (registro.estado == "FINALIZADO" && registro.tiempoEfectivoMinutos > 0) {
+                Spacer(modifier = Modifier.height(2.dp))
+                val h = registro.tiempoEfectivoMinutos / 60
+                val m = registro.tiempoEfectivoMinutos % 60
+                Text("${h}h ${m}m efectivos", color = CafeTextSecondary, fontSize = 10.sp)
+            } else if (registro.estado == "PENDIENTE DE CIERRE") {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("0h efectivas", color = Color(0xFFE65100), fontSize = 10.sp)
             }
         }
 

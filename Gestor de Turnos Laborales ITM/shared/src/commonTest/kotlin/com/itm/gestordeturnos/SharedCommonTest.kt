@@ -37,6 +37,8 @@ import com.itm.gestordeturnos.domain.usecase.ValidarContrasenaFirebaseAuthUseCas
 import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarModificacionRolEstadoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarPermisosAdminSucursalEmpleadoUseCase
+import com.itm.gestordeturnos.domain.usecase.CalcularJornadaAsistenciaUseCase
+import com.itm.gestordeturnos.domain.usecase.JornadaEvaluada
 import com.itm.gestordeturnos.domain.usecase.ValidarRecuperacionContrasenaUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarSolicitudCambioTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.VerificarCoberturaDiariaUseCase
@@ -62,6 +64,7 @@ class SharedCommonTest {
     private val validarAsignacionUseCase = ValidarAsignacionTurnoUseCase()
     private val validarMarcacionAsistenciaUseCase = ValidarMarcacionAsistenciaUseCase()
     private val validarMarcaSupervisorUseCase = ValidarMarcaSupervisorUseCase()
+    private val calcularJornadaUseCase = CalcularJornadaAsistenciaUseCase()
 
     // =========================================================================
     // 1. PRUEBAS DE COBERTURA DIARIA Y CÁLCULO DE HORAS SEMANALES
@@ -4145,6 +4148,153 @@ class SharedCommonTest {
         assertEquals("Omisión de marcación de salida", registro.motivoSupervisor)
         assertTrue(registro.salidaPorSupervisor)
         assertFalse(registro.entradaPorSupervisor)
+    }
+
+    // =========================================================================
+    // 29. PRUEBAS DE CÁLCULO DE TIEMPO EFECTIVO Y ESTADO PENDIENTE DE CIERRE (RN-30)
+    // =========================================================================
+
+    @Test
+    fun rn30_formulaTiempoEfectivo_descuentaPausasDeDescansoCorrectamente() {
+        val pausas = listOf(
+            PausaDescanso(id = "1", horaInicio = "10:00", horaFin = "10:15"), // 15 min
+            PausaDescanso(id = "2", horaInicio = "13:00", horaFin = "13:45")  // 45 min
+        )
+        // 08:00 a 17:00 = 9 horas (540 minutos)
+        // 540 - (15 + 45) = 480 minutos (8 horas)
+        val minutosNetos = calcularJornadaUseCase.calcularMinutosTrabajados(
+            horaEntrada = "08:00",
+            horaSalida = "17:00",
+            descansos = pausas
+        )
+        assertEquals(480, minutosNetos)
+    }
+
+    @Test
+    fun rn30_formulaTiempoEfectivo_sinDescansos_retornaTotalBruto() {
+        val minutosNetos = calcularJornadaUseCase.calcularMinutosTrabajados(
+            horaEntrada = "08:00",
+            horaSalida = "16:00",
+            descansos = emptyList()
+        )
+        assertEquals(480, minutosNetos)
+    }
+
+    @Test
+    fun rn30_turnoConEntradaSinSalida_noPasaAFinalizadoDuranteTurno() {
+        // Turno en curso dentro del horario (hoy 2026-11-07, programado 08:00 - 16:00, hora actual 12:00 = 720 min)
+        val registro = RegistroAsistencia(
+            id = "reg_1",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            horarioProgramado = "08:00 - 16:00",
+            horaEntrada = "08:00",
+            horaSalida = "-",
+            estadoAsistencia = EstadoAsistencia.EN_TURNO
+        )
+
+        val evaluacion = calcularJornadaUseCase.evaluarJornada(
+            registro = registro,
+            fechaActualIso = "2026-11-07",
+            horaActualMinutos = 12 * 60
+        )
+
+        assertFalse(evaluacion.esPendienteDeCierre)
+        assertEquals("PRESENTE", evaluacion.estadoTexto)
+        assertEquals(EstadoAsistencia.EN_TURNO, evaluacion.estadoAsistencia)
+        assertEquals(0, evaluacion.tiempoEfectivoMinutos)
+    }
+
+    @Test
+    fun rn30_turnoSinSalida_cuandoExpiraElHorarioProgramado_pasaAPendienteDeCierre() {
+        // Horario programado termina a las 16:00 (960 min).
+        // Hora actual: 16:45 (1005 min, sobrepasa fin + 30 min de tolerancia).
+        val registro = RegistroAsistencia(
+            id = "reg_1",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            horarioProgramado = "08:00 - 16:00",
+            horaEntrada = "08:00",
+            horaSalida = "-",
+            estadoAsistencia = EstadoAsistencia.EN_TURNO
+        )
+
+        val evaluacion = calcularJornadaUseCase.evaluarJornada(
+            registro = registro,
+            fechaActualIso = "2026-11-07",
+            horaActualMinutos = 16 * 60 + 45
+        )
+
+        assertTrue(evaluacion.esPendienteDeCierre, "Debe marcarse como pendiente de cierre si expiró el horario")
+        assertEquals("PENDIENTE DE CIERRE", evaluacion.estadoTexto)
+        assertEquals(0, evaluacion.tiempoEfectivoMinutos, "Tiempo efectivo debe ser 0 mientras no haya salida formal")
+    }
+
+    @Test
+    fun rn30_turnoSinSalida_cuandoTerminaElDia_pasaAPendienteDeCierre() {
+        // Turno del día anterior ("2026-11-06"), hoy es "2026-11-07"
+        val registro = RegistroAsistencia(
+            id = "reg_ayer",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-06",
+            horarioProgramado = "08:00 - 16:00",
+            horaEntrada = "08:05",
+            horaSalida = "-",
+            estadoAsistencia = EstadoAsistencia.EN_TURNO
+        )
+
+        val evaluacion = calcularJornadaUseCase.evaluarJornada(
+            registro = registro,
+            fechaActualIso = "2026-11-07",
+            horaActualMinutos = 9 * 60
+        )
+
+        assertTrue(evaluacion.esPendienteDeCierre, "Debe marcarse como pendiente de cierre si el día ya culminó")
+        assertEquals("PENDIENTE DE CIERRE", evaluacion.estadoTexto)
+        assertEquals(0, evaluacion.tiempoEfectivoMinutos, "Tiempo efectivo debe permanecer en 0 hasta su resolución")
+    }
+
+    @Test
+    fun rn30_turnoCerradoConSalida_calculaTiempoEfectivoNetoYEstadoFinalizado() {
+        val pausas = listOf(
+            PausaDescanso(id = "1", horaInicio = "12:00", horaFin = "12:30") // 30 min
+        )
+        // 08:00 a 16:30 = 8h 30m (510 min) - 30 min descanso = 480 min (8 horas efectivas)
+        val registro = RegistroAsistencia(
+            id = "reg_cerrado",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            horarioProgramado = "08:00 - 16:00",
+            horaEntrada = "08:00",
+            horaSalida = "16:30",
+            descansos = pausas,
+            estadoAsistencia = EstadoAsistencia.EN_TURNO
+        )
+
+        val evaluacion = calcularJornadaUseCase.evaluarJornada(
+            registro = registro,
+            fechaActualIso = "2026-11-07",
+            horaActualMinutos = 17 * 60
+        )
+
+        assertFalse(evaluacion.esPendienteDeCierre)
+        assertEquals("FINALIZADO", evaluacion.estadoTexto)
+        assertEquals(EstadoAsistencia.FINALIZADO, evaluacion.estadoAsistencia)
+        assertEquals(480, evaluacion.tiempoEfectivoMinutos)
+    }
+
+    @Test
+    fun rn30_mensajesYEstados_noContienenIdentificadoresTecnicosDeRegla() {
+        val registro = RegistroAsistencia(
+            id = "reg_test",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-06",
+            horarioProgramado = "08:00 - 16:00",
+            horaEntrada = "08:00",
+            horaSalida = "-"
+        )
+        val evaluacion = calcularJornadaUseCase.evaluarJornada(registro, "2026-11-07", 10 * 60)
+        assertFalse(evaluacion.estadoTexto.contains("RN-30"), "No debe exponer identificadores técnicos de regla en texto")
     }
 }
 

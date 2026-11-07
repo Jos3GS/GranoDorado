@@ -39,7 +39,8 @@ class AsistenciaViewModel(
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
     private val asistenciaRepository: AsistenciaRepositoryContract = AsistenciaRepository,
-    private val validarMarcaSupervisorUseCase: com.itm.gestordeturnos.domain.usecase.ValidarMarcaSupervisorUseCase = com.itm.gestordeturnos.domain.usecase.ValidarMarcaSupervisorUseCase()
+    private val validarMarcaSupervisorUseCase: com.itm.gestordeturnos.domain.usecase.ValidarMarcaSupervisorUseCase = com.itm.gestordeturnos.domain.usecase.ValidarMarcaSupervisorUseCase(),
+    private val calcularJornadaUseCase: com.itm.gestordeturnos.domain.usecase.CalcularJornadaAsistenciaUseCase = com.itm.gestordeturnos.domain.usecase.CalcularJornadaAsistenciaUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AsistenciaState())
     val uiState: StateFlow<AsistenciaState> = _uiState.asStateFlow()
@@ -113,7 +114,17 @@ class AsistenciaViewModel(
         // 1. Agregar registros de hoy guardados en Firestore
         for (reg in registrosDeHoy) {
             idsProcesados.add(reg.empleadoId)
-            listaFilas.add(reg)
+            val evaluacion = calcularJornadaUseCase.evaluarJornada(
+                registro = reg,
+                fechaActualIso = hoyIso,
+                horaActualMinutos = minutosActuales
+            )
+            val regEvaluado = reg.copy(
+                estado = evaluacion.estadoTexto,
+                estadoAsistencia = evaluacion.estadoAsistencia,
+                tiempoEfectivoMinutos = evaluacion.tiempoEfectivoMinutos
+            )
+            listaFilas.add(regEvaluado)
 
             // Si llegó tarde, generar notificación
             if (reg.estado == "TARDE" || reg.minutosTarde > 10) {
@@ -155,7 +166,8 @@ class AsistenciaViewModel(
                     horarioProgramado = asig.horario.replace("\n", " "),
                     horaEntrada = "--:--",
                     horaSalida = "--:--",
-                    estado = "PENDIENTE"
+                    estado = "PENDIENTE",
+                    tiempoEfectivoMinutos = 0
                 )
                 listaFilas.add(filaPendiente)
 
@@ -187,11 +199,18 @@ class AsistenciaViewModel(
             }
         }
 
-        // Si no hay asignaciones ni registros para hoy, mostrar registros generales existentes
+        // Si no hay asignaciones ni registros para hoy, mostrar registros generales existentes evaluados
         val filasFinales = if (listaFilas.isNotEmpty()) {
             listaFilas
         } else {
-            registros
+            registros.map { reg ->
+                val ev = calcularJornadaUseCase.evaluarJornada(reg, hoyIso, minutosActuales)
+                reg.copy(
+                    estado = ev.estadoTexto,
+                    estadoAsistencia = ev.estadoAsistencia,
+                    tiempoEfectivoMinutos = ev.tiempoEfectivoMinutos
+                )
+            }
         }
 
         // Notificaciones: fusionar dinámicas y de repositorio respetando persistencia
