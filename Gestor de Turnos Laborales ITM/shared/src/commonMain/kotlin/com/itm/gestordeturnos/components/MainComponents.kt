@@ -197,15 +197,27 @@ fun UserProfileInfo(
 @Composable
 fun TurnoCard(turno: TurnoAsignado) {
     val esIncapacidad = turno.tipoTurno?.contains("incapacidad", ignoreCase = true) == true
+    val esPermiso = turno.tipoTurno?.contains("permiso", ignoreCase = true) == true
+    val esVacaciones = turno.tipoTurno?.contains("vacaciones", ignoreCase = true) == true
+
     val colorBorde = when {
         esIncapacidad -> Color(0xFFFCA5A5)
+        esPermiso -> Color(0xFF93C5FD)
+        esVacaciones -> Color(0xFF86EFAC)
         turno.esDescanso -> CafeAccentYellow
         else -> CafeBorderColor
     }
 
+    val contenedorBg = when {
+        esIncapacidad -> Color(0xFFFEF2F2)
+        esPermiso -> Color(0xFFEFF6FF)
+        esVacaciones -> Color(0xFFF0FDF4)
+        else -> Color.White
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = if (esIncapacidad) Color(0xFFFEF2F2) else Color.White),
+        colors = CardDefaults.cardColors(containerColor = contenedorBg),
         border = BorderStroke(1.dp, colorBorde),
         shape = RoundedCornerShape(2.dp)
     ) {
@@ -230,7 +242,12 @@ fun TurnoCard(turno: TurnoAsignado) {
                 )
                 Text(
                     text = turno.numeroDia,
-                    color = if (esIncapacidad) Color(0xFF991B1B) else CafeTextPrimary,
+                    color = when {
+                        esIncapacidad -> Color(0xFF991B1B)
+                        esPermiso -> Color(0xFF1D4ED8)
+                        esVacaciones -> Color(0xFF15803D)
+                        else -> CafeTextPrimary
+                    },
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -242,11 +259,18 @@ fun TurnoCard(turno: TurnoAsignado) {
                 modifier = Modifier
                     .width(1.dp)
                     .fillMaxHeight()
-                    .background(if (esIncapacidad) Color(0xFFFCA5A5) else CafeBorderColor)
+                    .background(
+                        when {
+                            esIncapacidad -> Color(0xFFFCA5A5)
+                            esPermiso -> Color(0xFF93C5FD)
+                            esVacaciones -> Color(0xFF86EFAC)
+                            else -> CafeBorderColor
+                        }
+                    )
             )
             Spacer(modifier = Modifier.width(16.dp))
 
-            // 3. Columna Central: Apertura / Cierre / Descanso
+            // 3. Columna Central: Apertura / Cierre / Descanso / Ausencias
             Column(modifier = Modifier.weight(1f)) {
                 when {
                     esIncapacidad -> {
@@ -260,6 +284,42 @@ fun TurnoCard(turno: TurnoAsignado) {
                                 Text(
                                     text = "INCAPACIDAD MÉDICA",
                                     color = Color(0xFF991B1B),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+                    }
+                    esPermiso -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFFDBEAFE), RoundedCornerShape(2.dp))
+                                    .border(1.dp, Color(0xFF93C5FD), RoundedCornerShape(2.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "PERMISO APROBADO",
+                                    color = Color(0xFF1E40AF),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+                    }
+                    esVacaciones -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFFDCFCE7), RoundedCornerShape(2.dp))
+                                    .border(1.dp, Color(0xFF86EFAC), RoundedCornerShape(2.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "VACACIONES",
+                                    color = Color(0xFF166534),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 1.sp
@@ -325,8 +385,8 @@ fun TurnoCard(turno: TurnoAsignado) {
                 }
             }
 
-            // 4. Columna Derecha: Sucursal y Total Horas
-            if (!turno.esDescanso && !turno.sinAsignar && !esIncapacidad) {
+            // 4. Columna Derecha: Sucursal y Total Horas / Badge de justificación
+            if (!turno.esDescanso && !turno.sinAsignar && !esIncapacidad && !esPermiso && !esVacaciones) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SucursalChip(
                         sucursal = turno.sucursal ?: "",
@@ -350,6 +410,34 @@ fun TurnoCard(turno: TurnoAsignado) {
                     Text(
                         text = "JUSTIFICADA",
                         color = Color(0xFF991B1B),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            } else if (esPermiso) {
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFFDBEAFE), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "APROBADO",
+                        color = Color(0xFF1E40AF),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            } else if (esVacaciones) {
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFFDCFCE7), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "PROGRAMADAS",
+                        color = Color(0xFF166534),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp

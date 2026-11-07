@@ -225,11 +225,15 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                             Spacer(modifier = Modifier.width(12.dp))
 
                             // Botón Primario: Publicar semana
+                            val botonHabilitado = !state.esSemanaPasada && !state.esSoloLectura
                             Button(
                                 onClick = { viewModel.publicarSemana() },
+                                enabled = botonHabilitado,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = CafeDarkBrown,
-                                    contentColor = Color.White
+                                    containerColor = if (botonHabilitado) CafeDarkBrown else Color(0xFFD1D5DB),
+                                    contentColor = Color.White,
+                                    disabledContainerColor = Color(0xFFE5E7EB),
+                                    disabledContentColor = Color(0xFF9CA3AF)
                                 ),
                                 shape = RoundedCornerShape(6.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
@@ -310,11 +314,15 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                             Spacer(modifier = Modifier.width(12.dp))
 
                             // Botón Primario: Publicar semana
+                            val botonHabilitado = !state.esSemanaPasada && !state.esSoloLectura
                             Button(
                                 onClick = { viewModel.publicarSemana() },
+                                enabled = botonHabilitado,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = CafeDarkBrown,
-                                    contentColor = Color.White
+                                    containerColor = if (botonHabilitado) CafeDarkBrown else Color(0xFFD1D5DB),
+                                    contentColor = Color.White,
+                                    disabledContainerColor = Color(0xFFE5E7EB),
+                                    disabledContentColor = Color(0xFF9CA3AF)
                                 ),
                                 shape = RoundedCornerShape(6.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
@@ -509,6 +517,10 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                                     colDiaWidth = colDiaWidth,
                                     colTotalWidth = colTotalWidth,
                                     onCeldaClick = { f, diaIdx, turno ->
+                                        if (state.esSoloLectura || state.esSemanaPasada) {
+                                            viewModel.mostrarErrorSoloLectura()
+                                            return@MallaEmployeeRow
+                                        }
                                         val fechaDia = state.fechaInicioSemana.plus(DatePeriod(days = diaIdx))
                                         val hoy = Clock.System.todayIn(TimeZone.currentSystemDefault())
                                         if (fechaDia < hoy) {

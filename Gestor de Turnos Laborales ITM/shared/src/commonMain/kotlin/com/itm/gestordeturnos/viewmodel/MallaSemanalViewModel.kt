@@ -15,7 +15,9 @@ import com.itm.gestordeturnos.domain.model.TurnoCelda
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.ConsultarHorarioEmpleadoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionAsignacionResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionSoloLecturaResult
 import com.itm.gestordeturnos.domain.usecase.ValidarAsignacionTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.VerificarCoberturaDiariaUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -88,6 +90,7 @@ data class MallaSemanalState(
     val turnosCatalogoActivos: List<TurnoTemplate> = emptyList(),
     val publicado: Boolean = false,
     val esSemanaPasada: Boolean = false,
+    val esSoloLectura: Boolean = false,
     val mensajeError: String? = null
 )
 
@@ -95,7 +98,8 @@ class MallaSemanalViewModel(
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
     private val verificarCoberturaUseCase: VerificarCoberturaDiariaUseCase = VerificarCoberturaDiariaUseCase(),
-    private val validarAsignacionUseCase: ValidarAsignacionTurnoUseCase = ValidarAsignacionTurnoUseCase()
+    private val validarAsignacionUseCase: ValidarAsignacionTurnoUseCase = ValidarAsignacionTurnoUseCase(),
+    private val consultarHorarioUseCase: ConsultarHorarioEmpleadoUseCase = ConsultarHorarioEmpleadoUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MallaSemanalState())
     val uiState: StateFlow<MallaSemanalState> = _uiState.asStateFlow()
@@ -275,6 +279,9 @@ class MallaSemanalViewModel(
             }
 
             val esPasada = !validarAsignacionUseCase.esSemanaModificable(lunes)
+            val rolUsuario = SessionManager.usuarioActivo?.rol
+            val soloLectura = consultarHorarioUseCase.esModoSoloLectura(rolUsuario, esPasada)
+
             val estadoTexto = when {
                 esPasada && algunaPublicada -> "PUBLICADA - SEMANA PASADA (SOLO LECTURA)"
                 esPasada -> "HISTÓRICO - SEMANA PASADA (SOLO LECTURA)"
@@ -286,6 +293,7 @@ class MallaSemanalViewModel(
                 it.copy(
                     publicado = algunaPublicada,
                     esSemanaPasada = esPasada,
+                    esSoloLectura = soloLectura,
                     estadoMalla = estadoTexto
                 )
             }
@@ -295,20 +303,28 @@ class MallaSemanalViewModel(
                 turnosPorEmpleado[fila.idEmpleado] = fila.turnos.map { it.copy(modificadoTrasPublicar = false) }.toMutableList()
             }
             val esPasada = !validarAsignacionUseCase.esSemanaModificable(lunes)
+            val rolUsuario = SessionManager.usuarioActivo?.rol
+            val soloLectura = consultarHorarioUseCase.esModoSoloLectura(rolUsuario, esPasada)
+
             _uiState.update {
                 it.copy(
                     publicado = false,
                     esSemanaPasada = esPasada,
+                    esSoloLectura = soloLectura,
                     estadoMalla = if (esPasada) "HISTÓRICO - SEMANA PASADA (SOLO LECTURA)" else "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
                 )
             }
         } else {
             // Semana limpia sin asignaciones previas: inicia en estado BORRADOR
             val esPasada = !validarAsignacionUseCase.esSemanaModificable(lunes)
+            val rolUsuario = SessionManager.usuarioActivo?.rol
+            val soloLectura = consultarHorarioUseCase.esModoSoloLectura(rolUsuario, esPasada)
+
             _uiState.update {
                 it.copy(
                     publicado = false,
                     esSemanaPasada = esPasada,
+                    esSoloLectura = soloLectura,
                     estadoMalla = if (esPasada) "HISTÓRICO - SEMANA PASADA (SOLO LECTURA)" else "BORRADOR - NO VISIBLE PARA LOS EMPLEADOS"
                 )
             }
@@ -384,6 +400,15 @@ class MallaSemanalViewModel(
     }
 
     fun publicarSemana() {
+        val permisoModificar = consultarHorarioUseCase.validarPermisoModificarProgramacion(
+            SessionManager.usuarioActivo?.rol,
+            _uiState.value.esSemanaPasada
+        )
+        if (permisoModificar is ValidacionSoloLecturaResult.Bloqueado) {
+            _uiState.update { it.copy(mensajeError = permisoModificar.mensaje) }
+            return
+        }
+
         if (!validarAsignacionUseCase.esSemanaModificable(_uiState.value.fechaInicioSemana)) {
             _uiState.update { it.copy(mensajeError = "Solo se permiten ajustes y publicación en la semana actual o en semanas futuras.") }
             return
@@ -478,6 +503,15 @@ class MallaSemanalViewModel(
         diaIndex: Int,
         turnoTemplate: TurnoTemplate
     ) {
+        val permiso = consultarHorarioUseCase.validarPermisoModificarProgramacion(
+            SessionManager.usuarioActivo?.rol,
+            _uiState.value.esSemanaPasada
+        )
+        if (permiso is ValidacionSoloLecturaResult.Bloqueado) {
+            _uiState.update { it.copy(mensajeError = permiso.mensaje) }
+            return
+        }
+
         val fechaDia = _uiState.value.fechaInicioSemana.plus(DatePeriod(days = diaIndex))
         val emp = todosLosEmpleados.find { it.id == idEmpleado }
         val sucursalActual = _uiState.value.sucursal
@@ -567,6 +601,15 @@ class MallaSemanalViewModel(
         idEmpleado: String,
         diaIndex: Int
     ) {
+        val permiso = consultarHorarioUseCase.validarPermisoModificarProgramacion(
+            SessionManager.usuarioActivo?.rol,
+            _uiState.value.esSemanaPasada
+        )
+        if (permiso is ValidacionSoloLecturaResult.Bloqueado) {
+            _uiState.update { it.copy(mensajeError = permiso.mensaje) }
+            return
+        }
+
         val fechaDia = _uiState.value.fechaInicioSemana.plus(DatePeriod(days = diaIndex))
         val emp = todosLosEmpleados.find { it.id == idEmpleado }
         val sucursalActual = _uiState.value.sucursal
@@ -639,6 +682,17 @@ class MallaSemanalViewModel(
         }
     }
 
+    fun mostrarErrorSoloLectura() {
+        val rol = SessionManager.usuarioActivo?.rol
+        val validacion = consultarHorarioUseCase.validarPermisoModificarProgramacion(rol, _uiState.value.esSemanaPasada)
+        val msg = if (validacion is ValidacionSoloLecturaResult.Bloqueado) {
+            validacion.mensaje
+        } else {
+            ConsultarHorarioEmpleadoUseCase.MENSAJE_SOLO_LECTURA_EMPLEADO
+        }
+        _uiState.update { it.copy(mensajeError = msg) }
+    }
+
     fun limpiarMensajeError() {
         _uiState.update { it.copy(mensajeError = null) }
     }
@@ -651,12 +705,15 @@ class MallaSemanalViewModel(
     private fun actualizarSemana(lunes: LocalDate) {
         val rangoTexto = formatearRangoSemana(lunes)
         val esPasada = !validarAsignacionUseCase.esSemanaModificable(lunes)
+        val rolUsuario = SessionManager.usuarioActivo?.rol
+        val soloLectura = consultarHorarioUseCase.esModoSoloLectura(rolUsuario, esPasada)
 
         _uiState.update {
             it.copy(
                 fechaInicioSemana = lunes,
                 rangoSemana = rangoTexto,
                 esSemanaPasada = esPasada,
+                esSoloLectura = soloLectura,
                 mensajeError = null
             )
         }

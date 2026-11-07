@@ -6,6 +6,7 @@ import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import com.itm.gestordeturnos.domain.usecase.AplicarIncapacidadEnTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.AplicarPermisoEnTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.CalcularDescansosTurnoUseCase
+import com.itm.gestordeturnos.domain.usecase.ConsultarHorarioEmpleadoUseCase
 import com.itm.gestordeturnos.domain.usecase.ControlInactividadSesionUseCase
 import com.itm.gestordeturnos.domain.usecase.ControlIntentosLoginUseCase
 import com.itm.gestordeturnos.domain.usecase.EvaluacionIntentoLogin
@@ -13,6 +14,7 @@ import com.itm.gestordeturnos.domain.usecase.IntercambiarTurnosUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionAdminSucursalEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionAsignacionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionSoloLecturaResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
@@ -1515,6 +1517,249 @@ class SharedCommonTest {
         val error = assertIs<ValidacionAsignacionResult.Invalido>(resValidacion)
         assertTrue(error.mensaje.contains("permiso", ignoreCase = true))
         assertFalse(error.mensaje.contains("RN-17"))
+    }
+
+    // =========================================================================
+    // 17. PRUEBAS DE CONSULTA DE HORARIO PUBLICADO Y MODO SOLO LECTURA (RN-18)
+    // =========================================================================
+
+    @Test
+    fun rn18_empleadoConsultaUnicamenteSusPropiosTurnos() {
+        val useCase = ConsultarHorarioEmpleadoUseCase()
+        val fechasSemana = setOf("2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21", "2026-11-22")
+
+        val todasAsignaciones = listOf(
+            AsignacionTurno(
+                id = "asig_emp1_1",
+                empleadoId = "emp_1",
+                empleadoNombre = "Carlos Gómez",
+                fechaIso = "2026-11-16",
+                tipoTurno = "Apertura",
+                horario = "06:00-14:00",
+                sucursalId = "Centro",
+                estado = "PUBLICADA"
+            ),
+            AsignacionTurno(
+                id = "asig_emp1_2",
+                empleadoId = "emp_1",
+                empleadoNombre = "Carlos Gómez",
+                fechaIso = "2026-11-17",
+                tipoTurno = "Cierre",
+                horario = "14:00-22:00",
+                sucursalId = "Centro",
+                estado = "PUBLICADA"
+            ),
+            AsignacionTurno(
+                id = "asig_emp2_1",
+                empleadoId = "emp_2",
+                empleadoNombre = "Laura Pérez",
+                fechaIso = "2026-11-16",
+                tipoTurno = "Intermedio",
+                horario = "10:00-18:00",
+                sucursalId = "Centro",
+                estado = "PUBLICADA"
+            ),
+            AsignacionTurno(
+                id = "asig_emp2_2",
+                empleadoId = "emp_2",
+                empleadoNombre = "Laura Pérez",
+                fechaIso = "2026-11-18",
+                tipoTurno = "Apertura",
+                horario = "06:00-14:00",
+                sucursalId = "Centro",
+                estado = "PUBLICADA"
+            )
+        )
+
+        // El empleado 'emp_1' consulta sus turnos
+        val turnosVisibles = useCase.filtrarTurnosVisiblesParaEmpleado(
+            empleadoId = "emp_1",
+            empleadoNombre = "Carlos Gómez",
+            todasAsignaciones = todasAsignaciones,
+            fechasIsoSemana = fechasSemana,
+            sucursalEmpleado = "Centro",
+            esAdmin = false
+        )
+
+        assertEquals(2, turnosVisibles.size)
+        assertTrue(turnosVisibles.all { it.empleadoId == "emp_1" })
+        assertFalse(turnosVisibles.any { it.empleadoId == "emp_2" }, "El empleado nunca debe visualizar turnos de otros empleados")
+    }
+
+    @Test
+    fun rn18_empleadoNoVisualizaTurnosEnBorradorOSemanaNoPublicada() {
+        val useCase = ConsultarHorarioEmpleadoUseCase()
+        val fechasSemana = setOf("2026-11-16", "2026-11-17")
+
+        val asignacionesEnBorrador = listOf(
+            AsignacionTurno(
+                id = "asig_borrador_1",
+                empleadoId = "emp_1",
+                empleadoNombre = "Carlos Gómez",
+                fechaIso = "2026-11-16",
+                tipoTurno = "Apertura",
+                horario = "06:00-14:00",
+                sucursalId = "Centro",
+                estado = "BORRADOR"
+            ),
+            AsignacionTurno(
+                id = "asig_borrador_2",
+                empleadoId = "emp_1",
+                empleadoNombre = "Carlos Gómez",
+                fechaIso = "2026-11-17",
+                tipoTurno = "Cierre",
+                horario = "14:00-22:00",
+                sucursalId = "Centro",
+                estado = "BORRADOR"
+            )
+        )
+
+        val turnosVisibles = useCase.filtrarTurnosVisiblesParaEmpleado(
+            empleadoId = "emp_1",
+            empleadoNombre = "Carlos Gómez",
+            todasAsignaciones = asignacionesEnBorrador,
+            fechasIsoSemana = fechasSemana,
+            sucursalEmpleado = "Centro",
+            esAdmin = false
+        )
+
+        assertTrue(turnosVisibles.isEmpty(), "El empleado no debe visualizar turnos si no han sido publicados o están en borrador")
+    }
+
+    @Test
+    fun rn18_empleadoSoloVisualizaTurnosPublicadosYExcluyeBorradores() {
+        val useCase = ConsultarHorarioEmpleadoUseCase()
+        val fechasSemana = setOf("2026-11-16", "2026-11-17")
+
+        val asignacionesMixtas = listOf(
+            AsignacionTurno(
+                id = "asig_publicada",
+                empleadoId = "emp_1",
+                empleadoNombre = "Carlos Gómez",
+                fechaIso = "2026-11-16",
+                tipoTurno = "Apertura",
+                horario = "06:00-14:00",
+                sucursalId = "Centro",
+                estado = "PUBLICADA"
+            ),
+            AsignacionTurno(
+                id = "asig_borrador",
+                empleadoId = "emp_1",
+                empleadoNombre = "Carlos Gómez",
+                fechaIso = "2026-11-17",
+                tipoTurno = "Cierre",
+                horario = "14:00-22:00",
+                sucursalId = "Centro",
+                estado = "BORRADOR"
+            )
+        )
+
+        val turnosVisibles = useCase.filtrarTurnosVisiblesParaEmpleado(
+            empleadoId = "emp_1",
+            empleadoNombre = "Carlos Gómez",
+            todasAsignaciones = asignacionesMixtas,
+            fechasIsoSemana = fechasSemana,
+            sucursalEmpleado = "Centro",
+            esAdmin = false
+        )
+
+        assertEquals(1, turnosVisibles.size)
+        assertEquals("asig_publicada", turnosVisibles[0].id)
+        assertEquals("PUBLICADA", turnosVisibles[0].estado)
+    }
+
+    @Test
+    fun rn18_administradorPuedeVisualizarTurnosEnBorradorParaPlanificacion() {
+        val useCase = ConsultarHorarioEmpleadoUseCase()
+        val fechasSemana = setOf("2026-11-16", "2026-11-17")
+
+        val asignacionesBorrador = listOf(
+            AsignacionTurno(
+                id = "asig_borrador_1",
+                empleadoId = "emp_1",
+                empleadoNombre = "Carlos Gómez",
+                fechaIso = "2026-11-16",
+                tipoTurno = "Apertura",
+                horario = "06:00-14:00",
+                sucursalId = "Centro",
+                estado = "BORRADOR"
+            )
+        )
+
+        // Administrador visualizando la programación
+        val turnosVisiblesAdmin = useCase.filtrarTurnosVisiblesParaEmpleado(
+            empleadoId = "emp_1",
+            empleadoNombre = "Carlos Gómez",
+            todasAsignaciones = asignacionesBorrador,
+            fechasIsoSemana = fechasSemana,
+            sucursalEmpleado = "Centro",
+            esAdmin = true
+        )
+
+        assertEquals(1, turnosVisiblesAdmin.size)
+        assertEquals("asig_borrador_1", turnosVisiblesAdmin[0].id)
+    }
+
+    @Test
+    fun rn18_horarioYMallaSePresentanEnModoSoloLecturaParaEmpleado() {
+        val useCase = ConsultarHorarioEmpleadoUseCase()
+
+        // Modo solo lectura activo para empleado
+        assertTrue(useCase.esModoSoloLectura(RolUsuario.EMPLEADO, esSemanaPasada = false))
+
+        // Intentar modificar programación siendo empleado debe ser bloqueado
+        val validacion = useCase.validarPermisoModificarProgramacion(
+            rol = RolUsuario.EMPLEADO,
+            esSemanaPasada = false
+        )
+
+        val bloqueado = assertIs<ValidacionSoloLecturaResult.Bloqueado>(validacion)
+        assertTrue(bloqueado.mensaje.contains("solo lectura", ignoreCase = true))
+        assertFalse(bloqueado.mensaje.contains("RN-18"), "No debe exponer códigos técnicos en mensajes de cara al usuario")
+    }
+
+    @Test
+    fun rn18_programacionEnSemanaPasadaEsSoloLecturaParaCualquierRol() {
+        val useCase = ConsultarHorarioEmpleadoUseCase()
+
+        // Admin General en semana pasada
+        assertTrue(useCase.esModoSoloLectura(RolUsuario.ADMINISTRADOR_GENERAL, esSemanaPasada = true))
+
+        val resAdminGeneral = useCase.validarPermisoModificarProgramacion(
+            rol = RolUsuario.ADMINISTRADOR_GENERAL,
+            esSemanaPasada = true
+        )
+        val bloqueadoGeneral = assertIs<ValidacionSoloLecturaResult.Bloqueado>(resAdminGeneral)
+        assertTrue(bloqueadoGeneral.mensaje.contains("semana pasada", ignoreCase = true))
+        assertFalse(bloqueadoGeneral.mensaje.contains("RN-18"))
+
+        // Admin Sucursal en semana pasada
+        val resAdminSucursal = useCase.validarPermisoModificarProgramacion(
+            rol = RolUsuario.ADMINISTRADOR_SUCURSAL,
+            esSemanaPasada = true
+        )
+        assertIs<ValidacionSoloLecturaResult.Bloqueado>(resAdminSucursal)
+    }
+
+    @Test
+    fun rn18_administradorEnSemanaActualOFuturaTienePermisoModificar() {
+        val useCase = ConsultarHorarioEmpleadoUseCase()
+
+        // Admin General en semana modificable
+        assertFalse(useCase.esModoSoloLectura(RolUsuario.ADMINISTRADOR_GENERAL, esSemanaPasada = false))
+        val resGeneral = useCase.validarPermisoModificarProgramacion(
+            rol = RolUsuario.ADMINISTRADOR_GENERAL,
+            esSemanaPasada = false
+        )
+        assertIs<ValidacionSoloLecturaResult.Permitido>(resGeneral)
+
+        // Admin Sucursal en semana modificable
+        assertFalse(useCase.esModoSoloLectura(RolUsuario.ADMINISTRADOR_SUCURSAL, esSemanaPasada = false))
+        val resSucursal = useCase.validarPermisoModificarProgramacion(
+            rol = RolUsuario.ADMINISTRADOR_SUCURSAL,
+            esSemanaPasada = false
+        )
+        assertIs<ValidacionSoloLecturaResult.Permitido>(resSucursal)
     }
 }
 

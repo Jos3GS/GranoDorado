@@ -10,6 +10,7 @@ import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.model.TurnoAsignado
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.ConsultarHorarioEmpleadoUseCase
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,10 +46,10 @@ private fun calcularLunesSemanaActual(): LocalDate {
 
 private fun formatearRangoSemanaCompleto(lunes: LocalDate): String {
     val domingo = lunes.plus(DatePeriod(days = 6))
-    val mesLunes = MESES_COMPLETOS.getOrElse(lunes.monthNumber - 1) { "" }
-    val mesDomingo = MESES_COMPLETOS.getOrElse(domingo.monthNumber - 1) { "" }
+    val mesLunes = MESES_COMPLETOS.getOrElse(lunes.month.ordinal) { "" }
+    val mesDomingo = MESES_COMPLETOS.getOrElse(domingo.month.ordinal) { "" }
 
-    return if (lunes.monthNumber == domingo.monthNumber) {
+    return if (lunes.month == domingo.month) {
         "Semana del ${lunes.dayOfMonth} al ${domingo.dayOfMonth} de $mesDomingo de ${domingo.year}."
     } else {
         "Semana del ${lunes.dayOfMonth} de $mesLunes al ${domingo.dayOfMonth} de $mesDomingo de ${domingo.year}."
@@ -57,9 +58,9 @@ private fun formatearRangoSemanaCompleto(lunes: LocalDate): String {
 
 private fun formatearRangoSemanaCorto(lunes: LocalDate): String {
     val domingo = lunes.plus(DatePeriod(days = 6))
-    val mesLunes = obtenerMesCorto(lunes.monthNumber)
-    val mesDomingo = obtenerMesCorto(domingo.monthNumber)
-    return if (lunes.monthNumber == domingo.monthNumber) {
+    val mesLunes = obtenerMesCorto(lunes.month.ordinal + 1)
+    val mesDomingo = obtenerMesCorto(domingo.month.ordinal + 1)
+    return if (lunes.month == domingo.month) {
         "${lunes.dayOfMonth} – ${domingo.dayOfMonth} $mesDomingo ${domingo.year}"
     } else {
         "${lunes.dayOfMonth} $mesLunes – ${domingo.dayOfMonth} $mesDomingo ${domingo.year}"
@@ -72,6 +73,7 @@ data class MiHorarioState(
     val rangoSemanaCorto: String = formatearRangoSemanaCorto(fechaInicioSemana),
     val fechaPublicacion: String = "HORARIO PUBLICADO",
     val estaPublicado: Boolean = true,
+    val esModoSoloLectura: Boolean = true,
     val totalHoras: String = "0 h 00 min",
     val turnos: List<TurnoAsignado> = emptyList(),
     val nombreEmpleado: String = "",
@@ -80,7 +82,8 @@ data class MiHorarioState(
 
 class MiHorarioViewModel(
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
-    private val turnoRepository: TurnoRepositoryContract = TurnoRepository
+    private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
+    private val consultarHorarioUseCase: ConsultarHorarioEmpleadoUseCase = ConsultarHorarioEmpleadoUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MiHorarioState())
     val uiState: StateFlow<MiHorarioState> = _uiState.asStateFlow()
@@ -131,7 +134,8 @@ class MiHorarioViewModel(
         val empNombre = emp?.nombre ?: (SessionManager.usuarioActivo?.nombre ?: "")
         val empCargo = emp?.cargo?.displayName ?: (SessionManager.usuarioActivo?.cargo ?: "")
         val empSucursal = emp?.sucursal ?: (SessionManager.usuarioActivo?.sucursal ?: "CENTRO")
-        val esAdmin = SessionManager.usuarioActivo?.rol != RolUsuario.EMPLEADO
+        val rolActual = SessionManager.usuarioActivo?.rol ?: RolUsuario.EMPLEADO
+        val esAdmin = rolActual != RolUsuario.EMPLEADO
 
         val fechasSemana = (0..6).map { lunes.plus(DatePeriod(days = it)) }
         val fechasIsoSemana = fechasSemana.map { it.toString() }.toSet()
@@ -139,19 +143,23 @@ class MiHorarioViewModel(
 
         val todasAsigs = turnoRepository.asignaciones.value
 
-        // Asignaciones del empleado en la semana seleccionada
-        val asigsEmp = todasAsigs.filter { asig ->
-            (asig.empleadoId == empId || (asig.empleadoNombre.isNotBlank() && asig.empleadoNombre.equals(empNombre, ignoreCase = true))) &&
-            asig.fechaIso in fechasIsoSemana
-        }
+        // Determinar si la semana está publicada para la sucursal/empleado (RN-18)
+        val semanaPublicada = consultarHorarioUseCase.esSemanaPublicada(
+            todasAsignaciones = todasAsigs,
+            fechasIsoSemana = fechasIsoSemana,
+            sucursalEmpleado = empSucursal,
+            empleadoId = empId
+        )
 
-        // Determinar si la semana está publicada para la sucursal/empleado
-        val semanaPublicada = asigsEmp.any { it.estado.equals("PUBLICADA", ignoreCase = true) } ||
-            todasAsigs.any { asig ->
-                asig.fechaIso in fechasIsoSemana &&
-                asig.estado.equals("PUBLICADA", ignoreCase = true) &&
-                (asig.sucursalId.isBlank() || asig.sucursalId.equals(empSucursal, ignoreCase = true) || asig.sucursalId.replace(" ", "").equals(empSucursal.replace(" ", ""), ignoreCase = true))
-            }
+        // Asignaciones visibles para el empleado (únicamente sus propios turnos y publicados si no es admin) (RN-18)
+        val asigsEmp = consultarHorarioUseCase.filtrarTurnosVisiblesParaEmpleado(
+            empleadoId = empId,
+            empleadoNombre = empNombre,
+            todasAsignaciones = todasAsigs,
+            fechasIsoSemana = fechasIsoSemana,
+            sucursalEmpleado = empSucursal,
+            esAdmin = esAdmin
+        )
 
         var totalMinutos = 0
 
@@ -186,7 +194,7 @@ class MiHorarioViewModel(
                     duracion = null,
                     sinAsignar = true
                 )
-            } else if (asig.tipoTurno.equals("Incapacidad", ignoreCase = true)) {
+            } else if (asig.tipoTurno.equals("Incapacidad", ignoreCase = true) || asig.tipoTurno.contains("incapacidad", ignoreCase = true)) {
                 TurnoAsignado(
                     id = asig.id.ifEmpty { "inc_${fechaIso}" },
                     diaSemana = diaSem,
@@ -198,7 +206,31 @@ class MiHorarioViewModel(
                     esDescanso = false,
                     sinAsignar = false
                 )
-            } else if (asig.esDescanso) {
+            } else if (asig.tipoTurno.equals("Permiso", ignoreCase = true) || asig.tipoTurno.contains("permiso", ignoreCase = true)) {
+                TurnoAsignado(
+                    id = asig.id.ifEmpty { "perm_${fechaIso}" },
+                    diaSemana = diaSem,
+                    numeroDia = numDia,
+                    tipoTurno = "Permiso",
+                    horario = "-",
+                    sucursal = asig.sucursalId.ifEmpty { empSucursal },
+                    duracion = "-",
+                    esDescanso = false,
+                    sinAsignar = false
+                )
+            } else if (asig.tipoTurno.equals("Vacaciones", ignoreCase = true) || asig.tipoTurno.contains("vacaciones", ignoreCase = true)) {
+                TurnoAsignado(
+                    id = asig.id.ifEmpty { "vac_${fechaIso}" },
+                    diaSemana = diaSem,
+                    numeroDia = numDia,
+                    tipoTurno = "Vacaciones",
+                    horario = "-",
+                    sucursal = asig.sucursalId.ifEmpty { empSucursal },
+                    duracion = "-",
+                    esDescanso = false,
+                    sinAsignar = false
+                )
+            } else if (asig.esDescanso || asig.tipoTurno.equals("Descanso", ignoreCase = true)) {
                 TurnoAsignado(
                     id = asig.id.ifEmpty { "desc_${fechaIso}" },
                     diaSemana = diaSem,
@@ -239,11 +271,14 @@ class MiHorarioViewModel(
             "HORARIO EN BORRADOR · PENDIENTE DE PUBLICACIÓN"
         }
 
+        val modoSoloLectura = consultarHorarioUseCase.esModoSoloLectura(rolActual)
+
         _uiState.update {
             it.copy(
                 turnos = listaTurnos,
-                totalHoras = horasTexto,
+                totalHoras = if (!semanaPublicada && !esAdmin) "0 h 00 min" else horasTexto,
                 estaPublicado = semanaPublicada || esAdmin,
+                esModoSoloLectura = modoSoloLectura,
                 fechaPublicacion = textoPublicacion,
                 nombreEmpleado = empNombre,
                 cargoEmpleado = empCargo
