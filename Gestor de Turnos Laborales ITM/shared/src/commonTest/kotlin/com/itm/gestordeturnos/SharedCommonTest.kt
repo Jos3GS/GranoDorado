@@ -5,6 +5,7 @@ import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import com.itm.gestordeturnos.domain.usecase.AplicarIncapacidadEnTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.CalcularDescansosTurnoUseCase
+import com.itm.gestordeturnos.domain.usecase.ControlInactividadSesionUseCase
 import com.itm.gestordeturnos.domain.usecase.ControlIntentosLoginUseCase
 import com.itm.gestordeturnos.domain.usecase.EvaluacionIntentoLogin
 import com.itm.gestordeturnos.domain.usecase.IntercambiarTurnosUseCase
@@ -355,6 +356,47 @@ class SharedCommonTest {
         val nuevoFallo = useCase.registrarIntentoFallido(correo)
         val fallo = assertIs<EvaluacionIntentoLogin.FallidoRegistrado>(nuevoFallo)
         assertEquals(1, fallo.intentosAcumulados)
+    }
+
+    // =========================================================================
+    // 5. PRUEBAS DE CIERRE AUTOMÁTICO DE SESIÓN POR INACTIVIDAD (RN-03)
+    // =========================================================================
+
+    @Test
+    fun controlInactividadSesion_cierraSesionTras30MinutosSinInteraccion() {
+        var relojSimulado = 5_000_000L
+        val useCase = ControlInactividadSesionUseCase(relojMillis = { relojSimulado })
+
+        useCase.iniciarMonitoreo()
+        assertFalse(useCase.verificarSiExpiro(), "Recién iniciada la sesión no debe estar expirada")
+
+        // Avanzar 29 minutos (aún dentro del límite)
+        relojSimulado += 29 * 60_000L
+        assertFalse(useCase.verificarSiExpiro(), "A los 29 minutos de inactividad no debe expirar")
+
+        // Avanzar 1 minuto + 1 ms (total > 30 minutos de inactividad)
+        relojSimulado += (1 * 60_000L) + 1L
+        assertTrue(useCase.verificarSiExpiro(), "A los 30 minutos de inactividad debe expirar automáticamente")
+    }
+
+    @Test
+    fun controlInactividadSesion_interaccionDelUsuarioReiniciaTemporizadorDe30Minutos() {
+        var relojSimulado = 5_000_000L
+        val useCase = ControlInactividadSesionUseCase(relojMillis = { relojSimulado })
+
+        useCase.iniciarMonitoreo()
+
+        // El usuario interactúa a los 20 minutos (click, scroll o cambio de opción)
+        relojSimulado += 20 * 60_000L
+        useCase.registrarInteraccion()
+
+        // Avanzar 15 minutos más (tiempo total desde inicio = 35 min, pero solo 15 min desde la última interacción)
+        relojSimulado += 15 * 60_000L
+        assertFalse(useCase.verificarSiExpiro(), "La sesión no debe expirar si hubo interacción hace 15 minutos")
+
+        // Avanzar otros 15 minutos + 1 ms sin interactuar (30 minutos desde la última interacción)
+        relojSimulado += (15 * 60_000L) + 1L
+        assertTrue(useCase.verificarSiExpiro(), "La sesión debe expirar al cumplirse 30 minutos desde la última interacción")
     }
 }
 

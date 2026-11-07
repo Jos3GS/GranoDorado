@@ -61,6 +61,9 @@ import com.itm.gestordeturnos.viewmodel.TurnosViewModel
 import com.itm.gestordeturnos.domain.model.UsuarioActual
 import kotlinx.coroutines.launch
 
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+
 @Composable
 fun MainScreen(viewModel: MainViewModel, onLogoutSuccess: () -> Unit) {
 
@@ -69,6 +72,12 @@ fun MainScreen(viewModel: MainViewModel, onLogoutSuccess: () -> Unit) {
     }
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.sesionCerradaPorInactividad) {
+        if (state.sesionCerradaPorInactividad) {
+            onLogoutSuccess()
+        }
+    }
 
     // 1. CALCULAMOS LA RUTA INICIAL DINÁMICAMENTE
     val rutaInicial = state.opcionesMenu.firstOrNull()?.id ?: "panel"
@@ -142,7 +151,14 @@ fun MainScreen(viewModel: MainViewModel, onLogoutSuccess: () -> Unit) {
     }
 
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize().background(CafeBackgroundLight)
+        modifier = Modifier
+            .fillMaxSize()
+            .background(CafeBackgroundLight)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = { viewModel.registrarInteraccionUsuario() }
+                )
+            }
     ) {
         val isCompact = maxWidth < 800.dp
 

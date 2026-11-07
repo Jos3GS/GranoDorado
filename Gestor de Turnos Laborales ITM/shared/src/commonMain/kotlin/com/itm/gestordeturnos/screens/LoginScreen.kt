@@ -53,6 +53,10 @@ fun LoginScreen(viewModel: LoginViewModel, onLoginSuccess: () -> Unit) {
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.verificarSesionExpirada()
+    }
+
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().background(CafeBackgroundLight)
     ) {

@@ -70,6 +70,16 @@ class LoginViewModel(
         _uiState.update { it.copy(isSuccess = false) }
     }
 
+    /**
+     * Verifica si la sesión anterior fue cerrada automáticamente por inactividad (RN-03).
+     */
+    fun verificarSesionExpirada() {
+        val mensajeExpiracion = SessionManager.consumirMensajeExpiracion()
+        if (mensajeExpiracion != null) {
+            _uiState.update { it.copy(mensajeError = mensajeExpiracion) }
+        }
+    }
+
     // Iniciar sesión con Correo y Contraseña
     fun iniciarSesion() {
         val email = _uiState.value.email.trim()
