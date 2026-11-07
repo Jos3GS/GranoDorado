@@ -474,10 +474,11 @@ private fun DialogoRegistrarMarcaSupervisor(
     var tipoMarca by remember {
         mutableStateOf(
             when {
-                registro.horaEntrada == "-" -> "ENTRADA"
-                registro.inicioDescanso == "-" -> "INICIO_DESCANSO"
-                registro.finDescanso == "-" -> "FIN_DESCANSO"
-                else -> "SALIDA"
+                !registro.fueRegistradaPorEmpleado("ENTRADA") && !registro.fueRegistradaPorSupervisor("ENTRADA") -> "ENTRADA"
+                !registro.fueRegistradaPorEmpleado("INICIO_DESCANSO") && !registro.fueRegistradaPorSupervisor("INICIO_DESCANSO") -> "INICIO_DESCANSO"
+                !registro.fueRegistradaPorEmpleado("FIN_DESCANSO") && !registro.fueRegistradaPorSupervisor("FIN_DESCANSO") -> "FIN_DESCANSO"
+                !registro.fueRegistradaPorEmpleado("SALIDA") && !registro.fueRegistradaPorSupervisor("SALIDA") -> "SALIDA"
+                else -> "ENTRADA"
             }
         )
     }
@@ -507,13 +508,8 @@ private fun DialogoRegistrarMarcaSupervisor(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 opciones.forEach { (clave, label) ->
-                    val yaRegistradoPorEmpleado = when (clave) {
-                        "ENTRADA" -> registro.horaEntrada != "-" && !registro.registradoPorSupervisor
-                        "INICIO_DESCANSO" -> registro.inicioDescanso != "-" && !registro.registradoPorSupervisor
-                        "FIN_DESCANSO" -> registro.finDescanso != "-" && !registro.registradoPorSupervisor
-                        "SALIDA" -> registro.horaSalida != "-" && !registro.registradoPorSupervisor
-                        else -> false
-                    }
+                    val yaRegistradoPorEmpleado = registro.fueRegistradaPorEmpleado(clave)
+                    val yaRegistradoPorSupervisor = registro.fueRegistradaPorSupervisor(clave)
                     val disabled = yaRegistradoPorEmpleado
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -525,7 +521,11 @@ private fun DialogoRegistrarMarcaSupervisor(
                             enabled = !disabled
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        val textoOpcion = if (disabled) "$label (Ya registrada)" else label
+                        val textoOpcion = when {
+                            yaRegistradoPorEmpleado -> "$label (Registrada por colaborador)"
+                            yaRegistradoPorSupervisor -> "$label (Registrada por supervisor)"
+                            else -> label
+                        }
                         Text(
                             text = textoOpcion,
                             fontSize = 12.sp,

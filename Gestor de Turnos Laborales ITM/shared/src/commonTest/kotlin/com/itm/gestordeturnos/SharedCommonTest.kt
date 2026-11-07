@@ -21,6 +21,8 @@ import com.itm.gestordeturnos.domain.usecase.ValidacionSoloLecturaResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionMarcacionResult
 import com.itm.gestordeturnos.domain.usecase.ValidarMarcacionAsistenciaUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidacionMarcaSupervisorResult
+import com.itm.gestordeturnos.domain.usecase.ValidarMarcaSupervisorUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionNovedadResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionSolicitudCambioResult
@@ -59,6 +61,7 @@ class SharedCommonTest {
     private val calcularDescansosUseCase = CalcularDescansosTurnoUseCase()
     private val validarAsignacionUseCase = ValidarAsignacionTurnoUseCase()
     private val validarMarcacionAsistenciaUseCase = ValidarMarcacionAsistenciaUseCase()
+    private val validarMarcaSupervisorUseCase = ValidarMarcaSupervisorUseCase()
 
     // =========================================================================
     // 1. PRUEBAS DE COBERTURA DIARIA Y CÁLCULO DE HORAS SEMANALES
@@ -3880,6 +3883,161 @@ class SharedCommonTest {
         assertEquals(2, moderno.listaPausas.size)
         assertEquals("10:00", moderno.listaPausas[0].horaInicio)
         assertEquals("13:30", moderno.listaPausas[1].horaFin)
+    }
+
+    // =========================================================================
+    // 27. PRUEBAS DE INMUTABILIDAD DE MARCAS Y REGISTRO DE SUPERVISOR (RN-28)
+    // =========================================================================
+
+    @Test
+    fun validarMarcaSupervisor_rechazaSiMotivoEnBlanco() {
+        val registro = RegistroAsistencia(
+            id = "reg_1",
+            empleadoId = "emp_1",
+            horaEntrada = "08:00",
+            horaSalida = "-"
+        )
+
+        val resultadoVacio = validarMarcaSupervisorUseCase.validar(
+            registroActual = registro,
+            tipoMarca = "SALIDA",
+            horaMarca = "16:00",
+            motivo = "   "
+        )
+        val invalido = assertIs<ValidacionMarcaSupervisorResult.Invalido>(resultadoVacio)
+        assertTrue(invalido.mensaje.contains("motivo", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-28)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun validarMarcaSupervisor_rechazaFormatoHoraInvalido() {
+        val registro = RegistroAsistencia(id = "reg_1", empleadoId = "emp_1")
+
+        val res1 = validarMarcaSupervisorUseCase.validar(registro, "ENTRADA", "25:00", "Olvido de tarjeta")
+        val inv1 = assertIs<ValidacionMarcaSupervisorResult.Invalido>(res1)
+        assertTrue(inv1.mensaje.contains("formato válido", ignoreCase = true))
+        assertFalse(inv1.mensaje.contains("(RN-28)"))
+
+        val res2 = validarMarcaSupervisorUseCase.validar(registro, "ENTRADA", "ocho y media", "Falla en lector")
+        val inv2 = assertIs<ValidacionMarcaSupervisorResult.Invalido>(res2)
+        assertTrue(inv2.mensaje.contains("formato válido", ignoreCase = true))
+        assertFalse(inv2.mensaje.contains("(RN-28)"))
+    }
+
+    @Test
+    fun validarMarcaSupervisor_bloqueaSobrescribirMarcaRegistradaPorEmpleado() {
+        // El empleado registró entrada
+        val registro = RegistroAsistencia(
+            id = "reg_1",
+            empleadoId = "emp_1",
+            horaEntrada = "08:05",
+            entradaPorSupervisor = false,
+            registradoPorSupervisor = false
+        )
+
+        // El supervisor intenta sobrescribir la entrada del empleado
+        val resultado = validarMarcaSupervisorUseCase.validar(
+            registroActual = registro,
+            tipoMarca = "ENTRADA",
+            horaMarca = "08:00",
+            motivo = "Ajuste de hora acordado"
+        )
+
+        val invalido = assertIs<ValidacionMarcaSupervisorResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("colaborador", ignoreCase = true))
+        assertTrue(invalido.mensaje.contains("inmutable", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-28)"))
+    }
+
+    @Test
+    fun validarMarcaSupervisor_permiteRegistrarOmisionFaltante() {
+        // El empleado registró entrada, pero olvidó marcar salida
+        val registro = RegistroAsistencia(
+            id = "reg_1",
+            empleadoId = "emp_1",
+            horaEntrada = "08:00",
+            horaSalida = "-",
+            entradaPorSupervisor = false
+        )
+
+        // El supervisor completa la marca faltante de salida
+        val resultado = validarMarcaSupervisorUseCase.validar(
+            registroActual = registro,
+            tipoMarca = "SALIDA",
+            horaMarca = "16:00",
+            motivo = "Colaborador olvidó registrar salida al culminar turno"
+        )
+
+        assertIs<ValidacionMarcaSupervisorResult.Valido>(resultado)
+    }
+
+    @Test
+    fun registroAsistencia_trazabilidadIndividualEvitaSobreescrituraCruzada() {
+        // 1. Empleado registró entrada
+        val registroInicial = RegistroAsistencia(
+            id = "reg_1",
+            empleadoId = "emp_1",
+            horaEntrada = "08:00",
+            horaSalida = "-",
+            entradaPorSupervisor = false,
+            registradoPorSupervisor = false
+        )
+        assertTrue(registroInicial.fueRegistradaPorEmpleado("ENTRADA"))
+        assertFalse(registroInicial.fueRegistradaPorSupervisor("ENTRADA"))
+
+        // 2. Supervisor completó la salida faltante
+        val registroConSalidaSupervisor = registroInicial.copy(
+            horaSalida = "16:00",
+            salidaPorSupervisor = true,
+            registradoPorSupervisor = true,
+            motivoSupervisor = "Omisión de salida",
+            supervisorNombre = "Supervisor Jefe"
+        )
+
+        // Verificación de trazabilidad por marca individual
+        assertTrue(registroConSalidaSupervisor.fueRegistradaPorEmpleado("ENTRADA"), "La entrada sigue perteneciendo al empleado")
+        assertFalse(registroConSalidaSupervisor.fueRegistradaPorSupervisor("ENTRADA"))
+        assertFalse(registroConSalidaSupervisor.fueRegistradaPorEmpleado("SALIDA"))
+        assertTrue(registroConSalidaSupervisor.fueRegistradaPorSupervisor("SALIDA"), "La salida fue registrada por el supervisor")
+
+        // 3. Intento posterior de sobrescribir la entrada original del empleado
+        val intentoModificarEntrada = validarMarcaSupervisorUseCase.validar(
+            registroActual = registroConSalidaSupervisor,
+            tipoMarca = "ENTRADA",
+            horaMarca = "07:50",
+            motivo = "Intento de corrección"
+        )
+        val inv = assertIs<ValidacionMarcaSupervisorResult.Invalido>(intentoModificarEntrada)
+        assertTrue(inv.mensaje.contains("inmutable", ignoreCase = true))
+        assertFalse(inv.mensaje.contains("(RN-28)"))
+    }
+
+    @Test
+    fun validarMarcaSupervisor_protegeTodasLasMarcasDeEmpleado() {
+        val registroCompletoEmpleado = RegistroAsistencia(
+            id = "reg_full",
+            empleadoId = "emp_1",
+            horaEntrada = "08:00",
+            inicioDescanso = "12:00",
+            finDescanso = "13:00",
+            horaSalida = "16:00",
+            entradaPorSupervisor = false,
+            salidaPorSupervisor = false,
+            inicioDescansoPorSupervisor = false,
+            finDescansoPorSupervisor = false
+        )
+
+        for (marca in listOf("ENTRADA", "INICIO_DESCANSO", "FIN_DESCANSO", "SALIDA")) {
+            val res = validarMarcaSupervisorUseCase.validar(
+                registroActual = registroCompletoEmpleado,
+                tipoMarca = marca,
+                horaMarca = "10:00",
+                motivo = "Modificación de prueba"
+            )
+            val inv = assertIs<ValidacionMarcaSupervisorResult.Invalido>(res)
+            assertTrue(inv.mensaje.contains("inmutable", ignoreCase = true))
+            assertFalse(inv.mensaje.contains("(RN-28)"))
+        }
     }
 }
 

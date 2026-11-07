@@ -265,7 +265,8 @@ class AsistenciaViewModel(
                 horarioProg = horarioProg,
                 tipoMarca = tipoMarca,
                 horaMarca = horaMarca,
-                motivo = motivo
+                motivo = motivo,
+                supervisorNombre = usuario?.nombre ?: "Supervisor"
             )
             if (res.isSuccess) {
                 onResult(true, null)

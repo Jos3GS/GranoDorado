@@ -92,7 +92,8 @@ interface AsistenciaRepositoryContract {
         horarioProg: String,
         tipoMarca: String,
         horaMarca: String,
-        motivo: String
+        motivo: String,
+        supervisorNombre: String = ""
     ): Result<Unit>
     fun actualizarNotificaciones(lista: List<NotificacionIncumplimiento>)
 }

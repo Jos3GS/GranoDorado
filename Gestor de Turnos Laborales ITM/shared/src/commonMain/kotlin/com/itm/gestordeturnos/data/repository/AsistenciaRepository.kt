@@ -141,6 +141,8 @@ object AsistenciaRepository : AsistenciaRepositoryContract {
         return Result.success(Unit)
     }
 
+    private val validarMarcaSupervisorUseCase = com.itm.gestordeturnos.domain.usecase.ValidarMarcaSupervisorUseCase()
+
     override suspend fun registrarMarcaSupervisor(
         registroId: String,
         empleadoId: String,
@@ -151,14 +153,22 @@ object AsistenciaRepository : AsistenciaRepositoryContract {
         horarioProg: String,
         tipoMarca: String,
         horaMarca: String,
-        motivo: String
+        motivo: String,
+        supervisorNombre: String
     ): Result<Unit> {
-        if (motivo.isBlank()) {
-            return Result.failure(IllegalArgumentException("El motivo de la marcación por supervisor es obligatorio."))
-        }
-
         val existente = _registrosDiarios.value.find {
             it.id == registroId || (it.empleadoId == empleadoId && it.fechaIso == fechaIso)
+        }
+
+        // RN-28: Validación estricta de inmutabilidad y justificación
+        val validacion = validarMarcaSupervisorUseCase.validar(
+            registroActual = existente,
+            tipoMarca = tipoMarca,
+            horaMarca = horaMarca,
+            motivo = motivo
+        )
+        if (validacion is com.itm.gestordeturnos.domain.usecase.ValidacionMarcaSupervisorResult.Invalido) {
+            return Result.failure(IllegalArgumentException(validacion.mensaje))
         }
 
         var entrada = existente?.horaEntrada ?: "-"
@@ -169,12 +179,15 @@ object AsistenciaRepository : AsistenciaRepositoryContract {
         var estadoStr = existente?.estado ?: "PENDIENTE"
         var minsTarde = existente?.minutosTarde ?: 0
 
+        var entSup = existente?.entradaPorSupervisor ?: false
+        var salSup = existente?.salidaPorSupervisor ?: false
+        var descIniSup = existente?.inicioDescansoPorSupervisor ?: false
+        var descFinSup = existente?.finDescansoPorSupervisor ?: false
+
         when (tipoMarca) {
             "ENTRADA" -> {
-                if (existente != null && existente.horaEntrada != "-" && !existente.registradoPorSupervisor) {
-                    return Result.failure(IllegalStateException("La marcación de entrada ya fue registrada por el empleado y no puede sobrescribirse."))
-                }
                 entrada = horaMarca
+                entSup = true
                 estadoAsis = EstadoAsistencia.EN_TURNO
                 val partes = horarioProg.split("-")
                 if (partes.isNotEmpty()) {
@@ -185,26 +198,20 @@ object AsistenciaRepository : AsistenciaRepositoryContract {
                 estadoStr = if (minsTarde > 0) "TARDE" else "PRESENTE"
             }
             "INICIO_DESCANSO" -> {
-                if (existente != null && existente.inicioDescanso != "-" && !existente.registradoPorSupervisor) {
-                    return Result.failure(IllegalStateException("El inicio de descanso ya fue registrado por el empleado."))
-                }
                 descIni = horaMarca
+                descIniSup = true
                 estadoAsis = EstadoAsistencia.EN_DESCANSO
                 estadoStr = "EN DESCANSO"
             }
             "FIN_DESCANSO" -> {
-                if (existente != null && existente.finDescanso != "-" && !existente.registradoPorSupervisor) {
-                    return Result.failure(IllegalStateException("El fin de descanso ya fue registrado por el empleado."))
-                }
                 descFin = horaMarca
+                descFinSup = true
                 estadoAsis = EstadoAsistencia.EN_TURNO
                 estadoStr = if (minsTarde > 0) "TARDE" else "PRESENTE"
             }
             "SALIDA" -> {
-                if (existente != null && existente.horaSalida != "-" && !existente.registradoPorSupervisor) {
-                    return Result.failure(IllegalStateException("La marcación de salida ya fue registrada por el empleado."))
-                }
                 salida = horaMarca
+                salSup = true
                 estadoAsis = EstadoAsistencia.FINALIZADO
                 estadoStr = "FINALIZADO"
             }
@@ -234,7 +241,12 @@ object AsistenciaRepository : AsistenciaRepositoryContract {
             minutosTarde = minsTarde,
             esDescanso = existente?.esDescanso ?: false,
             registradoPorSupervisor = true,
-            motivoSupervisor = motivo
+            motivoSupervisor = motivo,
+            entradaPorSupervisor = entSup,
+            salidaPorSupervisor = salSup,
+            inicioDescansoPorSupervisor = descIniSup,
+            finDescansoPorSupervisor = descFinSup,
+            supervisorNombre = supervisorNombre.ifBlank { existente?.supervisorNombre ?: "" }
         )
 
         val resultado = guardarRegistroAsistencia(registroActualizado)

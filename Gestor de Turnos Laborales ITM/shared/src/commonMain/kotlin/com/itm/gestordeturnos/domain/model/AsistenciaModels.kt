@@ -53,7 +53,13 @@ data class RegistroAsistencia(
     val minutosTarde: Int = 0,
     val esDescanso: Boolean = false,
     val registradoPorSupervisor: Boolean = false,
-    val motivoSupervisor: String = ""
+    val motivoSupervisor: String = "",
+    // RN-28: Trazabilidad individual de origen por marca para garantizar inmutabilidad
+    val entradaPorSupervisor: Boolean = false,
+    val salidaPorSupervisor: Boolean = false,
+    val inicioDescansoPorSupervisor: Boolean = false,
+    val finDescansoPorSupervisor: Boolean = false,
+    val supervisorNombre: String = ""
 ) {
     val listaPausas: List<PausaDescanso>
         get() = if (descansos.isNotEmpty()) {
@@ -63,4 +69,30 @@ data class RegistroAsistencia(
         } else {
             emptyList()
         }
+
+    fun fueRegistradaPorSupervisor(tipoMarca: String): Boolean {
+        val especifico = when (tipoMarca.trim().uppercase()) {
+            "ENTRADA" -> entradaPorSupervisor
+            "SALIDA" -> salidaPorSupervisor
+            "INICIO_DESCANSO" -> inicioDescansoPorSupervisor
+            "FIN_DESCANSO" -> finDescansoPorSupervisor
+            else -> false
+        }
+        if (especifico) return true
+        if (registradoPorSupervisor && !entradaPorSupervisor && !salidaPorSupervisor && !inicioDescansoPorSupervisor && !finDescansoPorSupervisor) {
+            return true
+        }
+        return false
+    }
+
+    fun fueRegistradaPorEmpleado(tipoMarca: String): Boolean {
+        val tieneMarca = when (tipoMarca.trim().uppercase()) {
+            "ENTRADA" -> horaEntrada != "-" && horaEntrada != "--:--"
+            "SALIDA" -> horaSalida != "-" && horaSalida != "--:--"
+            "INICIO_DESCANSO" -> inicioDescanso != "-" && inicioDescanso != "--:--"
+            "FIN_DESCANSO" -> finDescanso != "-" && finDescanso != "--:--"
+            else -> false
+        }
+        return tieneMarca && !fueRegistradaPorSupervisor(tipoMarca)
+    }
 }
