@@ -21,15 +21,15 @@ class ValidarEstadoEmpleadoActivoUseCase(
 ) {
     companion object {
         const val MENSAJE_CUENTA_INACTIVA_GENERICO =
-            "Tu cuenta de colaborador se encuentra inactiva. No tienes autorización para realizar esta acción (RN-11)."
+            "Tu cuenta de colaborador se encuentra inactiva. No tienes autorización para realizar esta acción."
         const val MENSAJE_CUENTA_INACTIVA_CAMBIO_TURNO =
-            "No puedes solicitar ni gestionar cambios de turno porque tu cuenta se encuentra inactiva (RN-11)."
+            "No puedes solicitar ni gestionar cambios de turno porque tu cuenta se encuentra inactiva."
         const val MENSAJE_CUENTA_INACTIVA_NOVEDAD =
-            "No puedes reportar ni modificar novedades porque tu cuenta se encuentra inactiva (RN-11)."
+            "No puedes reportar ni modificar novedades porque tu cuenta se encuentra inactiva."
         const val MENSAJE_CUENTA_INACTIVA_ASISTENCIA =
-            "No puedes registrar marcas de asistencia porque tu cuenta se encuentra inactiva (RN-11)."
+            "No puedes registrar marcas de asistencia porque tu cuenta se encuentra inactiva."
         const val MENSAJE_CUENTA_INACTIVA_CLAVE =
-            "No puedes cambiar tu contraseña porque tu cuenta se encuentra inactiva (RN-11)."
+            "No puedes cambiar tu contraseña porque tu cuenta se encuentra inactiva."
     }
 
     /**
