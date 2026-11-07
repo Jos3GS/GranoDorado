@@ -305,6 +305,16 @@ object FirestoreService {
         }
     }
 
+    suspend fun eliminarNovedad(idNovedad: String): Result<Unit> {
+        val firestore = db ?: return Result.failure(IllegalStateException("Firebase Firestore no está inicializado"))
+        return try {
+            firestore.collection("novedades").document(idNovedad).delete()
+            Result.success(Unit)
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun inicializarNovedadesSiEstaVacio(): Boolean {
         return try {
             val existentes = obtenerNovedades()

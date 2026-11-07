@@ -14,6 +14,7 @@ import com.itm.gestordeturnos.domain.model.RolUsuario
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.GestionarEstadoNovedadUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionNovedadResult
 import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
@@ -122,7 +123,8 @@ class NovedadesViewModel(
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
     private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase(),
-    private val validarReporteNovedadUseCase: ValidarReporteNovedadUseCase = ValidarReporteNovedadUseCase()
+    private val validarReporteNovedadUseCase: ValidarReporteNovedadUseCase = ValidarReporteNovedadUseCase(),
+    private val gestionarEstadoNovedadUseCase: GestionarEstadoNovedadUseCase = GestionarEstadoNovedadUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(NovedadesState())
     val uiState: StateFlow<NovedadesState> = _uiState.asStateFlow()
@@ -296,7 +298,11 @@ class NovedadesViewModel(
         val diferenciaTexto = if (horaReal.isNotBlank()) "Hora real: $horaReal" else ""
 
         val hoyIso = Clock.System.todayIn(TimeZone.currentSystemDefault()).toString()
-        val nuevaNovedad = Novedad(
+        val revisor = usuario?.let {
+            if (it.nombre.isNotBlank()) "${it.nombre} (${it.rol.titulo})" else it.rol.titulo
+        } ?: "Supervisor"
+
+        val novedadBase = Novedad(
             id = "nov_sup_${Clock.System.now().toEpochMilliseconds()}",
             tipo = tipoNovedad,
             descripcion = descripcion.trim(),
@@ -313,6 +319,14 @@ class NovedadesViewModel(
             fechaReferencia = fechaIso,
             fechaCreacionIso = hoyIso,
             reportadoPorSupervisor = true
+        )
+
+        // RN-25: Las novedades registradas directamente por supervisión nacen inmediatamente en REVISADA
+        val nuevaNovedad = gestionarEstadoNovedadUseCase.prepararNovedadDirectaSupervisor(
+            novedadBase = novedadBase,
+            revisor = revisor,
+            fechaRevision = hoyIso,
+            comentarioSupervisor = "Registrada y aprobada directamente por supervisión"
         )
 
         novedadRepository.reportarNovedad(nuevaNovedad)

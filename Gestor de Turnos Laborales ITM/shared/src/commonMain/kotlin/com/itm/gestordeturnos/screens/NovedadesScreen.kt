@@ -328,8 +328,9 @@ private fun DialogoRevisarNovedad(
     onConfirmar: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var comentario by remember { mutableStateOf("") }
+    var comentario by remember { mutableStateOf(novedad.comentarioRevision) }
     val isIncapacidad = novedad.tipo.contains("incapacidad", ignoreCase = true)
+    val yaRevisada = novedad.estado == com.itm.gestordeturnos.domain.model.EstadoNovedad.REVISADA
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -345,7 +346,11 @@ private fun DialogoRevisarNovedad(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        if (isIncapacidad) "Aprobar incapacidad médica" else "Revisar novedad",
+                        when {
+                            yaRevisada -> "Editar comentario de revisión"
+                            isIncapacidad -> "Aprobar incapacidad médica"
+                            else -> "Revisar novedad"
+                        },
                         color = CafeDarkBrown,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
@@ -381,7 +386,7 @@ private fun DialogoRevisarNovedad(
                     }
                 }
 
-                if (isIncapacidad) {
+                if (isIncapacidad && !yaRevisada) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Box(
                         modifier = Modifier
@@ -425,10 +430,16 @@ private fun DialogoRevisarNovedad(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = { onConfirmar(comentario) },
-                        colors = ButtonDefaults.buttonColors(containerColor = if (isIncapacidad) Color(0xFF991B1B) else CafeDarkBrown),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (isIncapacidad && !yaRevisada) Color(0xFF991B1B) else CafeDarkBrown),
                         shape = RoundedCornerShape(4.dp)
                     ) {
-                        Text(if (isIncapacidad) "Aprobar incapacidad" else "Confirmar revisión")
+                        Text(
+                            when {
+                                yaRevisada -> "Guardar comentario"
+                                isIncapacidad -> "Aprobar incapacidad"
+                                else -> "Confirmar revisión"
+                            }
+                        )
                     }
                 }
             }

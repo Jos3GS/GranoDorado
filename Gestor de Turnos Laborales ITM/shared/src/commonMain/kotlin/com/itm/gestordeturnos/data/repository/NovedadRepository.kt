@@ -7,6 +7,8 @@ import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
 import com.itm.gestordeturnos.domain.usecase.AplicarIncapacidadEnTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.AplicarPermisoEnTurnoUseCase
+import com.itm.gestordeturnos.domain.usecase.GestionarEstadoNovedadUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidacionGestionNovedadResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,6 +23,10 @@ object NovedadRepository : NovedadRepositoryContract {
     private val repositoryScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val _novedades = MutableStateFlow(MockDataProviders.inicialNovedades())
     override val novedades: StateFlow<List<Novedad>> = _novedades.asStateFlow()
+
+    private val gestionarEstadoNovedadUseCase by lazy {
+        GestionarEstadoNovedadUseCase()
+    }
 
     private val aplicarIncapacidadUseCase by lazy {
         AplicarIncapacidadEnTurnoUseCase(
@@ -86,6 +92,14 @@ object NovedadRepository : NovedadRepositoryContract {
         if (res.isFailure) {
             println("Error al guardar novedad en Firestore: ${res.exceptionOrNull()?.message}")
         }
+        // Si la novedad se guarda/nace en estado REVISADA, aplicar bloqueo de incapacidad o permiso (RN-17, RN-25)
+        if (novedad.estado == EstadoNovedad.REVISADA) {
+            if (novedad.tipo.contains("incapacidad", ignoreCase = true)) {
+                aplicarIncapacidadUseCase(novedad)
+            } else if (novedad.tipo.contains("permiso", ignoreCase = true)) {
+                aplicarPermisoUseCase(novedad)
+            }
+        }
         return res
     }
 
@@ -102,31 +116,37 @@ object NovedadRepository : NovedadRepositoryContract {
             revisor = revisor,
             fecha = fecha
         )
+        val validacionIntegridad = gestionarEstadoNovedadUseCase.validarRevisionAdministrador(novedadActual, novedadActualizada)
+        if (validacionIntegridad is ValidacionGestionNovedadResult.Invalido) {
+            println("Error de integridad en revisión: ${validacionIntegridad.mensaje}")
+            return
+        }
         repositoryScope.launch {
             guardarNovedad(novedadActualizada)
-            if (novedadActualizada.tipo.contains("incapacidad", ignoreCase = true)) {
-                aplicarIncapacidadUseCase(novedadActualizada)
-            } else if (novedadActualizada.tipo.contains("permiso", ignoreCase = true)) {
-                aplicarPermisoUseCase(novedadActualizada)
-            }
         }
     }
 
     override fun cambiarEstadoNovedad(idNovedad: String, nuevoEstado: EstadoNovedad) {
         val novedadActual = _novedades.value.find { it.id == idNovedad } ?: return
+        val validacion = gestionarEstadoNovedadUseCase.validarTransicionEstado(novedadActual.estado, nuevoEstado)
+        if (validacion is ValidacionGestionNovedadResult.Invalido) {
+            println("No se puede cambiar estado de novedad (RN-25): ${validacion.mensaje}")
+            return
+        }
         val novedadActualizada = novedadActual.copy(estado = nuevoEstado)
         repositoryScope.launch {
             guardarNovedad(novedadActualizada)
-
-            // Si es una novedad de incapacidad médica o permiso y fue revisada/aprobada,
-            // aplicamos el bloqueo en la malla (RN-17)
-            if (nuevoEstado == EstadoNovedad.REVISADA) {
-                if (novedadActualizada.tipo.contains("incapacidad", ignoreCase = true)) {
-                    aplicarIncapacidadUseCase(novedadActualizada)
-                } else if (novedadActualizada.tipo.contains("permiso", ignoreCase = true)) {
-                    aplicarPermisoUseCase(novedadActualizada)
-                }
-            }
         }
+    }
+
+    override suspend fun eliminarNovedad(idNovedad: String): Result<Unit> {
+        val novedadActual = _novedades.value.find { it.id == idNovedad }
+        if (novedadActual != null && novedadActual.estado == EstadoNovedad.REVISADA) {
+            return Result.failure(IllegalStateException("La novedad ya ha sido revisada y no puede ser eliminada."))
+        }
+        _novedades.update { lista ->
+            lista.filterNot { it.id == idNovedad }
+        }
+        return FirestoreService.eliminarNovedad(idNovedad)
     }
 }

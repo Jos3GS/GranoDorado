@@ -2016,7 +2016,9 @@ fun EncabezadoPantalla(
 @Composable
 fun NovedadCard(
     novedad: Novedad,
-    onMarcarRevisada: (() -> Unit)? = null
+    onMarcarRevisada: (() -> Unit)? = null,
+    onEditar: (() -> Unit)? = null,
+    onEliminar: (() -> Unit)? = null
 ) {
     val colorBarra = when (novedad.colorBorde.ifBlank { novedad.colorVorde }.uppercase()) {
         "ROJO" -> Color(0xFFAC3927)
@@ -2191,6 +2193,37 @@ fun NovedadCard(
                                     ) {
                                         Text(textoBoton, fontSize = 11.sp, color = Color.White)
                                     }
+                                } else if (onMarcarRevisada != null && novedad.estado == com.itm.gestordeturnos.domain.model.EstadoNovedad.REVISADA) {
+                                    OutlinedButton(
+                                        onClick = onMarcarRevisada,
+                                        shape = RoundedCornerShape(2.dp),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text("Editar comentario", fontSize = 11.sp, color = CafeDarkBrown)
+                                    }
+                                }
+                                if (onEditar != null && novedad.estado == com.itm.gestordeturnos.domain.model.EstadoNovedad.REPORTADA) {
+                                    OutlinedButton(
+                                        onClick = onEditar,
+                                        shape = RoundedCornerShape(2.dp),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text("Editar", fontSize = 11.sp, color = CafeDarkBrown)
+                                    }
+                                }
+                                if (onEliminar != null && novedad.estado == com.itm.gestordeturnos.domain.model.EstadoNovedad.REPORTADA) {
+                                    OutlinedButton(
+                                        onClick = onEliminar,
+                                        border = BorderStroke(1.dp, Color(0xFFEF9A9A)),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFC62828)),
+                                        shape = RoundedCornerShape(2.dp),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text("Eliminar", fontSize = 11.sp, color = Color(0xFFC62828))
+                                    }
                                 }
                             }
                         }
@@ -2214,6 +2247,37 @@ fun NovedadCard(
                                     modifier = Modifier.height(28.dp)
                                 ) {
                                     Text(textoBoton, fontSize = 11.sp, color = Color.White)
+                                }
+                            } else if (onMarcarRevisada != null && novedad.estado == com.itm.gestordeturnos.domain.model.EstadoNovedad.REVISADA) {
+                                OutlinedButton(
+                                    onClick = onMarcarRevisada,
+                                    shape = RoundedCornerShape(2.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text("Editar comentario", fontSize = 11.sp, color = CafeDarkBrown)
+                                }
+                            }
+                            if (onEditar != null && novedad.estado == com.itm.gestordeturnos.domain.model.EstadoNovedad.REPORTADA) {
+                                OutlinedButton(
+                                    onClick = onEditar,
+                                    shape = RoundedCornerShape(2.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text("Editar", fontSize = 11.sp, color = CafeDarkBrown)
+                                }
+                            }
+                            if (onEliminar != null && novedad.estado == com.itm.gestordeturnos.domain.model.EstadoNovedad.REPORTADA) {
+                                OutlinedButton(
+                                    onClick = onEliminar,
+                                    border = BorderStroke(1.dp, Color(0xFFEF9A9A)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFC62828)),
+                                    shape = RoundedCornerShape(2.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text("Eliminar", fontSize = 11.sp, color = Color(0xFFC62828))
                                 }
                             }
                         }

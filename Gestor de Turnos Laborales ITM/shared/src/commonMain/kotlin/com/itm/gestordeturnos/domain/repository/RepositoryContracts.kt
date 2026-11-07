@@ -49,6 +49,7 @@ interface NovedadRepositoryContract {
     fun reportarNovedad(novedad: Novedad)
     fun revisarNovedad(idNovedad: String, comentario: String, revisor: String, fecha: String)
     fun cambiarEstadoNovedad(idNovedad: String, nuevoEstado: EstadoNovedad)
+    suspend fun eliminarNovedad(idNovedad: String): Result<Unit>
 }
 
 /**

@@ -13,6 +13,8 @@ import com.itm.gestordeturnos.domain.model.Novedad
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.GestionarEstadoNovedadUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidacionGestionNovedadResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionNovedadResult
 import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
@@ -47,7 +49,14 @@ data class ReportarNovedadState(
         "Incapacidad médica",
         "Permiso especial"
     ),
-    val historial: List<Novedad> = emptyList()
+    val historial: List<Novedad> = emptyList(),
+    val novedadAEditar: Novedad? = null,
+    val novedadAEliminar: Novedad? = null,
+    val editDescripcion: String = "",
+    val editHoraReal: String = "",
+    val editErrorMensaje: String? = null,
+    val mostrarDialogoEditar: Boolean = false,
+    val mostrarDialogoEliminar: Boolean = false
 ) {
     val requiereHoraReal: Boolean
         get() = tipoNovedad in listOf("Llegada tarde", "Salida antes de la hora", "Ampliación del turno")
@@ -58,7 +67,8 @@ class ReportarNovedadViewModel(
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
     private val novedadRepository: NovedadRepositoryContract = NovedadRepository,
     private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase(),
-    private val validarReporteNovedadUseCase: ValidarReporteNovedadUseCase = ValidarReporteNovedadUseCase()
+    private val validarReporteNovedadUseCase: ValidarReporteNovedadUseCase = ValidarReporteNovedadUseCase(),
+    private val gestionarEstadoNovedadUseCase: GestionarEstadoNovedadUseCase = GestionarEstadoNovedadUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReportarNovedadState())
     val uiState: StateFlow<ReportarNovedadState> = _uiState.asStateFlow()
@@ -380,4 +390,191 @@ class ReportarNovedadViewModel(
     }
 
     fun enviarFormulario() = guardarNovedad()
+
+    fun iniciarEdicion(novedad: Novedad) {
+        val emp = resolverEmpleado(listaEmpleados)
+        val empId = emp?.id ?: (SessionManager.usuarioActivo?.id ?: "")
+        val validacion = gestionarEstadoNovedadUseCase.validarEdicionColaborador(novedad, empId)
+        if (validacion is ValidacionGestionNovedadResult.Invalido) {
+            _uiState.update { it.copy(errorMensaje = validacion.mensaje) }
+            return
+        }
+        _uiState.update {
+            it.copy(
+                novedadAEditar = novedad,
+                editDescripcion = novedad.descripcion,
+                editHoraReal = novedad.horaReal,
+                editErrorMensaje = null,
+                mostrarDialogoEditar = true,
+                errorMensaje = null,
+                mensajeExito = null
+            )
+        }
+    }
+
+    fun cerrarDialogoEditar() {
+        _uiState.update {
+            it.copy(
+                novedadAEditar = null,
+                mostrarDialogoEditar = false,
+                editErrorMensaje = null
+            )
+        }
+    }
+
+    fun onEditDescripcionCambio(nuevaDesc: String) {
+        _uiState.update { it.copy(editDescripcion = nuevaDesc, editErrorMensaje = null) }
+    }
+
+    fun onEditHoraRealCambio(nuevaHora: String) {
+        _uiState.update { it.copy(editHoraReal = nuevaHora, editErrorMensaje = null) }
+    }
+
+    fun guardarEdicion() {
+        val actual = _uiState.value
+        val nov = actual.novedadAEditar ?: return
+        val emp = resolverEmpleado(listaEmpleados)
+        val empId = emp?.id ?: (SessionManager.usuarioActivo?.id ?: "")
+        val validacion = gestionarEstadoNovedadUseCase.validarEdicionColaborador(nov, empId)
+        if (validacion is ValidacionGestionNovedadResult.Invalido) {
+            _uiState.update { it.copy(editErrorMensaje = validacion.mensaje) }
+            return
+        }
+
+        if (actual.editDescripcion.trim().isBlank()) {
+            _uiState.update { it.copy(editErrorMensaje = "La descripción no puede estar vacía.") }
+            return
+        }
+        if (actual.editDescripcion.trim().length < 5) {
+            _uiState.update { it.copy(editErrorMensaje = "La descripción debe tener al menos 5 caracteres.") }
+            return
+        }
+
+        val requiereHora = nov.tipo in listOf("Llegada tarde", "Salida antes de la hora", "Ampliación del turno")
+        if (requiereHora && actual.editHoraReal.isBlank()) {
+            _uiState.update { it.copy(editErrorMensaje = "Debes ingresar la hora real.") }
+            return
+        }
+
+        val nuevaDiferencia = if (actual.editHoraReal.isNotBlank()) "Hora real: ${actual.editHoraReal.trim()}" else actual.editDescripcion.trim()
+        val novActualizada = nov.copy(
+            descripcion = actual.editDescripcion.trim(),
+            horaReal = actual.editHoraReal.trim(),
+            diferencia = nuevaDiferencia
+        )
+
+        viewModelScope.launch {
+            novedadRepository.guardarNovedad(novActualizada)
+            _uiState.update {
+                it.copy(
+                    novedadAEditar = null,
+                    mostrarDialogoEditar = false,
+                    editErrorMensaje = null,
+                    mensajeExito = "Novedad actualizada exitosamente."
+                )
+            }
+        }
+    }
+
+    fun solicitarEliminacion(novedad: Novedad) {
+        val emp = resolverEmpleado(listaEmpleados)
+        val empId = emp?.id ?: (SessionManager.usuarioActivo?.id ?: "")
+        val validacion = gestionarEstadoNovedadUseCase.validarEliminacionColaborador(novedad, empId)
+        if (validacion is ValidacionGestionNovedadResult.Invalido) {
+            _uiState.update { it.copy(errorMensaje = validacion.mensaje) }
+            return
+        }
+        _uiState.update {
+            it.copy(
+                novedadAEliminar = novedad,
+                mostrarDialogoEliminar = true,
+                errorMensaje = null,
+                mensajeExito = null
+            )
+        }
+    }
+
+    fun cerrarDialogoEliminar() {
+        _uiState.update {
+            it.copy(
+                novedadAEliminar = null,
+                mostrarDialogoEliminar = false
+            )
+        }
+    }
+
+    fun confirmarEliminacion() {
+        val nov = _uiState.value.novedadAEliminar ?: return
+        val emp = resolverEmpleado(listaEmpleados)
+        val empId = emp?.id ?: (SessionManager.usuarioActivo?.id ?: "")
+        val validacion = gestionarEstadoNovedadUseCase.validarEliminacionColaborador(nov, empId)
+        if (validacion is ValidacionGestionNovedadResult.Invalido) {
+            _uiState.update {
+                it.copy(
+                    errorMensaje = validacion.mensaje,
+                    mostrarDialogoEliminar = false,
+                    novedadAEliminar = null
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            val res = novedadRepository.eliminarNovedad(nov.id)
+            if (res.isSuccess) {
+                _uiState.update {
+                    it.copy(
+                        novedadAEliminar = null,
+                        mostrarDialogoEliminar = false,
+                        mensajeExito = "Novedad eliminada exitosamente."
+                    )
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        novedadAEliminar = null,
+                        mostrarDialogoEliminar = false,
+                        errorMensaje = res.exceptionOrNull()?.message ?: "No se pudo eliminar la novedad."
+                    )
+                }
+            }
+        }
+    }
+
+    fun editarNovedad(idNovedad: String, nuevaDescripcion: String, nuevaHoraReal: String): Boolean {
+        val nov = _uiState.value.historial.find { it.id == idNovedad } ?: novedadRepository.novedades.value.find { it.id == idNovedad }
+        if (nov == null) return false
+        val emp = resolverEmpleado(listaEmpleados)
+        val empId = emp?.id ?: (SessionManager.usuarioActivo?.id ?: "")
+        val validacion = gestionarEstadoNovedadUseCase.validarEdicionColaborador(nov, empId)
+        if (validacion is ValidacionGestionNovedadResult.Invalido) {
+            _uiState.update { it.copy(errorMensaje = validacion.mensaje) }
+            return false
+        }
+        val actual = nov.copy(
+            descripcion = nuevaDescripcion.trim(),
+            horaReal = nuevaHoraReal.trim(),
+            diferencia = if (nuevaHoraReal.isNotBlank()) "Hora real: ${nuevaHoraReal.trim()}" else nuevaDescripcion.trim()
+        )
+        viewModelScope.launch {
+            novedadRepository.guardarNovedad(actual)
+        }
+        return true
+    }
+
+    fun eliminarNovedad(idNovedad: String): Boolean {
+        val nov = _uiState.value.historial.find { it.id == idNovedad } ?: novedadRepository.novedades.value.find { it.id == idNovedad }
+        if (nov == null) return false
+        val emp = resolverEmpleado(listaEmpleados)
+        val empId = emp?.id ?: (SessionManager.usuarioActivo?.id ?: "")
+        val validacion = gestionarEstadoNovedadUseCase.validarEliminacionColaborador(nov, empId)
+        if (validacion is ValidacionGestionNovedadResult.Invalido) {
+            _uiState.update { it.copy(errorMensaje = validacion.mensaje) }
+            return false
+        }
+        viewModelScope.launch {
+            novedadRepository.eliminarNovedad(idNovedad)
+        }
+        return true
+    }
 }

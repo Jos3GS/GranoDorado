@@ -23,6 +23,9 @@ import com.itm.gestordeturnos.domain.usecase.ValidacionNovedadResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionSolicitudCambioResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
+import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.GestionarEstadoNovedadUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidacionGestionNovedadResult
 import com.itm.gestordeturnos.domain.usecase.ValidarReporteNovedadUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarAprobacionCambioTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarAsignacionTurnoUseCase
@@ -3409,6 +3412,205 @@ class SharedCommonTest {
 
         assertIs<ValidacionNovedadResult.Valido>(resultado)
     }
+
+    // =========================================================================
+    // 25. PRUEBAS DE GESTIÓN DE NOVEDADES Y ESTADOS (RN-25)
+    // =========================================================================
+
+    private val gestionarEstadoNovedadUseCase = GestionarEstadoNovedadUseCase()
+
+    @Test
+    fun gestionarEstadoNovedad_colaboradorPuedeEditarNovedadEnEstadoReportada() {
+        val novedad = Novedad(
+            id = "nov_1",
+            tipo = "Llegada tarde",
+            descripcion = "Retraso en transporte público",
+            estado = EstadoNovedad.REPORTADA,
+            empleadoId = "emp_1"
+        )
+
+        val resultado = gestionarEstadoNovedadUseCase.validarEdicionColaborador(novedad, "emp_1")
+        assertIs<ValidacionGestionNovedadResult.Valido>(resultado)
+    }
+
+    @Test
+    fun gestionarEstadoNovedad_colaboradorNoPuedeEditarNovedadEnEstadoRevisada() {
+        val novedad = Novedad(
+            id = "nov_2",
+            tipo = "Llegada tarde",
+            descripcion = "Retraso en transporte",
+            estado = EstadoNovedad.REVISADA,
+            empleadoId = "emp_1"
+        )
+
+        val resultado = gestionarEstadoNovedadUseCase.validarEdicionColaborador(novedad, "emp_1")
+        val invalido = assertIs<ValidacionGestionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("revisada", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-25)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun gestionarEstadoNovedad_colaboradorNoPuedeEditarNovedadDeOtroColaborador() {
+        val novedad = Novedad(
+            id = "nov_3",
+            tipo = "Salida antes de la hora",
+            descripcion = "Cita médica urgente",
+            estado = EstadoNovedad.REPORTADA,
+            empleadoId = "emp_otro"
+        )
+
+        val resultado = gestionarEstadoNovedadUseCase.validarEdicionColaborador(novedad, "emp_1")
+        val invalido = assertIs<ValidacionGestionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("permisos", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-25)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun gestionarEstadoNovedad_colaboradorPuedeEliminarNovedadEnEstadoReportada() {
+        val novedad = Novedad(
+            id = "nov_4",
+            tipo = "Ampliación del turno",
+            descripcion = "Apoyo en horas pico",
+            estado = EstadoNovedad.REPORTADA,
+            empleadoId = "emp_1"
+        )
+
+        val resultado = gestionarEstadoNovedadUseCase.validarEliminacionColaborador(novedad, "emp_1")
+        assertIs<ValidacionGestionNovedadResult.Valido>(resultado)
+    }
+
+    @Test
+    fun gestionarEstadoNovedad_colaboradorNoPuedeEliminarNovedadEnEstadoRevisada() {
+        val novedad = Novedad(
+            id = "nov_5",
+            tipo = "Ampliación del turno",
+            descripcion = "Apoyo en horas pico",
+            estado = EstadoNovedad.REVISADA,
+            empleadoId = "emp_1"
+        )
+
+        val resultado = gestionarEstadoNovedadUseCase.validarEliminacionColaborador(novedad, "emp_1")
+        val invalido = assertIs<ValidacionGestionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("revisada", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-25)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun gestionarEstadoNovedad_noSePuedeRevertirEstadoDeRevisadaAReportada() {
+        val resultado = gestionarEstadoNovedadUseCase.validarTransicionEstado(
+            estadoActual = EstadoNovedad.REVISADA,
+            nuevoEstado = EstadoNovedad.REPORTADA
+        )
+        val invalido = assertIs<ValidacionGestionNovedadResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("revertirse", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-25)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun gestionarEstadoNovedad_revisionAdministradorConservaDatosOriginales() {
+        val novedadOriginal = Novedad(
+            id = "nov_6",
+            tipo = "Llegada tarde",
+            descripcion = "Demora en metro",
+            horaReal = "08:20",
+            fechaReferencia = "2026-11-06",
+            empleadoId = "emp_1",
+            estado = EstadoNovedad.REPORTADA
+        )
+
+        // Revisión válida: solo agrega comentario y datos de revisor
+        val revisionValida = novedadOriginal.revisar(
+            comentario = "Justificación aceptada",
+            revisor = "Admin",
+            fecha = "2026-11-07"
+        )
+        val resValido = gestionarEstadoNovedadUseCase.validarRevisionAdministrador(novedadOriginal, revisionValida)
+        assertIs<ValidacionGestionNovedadResult.Valido>(resValido)
+
+        // Revisión inválida: altera descripción original reportada por el colaborador
+        val revisionInvalida = revisionValida.copy(descripcion = "Descripción modificada por el admin")
+        val resInvalido = gestionarEstadoNovedadUseCase.validarRevisionAdministrador(novedadOriginal, revisionInvalida)
+        val invalido = assertIs<ValidacionGestionNovedadResult.Invalido>(resInvalido)
+        assertTrue(invalido.mensaje.contains("alterar ni borrar", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-25)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun gestionarEstadoNovedad_novedadRegistradaPorSupervisorNaceInmediatamenteEnEstadoRevisada() {
+        val novedadBase = Novedad(
+            id = "nov_sup_1",
+            tipo = "Ausencia justificada",
+            descripcion = "Calamidad doméstica informada por teléfono",
+            empleadoId = "emp_1",
+            fechaReferencia = "2026-11-06"
+        )
+
+        val preparada = gestionarEstadoNovedadUseCase.prepararNovedadDirectaSupervisor(
+            novedadBase = novedadBase,
+            revisor = "Supervisor Carlos",
+            fechaRevision = "2026-11-06",
+            comentarioSupervisor = "Registrada y aprobada directamente por supervisión"
+        )
+
+        assertEquals(EstadoNovedad.REVISADA, preparada.estado)
+        assertTrue(preparada.reportadoPorSupervisor)
+        assertEquals("Supervisor Carlos", preparada.revisadoPor)
+        assertEquals("2026-11-06", preparada.fechaRevision)
+        assertEquals("Registrada y aprobada directamente por supervisión", preparada.comentarioRevision)
+    }
+
+    @Test
+    fun novedadRepository_gestionDeNovedades_eliminarBloqueadoEnRevisadaYPermitidoEnReportada() = runBlocking {
+        val novReportada = Novedad(
+            id = "nov_colab_1",
+            tipo = "Llegada tarde",
+            descripcion = "Retraso en ruta",
+            horaReal = "08:15",
+            estado = EstadoNovedad.REPORTADA,
+            empleadoId = "emp_1",
+            fechaReferencia = "2026-11-06"
+        )
+        val novRevisada = Novedad(
+            id = "nov_colab_2",
+            tipo = "Salida antes de la hora",
+            descripcion = "Permiso concedido",
+            horaReal = "15:30",
+            estado = EstadoNovedad.REVISADA,
+            empleadoId = "emp_1",
+            fechaReferencia = "2026-11-06"
+        )
+
+        val fakeRepo = FakeNovedadRepository(listOf(novReportada, novRevisada))
+
+        // 1. Eliminación en REVISADA falla y no elimina
+        val resEliminarRevisada = fakeRepo.eliminarNovedad("nov_colab_2")
+        assertTrue(resEliminarRevisada.isFailure)
+        assertEquals(2, fakeRepo.novedades.value.size)
+
+        // 2. Eliminación en REPORTADA tiene éxito
+        val resEliminarReportada = fakeRepo.eliminarNovedad("nov_colab_1")
+        assertTrue(resEliminarReportada.isSuccess)
+        assertEquals(1, fakeRepo.novedades.value.size)
+        assertEquals("nov_colab_2", fakeRepo.novedades.value.first().id)
+    }
+
+    @Test
+    fun novedadRepository_transicionEstado_noPermiteRevertirDeRevisadaAReportada() {
+        val novRevisada = Novedad(
+            id = "nov_rev_1",
+            tipo = "Llegada tarde",
+            descripcion = "Demora en transporte",
+            estado = EstadoNovedad.REVISADA,
+            empleadoId = "emp_1"
+        )
+        val fakeRepo = FakeNovedadRepository(listOf(novRevisada))
+
+        // Intento de cambiar estado a REPORTADA
+        fakeRepo.cambiarEstadoNovedad("nov_rev_1", EstadoNovedad.REPORTADA)
+
+        // Sigue manteniéndose en REVISADA
+        assertEquals(EstadoNovedad.REVISADA, fakeRepo.novedades.value.first().estado)
+    }
 }
 
 // =========================================================================
@@ -3466,3 +3668,61 @@ private class FakeTurnoRepository(
     override fun agregarTurnoCatalogo(turno: TurnoTemplate) {}
     override fun getTurnoHoy(): TurnoAsignado? = null
 }
+
+private class FakeNovedadRepository(
+    novedadesIniciales: List<Novedad> = emptyList()
+) : NovedadRepositoryContract {
+    private val _novedades = MutableStateFlow(novedadesIniciales)
+    override val novedades: StateFlow<List<Novedad>> = _novedades
+
+    override fun iniciarSincronizacionFirestore(forzar: Boolean) {}
+    override fun detenerSincronizacion() {}
+
+    override suspend fun guardarNovedad(novedad: Novedad): Result<Unit> {
+        val actual = _novedades.value.toMutableList()
+        val idx = actual.indexOfFirst { it.id == novedad.id }
+        if (idx >= 0) actual[idx] = novedad else actual.add(0, novedad)
+        _novedades.value = actual
+        return Result.success(Unit)
+    }
+
+    override fun reportarNovedad(novedad: Novedad) {
+        val actual = _novedades.value.toMutableList()
+        val idx = actual.indexOfFirst { it.id == novedad.id }
+        if (idx >= 0) actual[idx] = novedad else actual.add(0, novedad)
+        _novedades.value = actual
+    }
+
+    override fun revisarNovedad(idNovedad: String, comentario: String, revisor: String, fecha: String) {
+        val actual = _novedades.value.toMutableList()
+        val idx = actual.indexOfFirst { it.id == idNovedad }
+        if (idx >= 0) {
+            actual[idx] = actual[idx].revisar(comentario, revisor, fecha)
+            _novedades.value = actual
+        }
+    }
+
+    override fun cambiarEstadoNovedad(idNovedad: String, nuevoEstado: EstadoNovedad) {
+        val actual = _novedades.value.toMutableList()
+        val idx = actual.indexOfFirst { it.id == idNovedad }
+        if (idx >= 0) {
+            if (actual[idx].estado == EstadoNovedad.REVISADA && nuevoEstado == EstadoNovedad.REPORTADA) {
+                return
+            }
+            actual[idx] = actual[idx].copy(estado = nuevoEstado)
+            _novedades.value = actual
+        }
+    }
+
+    override suspend fun eliminarNovedad(idNovedad: String): Result<Unit> {
+        val actual = _novedades.value.toMutableList()
+        val nov = actual.find { it.id == idNovedad }
+        if (nov != null && nov.estado == EstadoNovedad.REVISADA) {
+            return Result.failure(IllegalStateException("La novedad ya ha sido revisada y no puede ser eliminada."))
+        }
+        actual.removeAll { it.id == idNovedad }
+        _novedades.value = actual
+        return Result.success(Unit)
+    }
+}
+
