@@ -1,6 +1,8 @@
 package com.itm.gestordeturnos.domain.usecase
 
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
+import com.itm.gestordeturnos.domain.model.RolUsuario
+import com.itm.gestordeturnos.domain.model.UsuarioActual
 
 sealed interface ValidacionMarcaSupervisorResult {
     data object Valido : ValidacionMarcaSupervisorResult
@@ -8,24 +10,50 @@ sealed interface ValidacionMarcaSupervisorResult {
 }
 
 /**
- * Caso de uso de dominio para las reglas de inmutabilidad y registro manual de marcas por supervisor (RN-28).
+ * Caso de uso de dominio para las reglas de inmutabilidad, permisos y registro manual de marcas por supervisor (RN-28 y RN-29).
  *
  * Reglas de negocio:
- * 1. Las marcaciones registradas por el colaborador son estrictamente inmutables:
- *    no pueden ser editadas ni eliminadas por el empleado, ni sobrescritas por el supervisor.
- * 2. El supervisor únicamente puede registrar marcas faltantes (omisiones).
- * 3. El motivo o justificación de la marcación por supervisor es obligatorio.
- * 4. La hora ingresada debe tener formato válido de 24 horas (HH:mm).
- * 5. Cada marca registrada por el supervisor queda trazada individualmente para impedir que
- *    completar una omisión habilite la sobrescritura de marcas previas del empleado.
+ * 1. Solo administradores (General o de Sucursal) tienen permiso para registrar marcaciones manuales (RN-29).
+ * 2. El Administrador de Sucursal solo puede registrar marcas en empleados pertenecientes a su sucursal (RN-29).
+ * 3. Se debe registrar obligatoriamente la identificación y nombre del supervisor responsable (RN-29).
+ * 4. El motivo o justificación de la marcación por supervisor es estrictamente obligatorio (RN-29).
+ * 5. Las marcaciones registradas por el colaborador son inmutables: no pueden ser sobrescritas (RN-28).
+ * 6. El supervisor únicamente puede registrar marcas faltantes (omisiones) (RN-28).
+ * 7. Trazabilidad individual de origen por cada una de las marcas (entrada, descansos, salida) (RN-28 y RN-29).
  */
 class ValidarMarcaSupervisorUseCase {
 
+    /**
+     * Valida permisos del usuario supervisor según su rol y sucursal (RN-29).
+     */
+    fun validarPermisoSupervisor(
+        usuarioActivo: UsuarioActual?,
+        sucursalRegistro: String
+    ): ValidacionMarcaSupervisorResult {
+        if (usuarioActivo == null) {
+            return ValidacionMarcaSupervisorResult.Invalido("Debes iniciar sesión en el sistema para realizar esta acción.")
+        }
+        if (usuarioActivo.rol == RolUsuario.EMPLEADO) {
+            return ValidacionMarcaSupervisorResult.Invalido("No tienes permisos para registrar marcaciones manuales de asistencia.")
+        }
+        if (usuarioActivo.rol == RolUsuario.ADMINISTRADOR_SUCURSAL) {
+            val sucursalAdmin = usuarioActivo.sucursal.trim()
+            if (sucursalAdmin.isNotBlank() && !sucursalAdmin.equals(sucursalRegistro.trim(), ignoreCase = true)) {
+                return ValidacionMarcaSupervisorResult.Invalido("Solo tienes autorización para registrar marcaciones en tu sucursal asignada ($sucursalAdmin).")
+            }
+        }
+        return ValidacionMarcaSupervisorResult.Valido
+    }
+
+    /**
+     * Valida los datos y la inmutabilidad de la marcación manual a registrar (RN-28 y RN-29).
+     */
     fun validar(
         registroActual: RegistroAsistencia?,
         tipoMarca: String,
         horaMarca: String,
-        motivo: String
+        motivo: String,
+        supervisorNombre: String = ""
     ): ValidacionMarcaSupervisorResult {
         if (motivo.isBlank()) {
             return ValidacionMarcaSupervisorResult.Invalido("El motivo o justificación de la marcación por supervisor es obligatorio.")

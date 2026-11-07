@@ -59,6 +59,7 @@ data class RegistroAsistencia(
     val salidaPorSupervisor: Boolean = false,
     val inicioDescansoPorSupervisor: Boolean = false,
     val finDescansoPorSupervisor: Boolean = false,
+    val supervisorId: String = "",
     val supervisorNombre: String = ""
 ) {
     val listaPausas: List<PausaDescanso>

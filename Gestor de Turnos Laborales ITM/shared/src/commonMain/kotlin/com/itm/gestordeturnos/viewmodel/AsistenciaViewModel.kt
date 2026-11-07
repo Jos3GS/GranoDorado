@@ -38,7 +38,8 @@ data class AsistenciaState(
 class AsistenciaViewModel(
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
-    private val asistenciaRepository: AsistenciaRepositoryContract = AsistenciaRepository
+    private val asistenciaRepository: AsistenciaRepositoryContract = AsistenciaRepository,
+    private val validarMarcaSupervisorUseCase: com.itm.gestordeturnos.domain.usecase.ValidarMarcaSupervisorUseCase = com.itm.gestordeturnos.domain.usecase.ValidarMarcaSupervisorUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AsistenciaState())
     val uiState: StateFlow<AsistenciaState> = _uiState.asStateFlow()
@@ -245,12 +246,9 @@ class AsistenciaViewModel(
         onResult: (Boolean, String?) -> Unit
     ) {
         val usuario = SessionManager.usuarioActivo
-        val esAdminGeneral = usuario?.rol == RolUsuario.ADMINISTRADOR_GENERAL
-        val sucursalUsuario = usuario?.sucursal?.ifBlank { "CENTRO" } ?: "CENTRO"
-
-        // CA-16.7: Ámbito por sucursal
-        if (!esAdminGeneral && !sucursal.equals(sucursalUsuario, ignoreCase = true)) {
-            onResult(false, "Solo puedes registrar marcaciones para tu sucursal ($sucursalUsuario).")
+        val validacionPermisos = validarMarcaSupervisorUseCase.validarPermisoSupervisor(usuario, sucursal)
+        if (validacionPermisos is com.itm.gestordeturnos.domain.usecase.ValidacionMarcaSupervisorResult.Invalido) {
+            onResult(false, validacionPermisos.mensaje)
             return
         }
 
@@ -266,6 +264,7 @@ class AsistenciaViewModel(
                 tipoMarca = tipoMarca,
                 horaMarca = horaMarca,
                 motivo = motivo,
+                supervisorId = usuario?.id ?: "",
                 supervisorNombre = usuario?.nombre ?: "Supervisor"
             )
             if (res.isSuccess) {

@@ -319,12 +319,17 @@ private fun FilaAsistencia(registro: RegistroAsistencia, onRegistrarMarca: (Regi
             Text(registro.empleado, color = CafeTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             if (registro.registradoPorSupervisor) {
                 Spacer(modifier = Modifier.height(2.dp))
+                val textoSupervisor = if (registro.supervisorNombre.isNotBlank()) {
+                    "Por: ${registro.supervisorNombre}"
+                } else {
+                    "Por supervisor"
+                }
                 Box(
                     modifier = Modifier
                         .background(CafeAccentYellow.copy(alpha = 0.2f), RoundedCornerShape(2.dp))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
-                    Text("Por supervisor", color = CafeDarkBrown, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text(textoSupervisor, color = CafeDarkBrown, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -335,10 +340,20 @@ private fun FilaAsistencia(registro: RegistroAsistencia, onRegistrarMarca: (Regi
         }
 
         // Columna Entrada
-        Text(registro.horaEntrada, modifier = Modifier.weight(1.5f), color = CafeTextPrimary, fontSize = 14.sp)
+        Column(modifier = Modifier.weight(1.5f)) {
+            Text(registro.horaEntrada, color = CafeTextPrimary, fontSize = 14.sp)
+            if (registro.entradaPorSupervisor) {
+                Text("Manual", color = CafeAccentYellow, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+        }
 
         // Columna Salida
-        Text(registro.horaSalida, modifier = Modifier.weight(1.5f), color = CafeTextPrimary, fontSize = 14.sp)
+        Column(modifier = Modifier.weight(1.5f)) {
+            Text(registro.horaSalida, color = CafeTextPrimary, fontSize = 14.sp)
+            if (registro.salidaPorSupervisor) {
+                Text("Manual", color = CafeAccentYellow, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+        }
 
         // Columna Estado (Tokens semánticos de Theme)
         Box(modifier = Modifier.weight(1.5f)) {

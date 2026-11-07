@@ -154,6 +154,7 @@ object AsistenciaRepository : AsistenciaRepositoryContract {
         tipoMarca: String,
         horaMarca: String,
         motivo: String,
+        supervisorId: String,
         supervisorNombre: String
     ): Result<Unit> {
         val existente = _registrosDiarios.value.find {
@@ -246,6 +247,7 @@ object AsistenciaRepository : AsistenciaRepositoryContract {
             salidaPorSupervisor = salSup,
             inicioDescansoPorSupervisor = descIniSup,
             finDescansoPorSupervisor = descFinSup,
+            supervisorId = supervisorId.ifBlank { existente?.supervisorId ?: "" },
             supervisorNombre = supervisorNombre.ifBlank { existente?.supervisorNombre ?: "" }
         )
 

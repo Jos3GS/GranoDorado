@@ -4039,6 +4039,113 @@ class SharedCommonTest {
             assertFalse(inv.mensaje.contains("(RN-28)"))
         }
     }
+
+    // =========================================================================
+    // 28. PRUEBAS DE REGISTRO MANUAL DE SUPERVISOR Y ÁMBITO DE SUCURSAL (RN-29)
+    // =========================================================================
+
+    @Test
+    fun validarPermisoSupervisor_bloqueaSiNoHaySesionActiva() {
+        val resultado = validarMarcaSupervisorUseCase.validarPermisoSupervisor(
+            usuarioActivo = null,
+            sucursalRegistro = "CENTRO"
+        )
+        val invalido = assertIs<ValidacionMarcaSupervisorResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("iniciar sesión", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-29)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun validarPermisoSupervisor_bloqueaSiUsuarioEsEmpleado() {
+        val usuarioEmpleado = UsuarioActual(
+            id = "user_emp",
+            nombre = "Pedro Empleado",
+            correo = "pedro@empresa.com",
+            sucursal = "CENTRO",
+            iniciales = "PE",
+            cargo = "Barista",
+            rol = RolUsuario.EMPLEADO
+        )
+
+        val resultado = validarMarcaSupervisorUseCase.validarPermisoSupervisor(
+            usuarioActivo = usuarioEmpleado,
+            sucursalRegistro = "CENTRO"
+        )
+        val invalido = assertIs<ValidacionMarcaSupervisorResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("permisos", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-29)"))
+    }
+
+    @Test
+    fun validarPermisoSupervisor_adminSucursalSoloPuedeMarcarEnSuSucursal() {
+        val adminSucursalSur = UsuarioActual(
+            id = "admin_sur",
+            nombre = "Marta Admin Sur",
+            correo = "marta@empresa.com",
+            sucursal = "SUR",
+            iniciales = "MS",
+            cargo = "Administrador de Sucursal",
+            rol = RolUsuario.ADMINISTRADOR_SUCURSAL
+        )
+
+        // 1. Intento en otra sucursal ("CENTRO") -> Bloqueado
+        val resOtraSucursal = validarMarcaSupervisorUseCase.validarPermisoSupervisor(
+            usuarioActivo = adminSucursalSur,
+            sucursalRegistro = "CENTRO"
+        )
+        val invalido = assertIs<ValidacionMarcaSupervisorResult.Invalido>(resOtraSucursal)
+        assertTrue(invalido.mensaje.contains("SUR", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("(RN-29)"))
+
+        // 2. Intento en su propia sucursal ("SUR") -> Permitido
+        val resPropiaSucursal = validarMarcaSupervisorUseCase.validarPermisoSupervisor(
+            usuarioActivo = adminSucursalSur,
+            sucursalRegistro = "SUR"
+        )
+        assertIs<ValidacionMarcaSupervisorResult.Valido>(resPropiaSucursal)
+    }
+
+    @Test
+    fun validarPermisoSupervisor_adminGeneralPuedeMarcarEnCualquierSucursal() {
+        val adminGeneral = UsuarioActual(
+            id = "admin_gen",
+            nombre = "Carlos Admin General",
+            correo = "carlos@empresa.com",
+            sucursal = "CENTRO",
+            iniciales = "CG",
+            cargo = "Administrador General",
+            rol = RolUsuario.ADMINISTRADOR_GENERAL
+        )
+
+        for (sucursal in listOf("CENTRO", "NORTE", "SUR")) {
+            val res = validarMarcaSupervisorUseCase.validarPermisoSupervisor(
+                usuarioActivo = adminGeneral,
+                sucursalRegistro = sucursal
+            )
+            assertIs<ValidacionMarcaSupervisorResult.Valido>(res)
+        }
+    }
+
+    @Test
+    fun registroAsistencia_persisteSupervisorIdYNombreConTrazabilidadIndividual() {
+        val registro = RegistroAsistencia(
+            id = "reg_test",
+            empleadoId = "emp_1",
+            horaEntrada = "08:00",
+            horaSalida = "16:00",
+            salidaPorSupervisor = true,
+            registradoPorSupervisor = true,
+            motivoSupervisor = "Omisión de marcación de salida",
+            supervisorId = "usr_sup_42",
+            supervisorNombre = "Admin Juan"
+        )
+
+        assertEquals("usr_sup_42", registro.supervisorId)
+        assertEquals("Admin Juan", registro.supervisorNombre)
+        assertEquals("Omisión de marcación de salida", registro.motivoSupervisor)
+        assertTrue(registro.salidaPorSupervisor)
+        assertFalse(registro.entradaPorSupervisor)
+    }
 }
 
 // =========================================================================
