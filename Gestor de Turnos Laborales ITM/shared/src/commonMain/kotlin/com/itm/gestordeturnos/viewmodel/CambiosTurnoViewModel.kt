@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.itm.gestordeturnos.data.mock.MockDataProviders
 import com.itm.gestordeturnos.data.repository.CambiosTurnoRepository
 import com.itm.gestordeturnos.data.repository.EmpleadoRepository
+import com.itm.gestordeturnos.data.repository.NovedadRepository
 import com.itm.gestordeturnos.data.repository.TurnoRepository
 import com.itm.gestordeturnos.domain.model.AsignacionTurno
+import com.itm.gestordeturnos.domain.model.Cargo
 import com.itm.gestordeturnos.domain.model.Empleado
 import com.itm.gestordeturnos.domain.model.EstadoSolicitudCambio
 import com.itm.gestordeturnos.domain.model.RolUsuario
@@ -16,9 +18,12 @@ import com.itm.gestordeturnos.domain.model.TurnoCompaneroSeleccionable
 import com.itm.gestordeturnos.domain.model.TurnoSeleccionable
 import com.itm.gestordeturnos.domain.repository.CambiosTurnoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
+import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionSolicitudCambioResult
 import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidarSolicitudCambioTurnoUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,7 +51,9 @@ class CambiosTurnoViewModel(
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
     private val empleadoRepository: EmpleadoRepositoryContract = EmpleadoRepository,
     private val cambiosTurnoRepository: CambiosTurnoRepositoryContract = CambiosTurnoRepository,
-    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase()
+    private val novedadRepository: NovedadRepositoryContract = NovedadRepository,
+    private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase(),
+    private val validarSolicitudCambioUseCase: ValidarSolicitudCambioTurnoUseCase = ValidarSolicitudCambioTurnoUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CambiosTurnoState())
     val uiState: StateFlow<CambiosTurnoState> = _uiState.asStateFlow()
@@ -55,6 +62,7 @@ class CambiosTurnoViewModel(
         turnoRepository.iniciarSincronizacionFirestore()
         empleadoRepository.iniciarSincronizacionFirestore()
         cambiosTurnoRepository.iniciarSincronizacionFirestore()
+        novedadRepository.iniciarSincronizacionFirestore()
         observarDatos()
     }
 
@@ -99,12 +107,12 @@ class CambiosTurnoViewModel(
                     }
                 }
 
-                // 2. Extraer turnos propios publicables
-                val propiosDinamicos = extraerTurnosPropios(empId, empNombre, asignaciones)
+                // 2. Extraer turnos propios publicables y elegibles (RN-19)
+                val propiosDinamicos = extraerTurnosPropios(empId, empNombre, asignaciones, solicitudes)
                 val propiosFinales = if (propiosDinamicos.isNotEmpty()) propiosDinamicos else MockDataProviders.inicialTurnosPropios()
 
-                // 3. Extraer turnos de compañeros elegibles (misma sucursal y mismo cargo)
-                val companerosDinamicos = extraerTurnosCompaneros(empId, empNombre, sucursalUsuario, empCargo, asignaciones, empleados)
+                // 3. Extraer turnos de compañeros elegibles (misma sucursal, mismo cargo, publicados y sin solicitud en curso) (RN-19)
+                val companerosDinamicos = extraerTurnosCompaneros(empId, empNombre, sucursalUsuario, empCargo, asignaciones, empleados, solicitudes)
                 val companerosFinales = if (companerosDinamicos.isNotEmpty()) companerosDinamicos else generarCompanerosMockFallback(sucursalUsuario)
 
                 _uiState.update { actual ->
@@ -121,16 +129,18 @@ class CambiosTurnoViewModel(
     private fun extraerTurnosPropios(
         empId: String,
         empNombre: String,
-        asignaciones: List<AsignacionTurno>
+        asignaciones: List<AsignacionTurno>,
+        solicitudes: List<SolicitudCambioTurno>
     ): List<TurnoSeleccionable> {
         return asignaciones.filter { asig ->
-            (asig.empleadoId == empId || (asig.empleadoNombre.isNotBlank() && asig.empleadoNombre.equals(empNombre, ignoreCase = true))) &&
-            !asig.esDescanso &&
-            asig.tipoTurno.isNotBlank() &&
-            !asig.tipoTurno.equals("Descanso", ignoreCase = true) &&
-            !asig.tipoTurno.contains("incapacidad", ignoreCase = true) &&
-            !asig.tipoTurno.contains("permiso", ignoreCase = true) &&
-            !asig.tipoTurno.contains("vacaciones", ignoreCase = true)
+            val coincideEmp = asig.empleadoId == empId ||
+                (asig.empleadoNombre.isNotBlank() && asig.empleadoNombre.equals(empNombre, ignoreCase = true))
+
+            coincideEmp && validarSolicitudCambioUseCase.esTurnoElegibleParaIntercambio(
+                asignacion = if (asig.empleadoId.isBlank()) asig.copy(empleadoId = empId) else asig,
+                empleadoId = if (asig.empleadoId.isBlank()) empId else asig.empleadoId,
+                solicitudesExistentes = solicitudes
+            )
         }.map { asig ->
             val desc = "${formatearFechaCorta(asig.fechaIso)} · ${asig.tipoTurno}"
             val hor = if (asig.horario.isNotBlank() && asig.horario != "-") asig.horario.replace("\n", " ") else "06:00 - 14:00"
@@ -151,27 +161,28 @@ class CambiosTurnoViewModel(
         sucursal: String,
         cargo: com.itm.gestordeturnos.domain.model.Cargo?,
         asignaciones: List<AsignacionTurno>,
-        empleados: List<Empleado>
+        empleados: List<Empleado>,
+        solicitudes: List<SolicitudCambioTurno>
     ): List<TurnoCompaneroSeleccionable> {
+        val sucursalLimpia = sucursal.trim().replace(" ", "")
         val empleadosElegibles = empleados.filter { e ->
             e.id != empId &&
             !e.nombre.equals(empNombre, ignoreCase = true) &&
             (cargo == null || e.cargo == cargo) &&
-            (e.sucursal.isBlank() || e.sucursal.equals(sucursal, ignoreCase = true)) &&
+            (e.sucursal.isBlank() || e.sucursal.trim().replace(" ", "").equals(sucursalLimpia, ignoreCase = true)) &&
             e.estado == com.itm.gestordeturnos.domain.model.EstadoUsuario.ACTIVO
         }.associateBy { it.id }
 
         return asignaciones.filter { asig ->
             asig.empleadoId != empId &&
             !asig.empleadoNombre.equals(empNombre, ignoreCase = true) &&
-            (asig.sucursalId.isBlank() || asig.sucursalId.equals(sucursal, ignoreCase = true)) &&
-            (empleadosElegibles.containsKey(asig.empleadoId) || cargo == null) &&
-            !asig.esDescanso &&
-            asig.tipoTurno.isNotBlank() &&
-            !asig.tipoTurno.equals("Descanso", ignoreCase = true) &&
-            !asig.tipoTurno.contains("incapacidad", ignoreCase = true) &&
-            !asig.tipoTurno.contains("permiso", ignoreCase = true) &&
-            !asig.tipoTurno.contains("vacaciones", ignoreCase = true)
+            (asig.sucursalId.isBlank() || asig.sucursalId.trim().replace(" ", "").equals(sucursalLimpia, ignoreCase = true)) &&
+            empleadosElegibles.containsKey(asig.empleadoId) &&
+            validarSolicitudCambioUseCase.esTurnoElegibleParaIntercambio(
+                asignacion = asig,
+                empleadoId = asig.empleadoId,
+                solicitudesExistentes = solicitudes
+            )
         }.map { asig ->
             val emp = empleadosElegibles[asig.empleadoId]
             val nombre = asig.empleadoNombre.ifBlank { emp?.let { "${it.nombre} ${it.apellido}".trim() } ?: "Compañero" }
@@ -254,17 +265,22 @@ class CambiosTurnoViewModel(
                 mostrarModalSolicitud = mostrar,
                 turnoPropioSeleccionado = if (!mostrar) null else it.turnoPropioSeleccionado,
                 turnoCompaneroSeleccionado = if (!mostrar) null else it.turnoCompaneroSeleccionado,
-                motivo = if (!mostrar) "" else it.motivo
+                motivo = if (!mostrar) "" else it.motivo,
+                mensajeFeedback = null
             )
         }
     }
 
+    fun limpiarMensajeFeedback() {
+        _uiState.update { it.copy(mensajeFeedback = null) }
+    }
+
     fun seleccionarTurnoPropio(turno: TurnoSeleccionable) {
-        _uiState.update { it.copy(turnoPropioSeleccionado = turno) }
+        _uiState.update { it.copy(turnoPropioSeleccionado = turno, mensajeFeedback = null) }
     }
 
     fun seleccionarTurnoCompanero(turno: TurnoCompaneroSeleccionable) {
-        _uiState.update { it.copy(turnoCompaneroSeleccionado = turno) }
+        _uiState.update { it.copy(turnoCompaneroSeleccionado = turno, mensajeFeedback = null) }
     }
 
     fun actualizarMotivo(motivo: String) {
@@ -279,7 +295,8 @@ class CambiosTurnoViewModel(
         if (motivo.isBlank()) return
 
         val usuario = SessionManager.usuarioActivo
-        val emp = resolverEmpleado(usuario, empleadoRepository.empleados.value)
+        val empleados = empleadoRepository.empleados.value
+        val emp = resolverEmpleado(usuario, empleados)
 
         // RN-11: El empleado no puede realizar acciones si está inactivo
         val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(emp, "cambio_turno")
@@ -288,11 +305,72 @@ class CambiosTurnoViewModel(
             return
         }
 
-        val empId = emp?.id ?: usuario?.id ?: "emp_1"
-        val empNombre = emp?.let {
-            if (it.apellido.isNotBlank()) "${it.nombre} ${it.apellido}".trim() else it.nombre
-        } ?: usuario?.nombre ?: "Empleado"
-        val sucursal = emp?.sucursal ?: usuario?.sucursal ?: "CENTRO"
+        val compEmpleado = empleados.find { it.id == companero.empleadoId }
+        val asignaciones = turnoRepository.asignaciones.value
+        val solicitudes = cambiosTurnoRepository.solicitudes.value
+        val novedades = novedadRepository.novedades.value
+
+        val empFinal = emp ?: Empleado(
+            id = usuario?.id ?: "emp_1",
+            nombre = usuario?.nombre ?: "Empleado",
+            apellido = "",
+            correo = usuario?.correo ?: "",
+            sucursal = usuario?.sucursal ?: "CENTRO",
+            cargo = Cargo.BARISTA
+        )
+        val compFinal = compEmpleado ?: Empleado(
+            id = companero.empleadoId.ifBlank { "emp_comp" },
+            nombre = companero.nombre,
+            apellido = "",
+            correo = "",
+            sucursal = empFinal.sucursal,
+            cargo = empFinal.cargo
+        )
+
+        val turnoEntregaAsig = asignaciones.find {
+            it.id == propio.asignacionId || it.id == propio.id || (it.empleadoId == empFinal.id && it.fechaIso == propio.fechaIso)
+        } ?: AsignacionTurno(
+            id = propio.asignacionId.ifBlank { propio.id },
+            empleadoId = empFinal.id,
+            empleadoNombre = "${empFinal.nombre} ${empFinal.apellido}".trim(),
+            fechaIso = propio.fechaIso,
+            tipoTurno = propio.tipoTurno.ifBlank { propio.descripcion.split("·").lastOrNull()?.trim() ?: "Turno" },
+            horario = propio.horario,
+            sucursalId = empFinal.sucursal,
+            estado = "PUBLICADA"
+        )
+
+        val turnoRecibeAsig = asignaciones.find {
+            it.id == companero.asignacionId || it.id == companero.id || (it.empleadoId == compFinal.id && it.fechaIso == companero.fechaIso)
+        } ?: AsignacionTurno(
+            id = companero.asignacionId.ifBlank { companero.id },
+            empleadoId = compFinal.id,
+            empleadoNombre = "${compFinal.nombre} ${compFinal.apellido}".trim(),
+            fechaIso = companero.fechaIso,
+            tipoTurno = companero.tipoTurno.ifBlank { companero.descripcion.split("·").lastOrNull()?.trim() ?: "Turno" },
+            horario = companero.horario,
+            sucursalId = compFinal.sucursal,
+            estado = "PUBLICADA"
+        )
+
+        // RN-19: Validación rigurosa de intercambio de turnos
+        val validacionRN19 = validarSolicitudCambioUseCase.validarSolicitud(
+            solicitante = empFinal,
+            companero = compFinal,
+            turnoEntrega = turnoEntregaAsig,
+            turnoRecibe = turnoRecibeAsig,
+            solicitudesExistentes = solicitudes,
+            todasAsignaciones = asignaciones
+        )
+
+        if (validacionRN19 is ValidacionSolicitudCambioResult.Invalido) {
+            _uiState.update { it.copy(mensajeFeedback = validacionRN19.mensaje) }
+            return
+        }
+
+        val empId = empFinal.id
+        val empNombre = if (empFinal.apellido.isNotBlank()) "${empFinal.nombre} ${empFinal.apellido}".trim() else empFinal.nombre
+        val sucursal = empFinal.sucursal.ifBlank { "CENTRO" }
 
         val randomId = Random.nextInt(100000, 999999).toString()
         val numSol = "SOL-${Random.nextInt(1000, 9999)}"
@@ -307,13 +385,13 @@ class CambiosTurnoViewModel(
             motivo = motivo,
             empleadoSolicitanteId = empId,
             nombreSolicitante = empNombre,
-            empleadoCompaneroId = companero.empleadoId.ifBlank { "emp_comp" },
-            nombreCompanero = companero.nombre,
-            turnoEntregaId = propio.asignacionId.ifBlank { propio.id },
-            tipoTurnoEntrega = propio.tipoTurno.ifBlank { propio.descripcion.split("·").lastOrNull()?.trim() ?: "Turno" },
+            empleadoCompaneroId = compFinal.id,
+            nombreCompanero = compFinal.nombre,
+            turnoEntregaId = turnoEntregaAsig.id,
+            tipoTurnoEntrega = turnoEntregaAsig.tipoTurno,
             detalleTurnoEntrega = "${propio.descripcion} · ${propio.horario}",
-            turnoRecibeId = companero.asignacionId.ifBlank { companero.id },
-            tipoTurnoRecibe = companero.tipoTurno.ifBlank { companero.descripcion.split("·").lastOrNull()?.trim() ?: "Turno" },
+            turnoRecibeId = turnoRecibeAsig.id,
+            tipoTurnoRecibe = turnoRecibeAsig.tipoTurno,
             detalleTurnoRecibe = "${companero.descripcion} · ${companero.horario}",
             sucursalNombre = sucursal,
             validacionesOk = true,

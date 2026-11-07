@@ -1,16 +1,24 @@
 package com.itm.gestordeturnos.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itm.gestordeturnos.CafeDarkBrown
+import com.itm.gestordeturnos.CafeStatusErrorBg
+import com.itm.gestordeturnos.CafeStatusErrorText
 import com.itm.gestordeturnos.CafeTextSecondary
 import com.itm.gestordeturnos.components.EncabezadoPantalla
 import com.itm.gestordeturnos.components.ModalSolicitarCambio
@@ -57,6 +67,42 @@ fun CambiosTurnoScreen(viewModel: CambiosTurnoViewModel, isRolAdmin: Boolean) {
                     }
                 } else null
             )
+
+            // Banner de error o retroalimentación
+            if (state.mensajeFeedback != null && !state.mostrarModalSolicitud) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .background(CafeStatusErrorBg, RoundedCornerShape(4.dp))
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = state.mensajeFeedback ?: "",
+                            color = CafeStatusErrorText,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { viewModel.limpiarMensajeFeedback() },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Cerrar",
+                                tint = CafeStatusErrorText,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
 
             // 2. LISTA DE SOLICITUDES
             LazyColumn(
@@ -101,6 +147,7 @@ fun CambiosTurnoScreen(viewModel: CambiosTurnoViewModel, isRolAdmin: Boolean) {
                     turnoSeleccionado = state.turnoPropioSeleccionado,
                     turnoCompaneroSeleccionado = state.turnoCompaneroSeleccionado,
                     motivo = state.motivo,
+                    mensajeError = state.mensajeFeedback,
                     onTurnoPropioSeleccionado = { viewModel.seleccionarTurnoPropio(it) },
                     onTurnoCompaneroSeleccionado = { viewModel.seleccionarTurnoCompanero(it) },
                     onMotivoCambiado = { viewModel.actualizarMotivo(it) },

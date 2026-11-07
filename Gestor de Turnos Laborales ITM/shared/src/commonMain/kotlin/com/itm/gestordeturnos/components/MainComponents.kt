@@ -2119,6 +2119,7 @@ fun ModalSolicitarCambio(
     turnoSeleccionado: TurnoSeleccionable?,
     turnoCompaneroSeleccionado: TurnoCompaneroSeleccionable? = null,
     motivo: String = "",
+    mensajeError: String? = null,
     onTurnoPropioSeleccionado: (TurnoSeleccionable) -> Unit,
     onTurnoCompaneroSeleccionado: ((TurnoCompaneroSeleccionable) -> Unit)? = null,
     onMotivoCambiado: ((String) -> Unit)? = null,
@@ -2241,6 +2242,23 @@ fun ModalSolicitarCambio(
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider(color = CafeBorderColor)
                 Spacer(modifier = Modifier.height(16.dp))
+
+                if (!mensajeError.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(CafeStatusErrorBg, RoundedCornerShape(4.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = mensajeError,
+                            color = CafeStatusErrorText,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
                 // BOTONES DE CONFIRMACIÓN
                 val puedeConfirmar = turnoSeleccionado != null && turnoCompaneroSeleccionado != null && motivo.isNotBlank()

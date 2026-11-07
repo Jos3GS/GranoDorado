@@ -17,6 +17,7 @@ import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionSoloLecturaResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionPermisosEdicionResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionSolicitudCambioResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
 import com.itm.gestordeturnos.domain.usecase.ValidarAsignacionTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarContrasenaFirebaseAuthUseCase
@@ -24,6 +25,7 @@ import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarModificacionRolEstadoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarPermisosAdminSucursalEmpleadoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarRecuperacionContrasenaUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidarSolicitudCambioTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.VerificarCoberturaDiariaUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -1760,6 +1762,468 @@ class SharedCommonTest {
             esSemanaPasada = false
         )
         assertIs<ValidacionSoloLecturaResult.Permitido>(resSucursal)
+    }
+
+    // =========================================================================
+    // 21. PRUEBAS DE REGLAS DE INTERCAMBIO DE TURNOS (RN-19)
+    // =========================================================================
+
+    @Test
+    fun rn19_solicitudRechazada_siTurnoEntregaNoEstaPublicado() {
+        val useCase = ValidarSolicitudCambioTurnoUseCase()
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+
+        val turnoBorrador = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            sucursalId = "CENTRO",
+            estado = "BORRADOR"
+        )
+        val turnoCompanero = AsignacionTurno(
+            id = "asig_2",
+            empleadoId = "emp_2",
+            fechaIso = "2029-10-16",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+
+        val resultado = useCase.validarSolicitud(
+            solicitante = emp1,
+            companero = emp2,
+            turnoEntrega = turnoBorrador,
+            turnoRecibe = turnoCompanero,
+            solicitudesExistentes = emptyList(),
+            todasAsignaciones = listOf(turnoBorrador, turnoCompanero)
+        )
+
+        val invalido = assertIs<ValidacionSolicitudCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("publicado", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-19"))
+    }
+
+    @Test
+    fun rn19_solicitudRechazada_siTurnoRecibeNoEstaPublicado() {
+        val useCase = ValidarSolicitudCambioTurnoUseCase()
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+
+        val turnoPropio = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+        val turnoCompaneroBorrador = AsignacionTurno(
+            id = "asig_2",
+            empleadoId = "emp_2",
+            fechaIso = "2029-10-16",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00",
+            sucursalId = "CENTRO",
+            estado = "BORRADOR"
+        )
+
+        val resultado = useCase.validarSolicitud(
+            solicitante = emp1,
+            companero = emp2,
+            turnoEntrega = turnoPropio,
+            turnoRecibe = turnoCompaneroBorrador,
+            solicitudesExistentes = emptyList(),
+            todasAsignaciones = listOf(turnoPropio, turnoCompaneroBorrador)
+        )
+
+        val invalido = assertIs<ValidacionSolicitudCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("publicado", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-19"))
+    }
+
+    @Test
+    fun rn19_solicitudRechazada_siFechaYHoraInicioYaPasaron() {
+        val useCase = ValidarSolicitudCambioTurnoUseCase()
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+
+        val turnoPasado = AsignacionTurno(
+            id = "asig_pasada",
+            empleadoId = "emp_1",
+            fechaIso = "2020-01-01",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+        val turnoFuturo = AsignacionTurno(
+            id = "asig_futura",
+            empleadoId = "emp_2",
+            fechaIso = "2029-10-16",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+
+        val resultado = useCase.validarSolicitud(
+            solicitante = emp1,
+            companero = emp2,
+            turnoEntrega = turnoPasado,
+            turnoRecibe = turnoFuturo,
+            solicitudesExistentes = emptyList(),
+            todasAsignaciones = listOf(turnoPasado, turnoFuturo)
+        )
+
+        val invalido = assertIs<ValidacionSolicitudCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("ya ha pasado", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-19"))
+    }
+
+    @Test
+    fun rn19_solicitudRechazada_siTurnoTieneSolicitudEnCurso() {
+        val useCase = ValidarSolicitudCambioTurnoUseCase()
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+
+        val turno1 = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+        val turno2 = AsignacionTurno(
+            id = "asig_2",
+            empleadoId = "emp_2",
+            fechaIso = "2029-10-16",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+
+        val solicitudEnCurso = SolicitudCambioTurno(
+            id = "sol_activa",
+            numeroSolicitud = "SOL-101",
+            estado = EstadoSolicitudCambio.PENDIENTE,
+            turnoEntregaId = "asig_1",
+            turnoRecibeId = "otra_asig",
+            empleadoSolicitanteId = "emp_1",
+            empleadoCompaneroId = "emp_3"
+        )
+
+        val resultado = useCase.validarSolicitud(
+            solicitante = emp1,
+            companero = emp2,
+            turnoEntrega = turno1,
+            turnoRecibe = turno2,
+            solicitudesExistentes = listOf(solicitudEnCurso),
+            todasAsignaciones = listOf(turno1, turno2)
+        )
+
+        val invalido = assertIs<ValidacionSolicitudCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("en curso", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-19"))
+    }
+
+    @Test
+    fun rn19_solicitudRechazada_siCompaneroEsDeDistintaSucursal() {
+        val useCase = ValidarSolicitudCambioTurnoUseCase()
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "POBLADO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+
+        val turno1 = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+        val turno2 = AsignacionTurno(
+            id = "asig_2",
+            empleadoId = "emp_2",
+            fechaIso = "2029-10-16",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00",
+            sucursalId = "POBLADO",
+            estado = "PUBLICADA"
+        )
+
+        val resultado = useCase.validarSolicitud(
+            solicitante = emp1,
+            companero = emp2,
+            turnoEntrega = turno1,
+            turnoRecibe = turno2,
+            solicitudesExistentes = emptyList(),
+            todasAsignaciones = listOf(turno1, turno2)
+        )
+
+        val invalido = assertIs<ValidacionSolicitudCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("misma sucursal", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-19"))
+    }
+
+    @Test
+    fun rn19_solicitudRechazada_siCompaneroTieneDistintoCargo() {
+        val useCase = ValidarSolicitudCambioTurnoUseCase()
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.COCINERO, estado = EstadoUsuario.ACTIVO)
+
+        val turno1 = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+        val turno2 = AsignacionTurno(
+            id = "asig_2",
+            empleadoId = "emp_2",
+            fechaIso = "2029-10-16",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+
+        val resultado = useCase.validarSolicitud(
+            solicitante = emp1,
+            companero = emp2,
+            turnoEntrega = turno1,
+            turnoRecibe = turno2,
+            solicitudesExistentes = emptyList(),
+            todasAsignaciones = listOf(turno1, turno2)
+        )
+
+        val invalido = assertIs<ValidacionSolicitudCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("mismo perfil o cargo", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-19"))
+    }
+
+    @Test
+    fun rn19_solicitudRechazada_siAlgunEmpleadoEstaInactivo() {
+        val useCase = ValidarSolicitudCambioTurnoUseCase()
+        val empActivo = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val empInactivo = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.INACTIVO)
+
+        val turno1 = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+        val turno2 = AsignacionTurno(
+            id = "asig_2",
+            empleadoId = "emp_2",
+            fechaIso = "2029-10-16",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+
+        val resultado = useCase.validarSolicitud(
+            solicitante = empActivo,
+            companero = empInactivo,
+            turnoEntrega = turno1,
+            turnoRecibe = turno2,
+            solicitudesExistentes = emptyList(),
+            todasAsignaciones = listOf(turno1, turno2)
+        )
+
+        val invalido = assertIs<ValidacionSolicitudCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("activa", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-19"))
+    }
+
+    @Test
+    fun rn19_solicitudRechazada_siResultadoIncumpleReglasDeDescanso12h() {
+        val useCase = ValidarSolicitudCambioTurnoUseCase()
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+
+        // emp1 ya tiene asignado un turno el 2029-10-16 de 06:00 a 14:00 (Apertura)
+        val turnoExistenteEmp1 = AsignacionTurno(
+            id = "asig_emp1_dia2",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-16",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+
+        // emp1 quiere entregar su turno de 2029-10-17 y recibir el de emp2 del 2029-10-15 que termina a las 22:00 (Cierre 14:00-22:00).
+        // Entre 22:00 del 2029-10-15 y 06:00 del 2029-10-16 hay solo 8 horas (< 12 horas).
+        val turnoEntrega = AsignacionTurno(
+            id = "asig_entrega",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-17",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+        val turnoRecibe = AsignacionTurno(
+            id = "asig_recibe",
+            empleadoId = "emp_2",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+
+        val resultado = useCase.validarSolicitud(
+            solicitante = emp1,
+            companero = emp2,
+            turnoEntrega = turnoEntrega,
+            turnoRecibe = turnoRecibe,
+            solicitudesExistentes = emptyList(),
+            todasAsignaciones = listOf(turnoExistenteEmp1, turnoEntrega, turnoRecibe)
+        )
+
+        val invalido = assertIs<ValidacionSolicitudCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("12 horas", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-19"))
+    }
+
+    @Test
+    fun rn19_solicitudRechazada_siResultadoExcedeLimite42HorasSemanales() {
+        val useCase = ValidarSolicitudCambioTurnoUseCase()
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+
+        // Semana de lunes 2029-10-15 a domingo 2029-10-21
+        // emp1 ya tiene 5 turnos de 8h (40h): martes 16, miércoles 17, jueves 18, viernes 19, sábado 20.
+        val turnosSemanaEmp1 = (16..20).map { dia ->
+            AsignacionTurno(
+                id = "asig_emp1_$dia",
+                empleadoId = "emp_1",
+                fechaIso = "2029-10-$dia",
+                tipoTurno = "Intermedio",
+                horario = "10:00 - 18:00",
+                sucursalId = "CENTRO",
+                estado = "PUBLICADA"
+            )
+        }
+
+        // emp1 entrega un turno corto de 2h el lunes 15 (40h + 2h = 42h)
+        val turnoEntrega = AsignacionTurno(
+            id = "asig_entrega",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Especial",
+            horario = "08:00 - 10:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+        // Recibe turno de 8h el domingo 21 -> su total pasaría a 40 + 8 = 48h > 42h
+        val turnoRecibe = AsignacionTurno(
+            id = "asig_recibe",
+            empleadoId = "emp_2",
+            fechaIso = "2029-10-21",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+
+        val todasAsignaciones = turnosSemanaEmp1 + turnoEntrega + turnoRecibe
+
+        val resultado = useCase.validarSolicitud(
+            solicitante = emp1,
+            companero = emp2,
+            turnoEntrega = turnoEntrega,
+            turnoRecibe = turnoRecibe,
+            solicitudesExistentes = emptyList(),
+            todasAsignaciones = todasAsignaciones
+        )
+
+        val invalido = assertIs<ValidacionSolicitudCambioResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("42 horas", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-19"))
+    }
+
+    @Test
+    fun rn19_solicitudValida_cuandoCumpleTodasLasReglas() {
+        val useCase = ValidarSolicitudCambioTurnoUseCase()
+        val emp1 = Empleado(id = "emp_1", nombre = "Carlos", apellido = "Ruiz", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+        val emp2 = Empleado(id = "emp_2", nombre = "María", apellido = "López", sucursal = "CENTRO", cargo = Cargo.BARISTA, estado = EstadoUsuario.ACTIVO)
+
+        val turno1 = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+        val turno2 = AsignacionTurno(
+            id = "asig_2",
+            empleadoId = "emp_2",
+            fechaIso = "2029-10-18",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00",
+            sucursalId = "CENTRO",
+            estado = "PUBLICADA"
+        )
+
+        val resultado = useCase.validarSolicitud(
+            solicitante = emp1,
+            companero = emp2,
+            turnoEntrega = turno1,
+            turnoRecibe = turno2,
+            solicitudesExistentes = emptyList(),
+            todasAsignaciones = listOf(turno1, turno2)
+        )
+
+        assertIs<ValidacionSolicitudCambioResult.Valido>(resultado)
+    }
+
+    @Test
+    fun rn19_esTurnoElegibleParaIntercambio_filtraCorrectamente() {
+        val useCase = ValidarSolicitudCambioTurnoUseCase()
+
+        val turnoValido = AsignacionTurno(
+            id = "asig_valida",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            estado = "PUBLICADA"
+        )
+        val turnoBorrador = turnoValido.copy(id = "asig_borrador", estado = "BORRADOR")
+        val turnoPasado = turnoValido.copy(id = "asig_pasada", fechaIso = "2020-01-01")
+        val turnoConSolicitud = turnoValido.copy(id = "asig_con_sol")
+
+        val solicitud = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.PENDIENTE,
+            turnoEntregaId = "asig_con_sol"
+        )
+
+        assertTrue(useCase.esTurnoElegibleParaIntercambio(turnoValido, "emp_1", emptyList()))
+        assertFalse(useCase.esTurnoElegibleParaIntercambio(turnoValido, "emp_otro", emptyList()), "No pertenece al empleado")
+        assertFalse(useCase.esTurnoElegibleParaIntercambio(turnoBorrador, "emp_1", emptyList()), "Está en borrador")
+        assertFalse(useCase.esTurnoElegibleParaIntercambio(turnoPasado, "emp_1", emptyList()), "Fecha en el pasado")
+        assertFalse(useCase.esTurnoElegibleParaIntercambio(turnoConSolicitud, "emp_1", listOf(solicitud)), "Ya tiene solicitud en curso")
     }
 }
 
