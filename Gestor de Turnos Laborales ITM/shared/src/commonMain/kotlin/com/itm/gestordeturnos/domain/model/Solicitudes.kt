@@ -45,9 +45,25 @@ data class SolicitudCambioTurno(
         motivoRechazo = motivo
     )
 
+    fun cancelar(): SolicitudCambioTurno = copy(
+        estado = EstadoSolicitudCambio.CANCELADA,
+        motivoRechazo = "Cancelada por el solicitante"
+    )
+
+    fun marcarVencida(motivo: String = "Vencida: el turno programado ya inició sin resolverse"): SolicitudCambioTurno = copy(
+        estado = EstadoSolicitudCambio.VENCIDA,
+        motivoRechazo = motivo
+    )
+
+    val esTerminal: Boolean
+        get() = estado == EstadoSolicitudCambio.APROBADA ||
+                estado == EstadoSolicitudCambio.RECHAZADA ||
+                estado == EstadoSolicitudCambio.CANCELADA ||
+                estado == EstadoSolicitudCambio.VENCIDA
+
     fun verificarVencimiento(fechaActual: LocalDate): Boolean {
         if (fechaSolicitud == null) return false
-        return fechaActual > fechaSolicitud && estado == EstadoSolicitudCambio.PENDIENTE
+        return fechaActual > fechaSolicitud && (estado == EstadoSolicitudCambio.PENDIENTE || estado == EstadoSolicitudCambio.ACEPTADA_COMPANERO)
     }
 }
 

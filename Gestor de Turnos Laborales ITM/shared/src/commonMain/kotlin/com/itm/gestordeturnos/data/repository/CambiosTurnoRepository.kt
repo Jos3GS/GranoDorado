@@ -90,10 +90,15 @@ object CambiosTurnoRepository : CambiosTurnoRepositoryContract {
 
     override fun cancelarSolicitud(idSolicitud: String) {
         val actual = _solicitudes.value.find { it.id == idSolicitud } ?: return
-        val actualizada = actual.copy(
-            estado = EstadoSolicitudCambio.RECHAZADA,
-            motivoRechazo = "Cancelada por el solicitante"
-        )
+        val actualizada = actual.cancelar()
+        repositoryScope.launch {
+            guardarSolicitud(actualizada)
+        }
+    }
+
+    override fun marcarSolicitudVencida(idSolicitud: String, motivo: String) {
+        val actual = _solicitudes.value.find { it.id == idSolicitud } ?: return
+        val actualizada = actual.marcarVencida(motivo)
         repositoryScope.launch {
             guardarSolicitud(actualizada)
         }

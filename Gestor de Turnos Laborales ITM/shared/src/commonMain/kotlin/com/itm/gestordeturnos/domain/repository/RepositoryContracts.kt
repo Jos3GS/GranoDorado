@@ -63,6 +63,7 @@ interface CambiosTurnoRepositoryContract {
     fun aceptarPorCompanero(idSolicitud: String)
     fun rechazarSolicitud(idSolicitud: String, motivo: String)
     fun cancelarSolicitud(idSolicitud: String)
+    fun marcarSolicitudVencida(idSolicitud: String, motivo: String = "Vencida: el turno programado ya inició sin resolverse")
     fun aprobarEIntercambiar(solicitud: SolicitudCambioTurno)
 }
 

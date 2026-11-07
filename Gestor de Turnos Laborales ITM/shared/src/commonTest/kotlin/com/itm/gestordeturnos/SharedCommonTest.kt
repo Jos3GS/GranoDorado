@@ -9,9 +9,11 @@ import com.itm.gestordeturnos.domain.usecase.CalcularDescansosTurnoUseCase
 import com.itm.gestordeturnos.domain.usecase.ConsultarHorarioEmpleadoUseCase
 import com.itm.gestordeturnos.domain.usecase.ControlInactividadSesionUseCase
 import com.itm.gestordeturnos.domain.usecase.ControlIntentosLoginUseCase
+import com.itm.gestordeturnos.domain.usecase.ControlarVencimientoYCancelacionCambioUseCase
 import com.itm.gestordeturnos.domain.usecase.EvaluacionIntentoLogin
 import com.itm.gestordeturnos.domain.usecase.IntercambiarTurnosUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionAdminSucursalEmpleadoResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionCancelacionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionAprobacionCambioResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionAsignacionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
@@ -2444,6 +2446,410 @@ class SharedCommonTest {
         )
 
         assertIs<ValidacionAprobacionCambioResult.Valido>(resultado)
+    }
+
+    // =========================================================================
+    // 23. PRUEBAS DE VENCIMIENTO AUTOMÁTICO E INMUTABILIDAD TERMINAL (RN-22)
+    // =========================================================================
+
+    @Test
+    fun rn22_solicitantePuedeCancelarEnEstadoPendienteAntesDelTurno() {
+        val useCase = ControlarVencimientoYCancelacionCambioUseCase()
+        val empSolicitante = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        val turno1 = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00"
+        )
+        val turno2 = AsignacionTurno(
+            id = "asig_2",
+            empleadoId = "emp_2",
+            fechaIso = "2029-10-18",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00"
+        )
+
+        val solicitudPendiente = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.PENDIENTE,
+            empleadoSolicitanteId = "emp_1",
+            nombreSolicitante = "Carlos Ruiz",
+            empleadoCompaneroId = "emp_2",
+            nombreCompanero = "María López",
+            turnoEntregaId = "asig_1",
+            turnoRecibeId = "asig_2",
+            esRemitente = true
+        )
+
+        val resultado = useCase.validarCancelacion(
+            solicitante = empSolicitante,
+            solicitud = solicitudPendiente,
+            todasAsignaciones = listOf(turno1, turno2),
+            fechaActual = LocalDate(2026, 1, 1),
+            horaActualMinutos = 480
+        )
+
+        assertIs<ValidacionCancelacionResult.Valido>(resultado)
+    }
+
+    @Test
+    fun rn22_solicitantePuedeCancelarEnEstadoAceptadaCompaneroAntesDelTurno() {
+        val useCase = ControlarVencimientoYCancelacionCambioUseCase()
+        val empSolicitante = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        val turno1 = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2029-10-15",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00"
+        )
+
+        val solicitudAceptada = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.ACEPTADA_COMPANERO,
+            empleadoSolicitanteId = "emp_1",
+            nombreSolicitante = "Carlos Ruiz",
+            empleadoCompaneroId = "emp_2",
+            nombreCompanero = "María López",
+            turnoEntregaId = "asig_1",
+            turnoRecibeId = "asig_2"
+        )
+
+        val resultado = useCase.validarCancelacion(
+            solicitante = empSolicitante,
+            solicitud = solicitudAceptada,
+            todasAsignaciones = listOf(turno1),
+            fechaActual = LocalDate(2026, 1, 1),
+            horaActualMinutos = 480
+        )
+
+        assertIs<ValidacionCancelacionResult.Valido>(resultado)
+    }
+
+    @Test
+    fun rn22_cancelacionRechazada_siEmpleadoEstaInactivo() {
+        val useCase = ControlarVencimientoYCancelacionCambioUseCase()
+        val empInactivo = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.INACTIVO
+        )
+
+        val solicitud = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.PENDIENTE,
+            empleadoSolicitanteId = "emp_1",
+            nombreSolicitante = "Carlos Ruiz",
+            empleadoCompaneroId = "emp_2"
+        )
+
+        val resultado = useCase.validarCancelacion(
+            solicitante = empInactivo,
+            solicitud = solicitud
+        )
+
+        val invalido = assertIs<ValidacionCancelacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("inactiva", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-22"))
+    }
+
+    @Test
+    fun rn22_cancelacionRechazada_siUsuarioNoEsElSolicitante() {
+        val useCase = ControlarVencimientoYCancelacionCambioUseCase()
+        val companero = Empleado(
+            id = "emp_2",
+            nombre = "María",
+            apellido = "López",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        val solicitud = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.ACEPTADA_COMPANERO,
+            empleadoSolicitanteId = "emp_1",
+            nombreSolicitante = "Carlos Ruiz",
+            empleadoCompaneroId = "emp_2",
+            nombreCompanero = "María López",
+            esRemitente = false
+        )
+
+        val resultado = useCase.validarCancelacion(
+            solicitante = companero,
+            solicitud = solicitud
+        )
+
+        val invalido = assertIs<ValidacionCancelacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("Solo el colaborador solicitante", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-22"))
+    }
+
+    @Test
+    fun rn22_cancelacionRechazada_enTodosLosEstadosTerminales() {
+        val useCase = ControlarVencimientoYCancelacionCambioUseCase()
+        val solicitante = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        val estadosTerminales = listOf(
+            EstadoSolicitudCambio.APROBADA,
+            EstadoSolicitudCambio.RECHAZADA,
+            EstadoSolicitudCambio.CANCELADA,
+            EstadoSolicitudCambio.VENCIDA
+        )
+
+        for (estado in estadosTerminales) {
+            val solicitud = SolicitudCambioTurno(
+                id = "sol_${estado.name}",
+                estado = estado,
+                empleadoSolicitanteId = "emp_1",
+                nombreSolicitante = "Carlos Ruiz",
+                empleadoCompaneroId = "emp_2",
+                nombreCompanero = "María López"
+            )
+
+            assertTrue(solicitud.esTerminal, "El estado $estado debe ser terminal")
+
+            val resultado = useCase.validarCancelacion(
+                solicitante = solicitante,
+                solicitud = solicitud
+            )
+
+            val invalido = assertIs<ValidacionCancelacionResult.Invalido>(resultado)
+            assertFalse(invalido.mensaje.contains("RN-22"))
+        }
+    }
+
+    @Test
+    fun rn22_cancelacionRechazada_siTurnoYaInicio() {
+        val useCase = ControlarVencimientoYCancelacionCambioUseCase()
+        val solicitante = Empleado(
+            id = "emp_1",
+            nombre = "Carlos",
+            apellido = "Ruiz",
+            sucursal = "CENTRO",
+            cargo = Cargo.BARISTA,
+            estado = EstadoUsuario.ACTIVO
+        )
+
+        // Turno hoy a las 08:00
+        val turno1 = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Apertura",
+            horario = "08:00 - 16:00"
+        )
+
+        val solicitud = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.PENDIENTE,
+            empleadoSolicitanteId = "emp_1",
+            nombreSolicitante = "Carlos Ruiz",
+            turnoEntregaId = "asig_1",
+            turnoRecibeId = "asig_2",
+            detalleTurnoEntrega = "Apertura · 2026-11-07 · 08:00 - 16:00"
+        )
+
+        // Son las 08:30 (510 minutos) del 2026-11-07
+        val resultado = useCase.validarCancelacion(
+            solicitante = solicitante,
+            solicitud = solicitud,
+            todasAsignaciones = listOf(turno1),
+            fechaActual = LocalDate(2026, 11, 7),
+            horaActualMinutos = 510
+        )
+
+        val invalido = assertIs<ValidacionCancelacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("ya inició o la fecha límite ha expirado", ignoreCase = true))
+        assertFalse(invalido.mensaje.contains("RN-22"))
+    }
+
+    @Test
+    fun rn22_esSolicitudVencida_detectaExpiracionPorFechaYHora() {
+        val useCase = ControlarVencimientoYCancelacionCambioUseCase()
+
+        // Turno del 2026-11-07 a las 06:00
+        val turno = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00"
+        )
+
+        val solicitudPendiente = SolicitudCambioTurno(
+            id = "sol_1",
+            estado = EstadoSolicitudCambio.PENDIENTE,
+            turnoEntregaId = "asig_1"
+        )
+
+        // Caso 1: Fecha pasada (2026-11-08)
+        assertTrue(
+            useCase.esSolicitudVencida(
+                solicitud = solicitudPendiente,
+                todasAsignaciones = listOf(turno),
+                fechaActual = LocalDate(2026, 11, 8),
+                horaActualMinutos = 0
+            )
+        )
+
+        // Caso 2: Mismo día después de la hora de inicio (06:00 = 360 min, son las 06:01 = 361 min)
+        assertTrue(
+            useCase.esSolicitudVencida(
+                solicitud = solicitudPendiente,
+                todasAsignaciones = listOf(turno),
+                fechaActual = LocalDate(2026, 11, 7),
+                horaActualMinutos = 361
+            )
+        )
+
+        // Caso 3: Mismo día exactamente a la hora de inicio (360 min)
+        assertTrue(
+            useCase.esSolicitudVencida(
+                solicitud = solicitudPendiente,
+                todasAsignaciones = listOf(turno),
+                fechaActual = LocalDate(2026, 11, 7),
+                horaActualMinutos = 360
+            )
+        )
+
+        // Caso 4: Mismo día antes de la hora de inicio (05:59 = 359 min)
+        assertFalse(
+            useCase.esSolicitudVencida(
+                solicitud = solicitudPendiente,
+                todasAsignaciones = listOf(turno),
+                fechaActual = LocalDate(2026, 11, 7),
+                horaActualMinutos = 359
+            )
+        )
+
+        // Caso 5: Fecha futura (2026-11-06)
+        assertFalse(
+            useCase.esSolicitudVencida(
+                solicitud = solicitudPendiente,
+                todasAsignaciones = listOf(turno),
+                fechaActual = LocalDate(2026, 11, 6),
+                horaActualMinutos = 600
+            )
+        )
+    }
+
+    @Test
+    fun rn22_esSolicitudVencida_respetaEstadosTerminalesComoAprobada() {
+        val useCase = ControlarVencimientoYCancelacionCambioUseCase()
+
+        val turnoPasado = AsignacionTurno(
+            id = "asig_pasada",
+            empleadoId = "emp_1",
+            fechaIso = "2020-01-01",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00"
+        )
+
+        val solicitudAprobada = SolicitudCambioTurno(
+            id = "sol_aprobada",
+            estado = EstadoSolicitudCambio.APROBADA,
+            turnoEntregaId = "asig_pasada"
+        )
+
+        // Aunque el turno ya pasó hace años, como ya fue aprobada, no debe cambiar a vencida
+        assertFalse(
+            useCase.esSolicitudVencida(
+                solicitud = solicitudAprobada,
+                todasAsignaciones = listOf(turnoPasado),
+                fechaActual = LocalDate(2026, 11, 7),
+                horaActualMinutos = 600
+            )
+        )
+    }
+
+    @Test
+    fun rn22_procesarVencimientos_actualizaUnicamenteSolicitudesExpiradasNoTerminales() {
+        val useCase = ControlarVencimientoYCancelacionCambioUseCase()
+
+        val turnoPasado = AsignacionTurno(
+            id = "asig_pasada",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-01",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00"
+        )
+        val turnoFuturo = AsignacionTurno(
+            id = "asig_futura",
+            empleadoId = "emp_2",
+            fechaIso = "2026-11-20",
+            tipoTurno = "Cierre",
+            horario = "14:00 - 22:00"
+        )
+
+        val solPendienteExpirada = SolicitudCambioTurno(
+            id = "sol_expirada",
+            estado = EstadoSolicitudCambio.PENDIENTE,
+            turnoEntregaId = "asig_pasada"
+        )
+        val solAceptadaCompaneroExpirada = SolicitudCambioTurno(
+            id = "sol_aceptada_expirada",
+            estado = EstadoSolicitudCambio.ACEPTADA_COMPANERO,
+            turnoEntregaId = "asig_pasada"
+        )
+        val solPendienteFutura = SolicitudCambioTurno(
+            id = "sol_futura",
+            estado = EstadoSolicitudCambio.PENDIENTE,
+            turnoEntregaId = "asig_futura"
+        )
+        val solAprobadaPasada = SolicitudCambioTurno(
+            id = "sol_aprobada_pasada",
+            estado = EstadoSolicitudCambio.APROBADA,
+            turnoEntregaId = "asig_pasada"
+        )
+
+        val lista = listOf(solPendienteExpirada, solAceptadaCompaneroExpirada, solPendienteFutura, solAprobadaPasada)
+        val asignaciones = listOf(turnoPasado, turnoFuturo)
+
+        val (actualizadas, recienVencidas) = useCase.procesarVencimientos(
+            solicitudes = lista,
+            todasAsignaciones = asignaciones,
+            fechaActual = LocalDate(2026, 11, 7),
+            horaActualMinutos = 600
+        )
+
+        assertEquals(2, recienVencidas.size)
+        assertTrue(recienVencidas.any { it.id == "sol_expirada" && it.estado == EstadoSolicitudCambio.VENCIDA })
+        assertTrue(recienVencidas.any { it.id == "sol_aceptada_expirada" && it.estado == EstadoSolicitudCambio.VENCIDA })
+
+        val mapActualizadas = actualizadas.associateBy { it.id }
+        assertEquals(EstadoSolicitudCambio.VENCIDA, mapActualizadas["sol_expirada"]?.estado)
+        assertEquals(EstadoSolicitudCambio.VENCIDA, mapActualizadas["sol_aceptada_expirada"]?.estado)
+        assertEquals(EstadoSolicitudCambio.PENDIENTE, mapActualizadas["sol_futura"]?.estado)
+        assertEquals(EstadoSolicitudCambio.APROBADA, mapActualizadas["sol_aprobada_pasada"]?.estado)
     }
 }
 

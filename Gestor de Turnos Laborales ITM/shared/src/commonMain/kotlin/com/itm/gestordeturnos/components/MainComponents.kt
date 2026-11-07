@@ -1432,6 +1432,7 @@ fun SolicitudCambioCard(
                         EstadoSolicitudCambio.APROBADA -> Pair(CafeStatusSuccessBg, CafeStatusSuccessText)
                         EstadoSolicitudCambio.RECHAZADA -> Pair(CafeStatusErrorBg, CafeStatusErrorText)
                         EstadoSolicitudCambio.ACEPTADA_COMPANERO -> Pair(CafeStatusInfoBg, CafeStatusInfoText)
+                        EstadoSolicitudCambio.CANCELADA -> Pair(Color(0xFFF3F4F6), Color(0xFF6B7280))
                         EstadoSolicitudCambio.VENCIDA -> Pair(Color(0xFFF3F4F6), Color(0xFF6B7280))
                         else -> Pair(CafeStatusWarningBg, CafeDarkBrown)
                     }

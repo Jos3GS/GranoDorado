@@ -102,7 +102,10 @@ class ValidarAprobacionCambioTurnoUseCase(
                 return ValidacionAprobacionCambioResult.Invalido("Esta solicitud ya ha sido aprobada previamente.")
             }
             EstadoSolicitudCambio.RECHAZADA -> {
-                return ValidacionAprobacionCambioResult.Invalido("Esta solicitud ya ha sido rechazada o cancelada y no puede ser aprobada.")
+                return ValidacionAprobacionCambioResult.Invalido("Esta solicitud ya ha sido rechazada y no puede ser aprobada.")
+            }
+            EstadoSolicitudCambio.CANCELADA -> {
+                return ValidacionAprobacionCambioResult.Invalido("Esta solicitud fue cancelada por el colaborador solicitante y no puede ser aprobada.")
             }
             EstadoSolicitudCambio.VENCIDA -> {
                 return ValidacionAprobacionCambioResult.Invalido("Esta solicitud se encuentra vencida y ya no puede ser aprobada.")
@@ -199,6 +202,7 @@ class ValidarAprobacionCambioTurnoUseCase(
 
         if (solicitud.estado == EstadoSolicitudCambio.APROBADA ||
             solicitud.estado == EstadoSolicitudCambio.RECHAZADA ||
+            solicitud.estado == EstadoSolicitudCambio.CANCELADA ||
             solicitud.estado == EstadoSolicitudCambio.VENCIDA) {
             return ValidacionAprobacionCambioResult.Invalido("La solicitud ya ha sido finalizada y no puede resolverse nuevamente.")
         }

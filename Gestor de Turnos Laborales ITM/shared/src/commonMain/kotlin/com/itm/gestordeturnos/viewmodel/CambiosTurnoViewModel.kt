@@ -20,7 +20,9 @@ import com.itm.gestordeturnos.domain.repository.CambiosTurnoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.EmpleadoRepositoryContract
 import com.itm.gestordeturnos.domain.repository.NovedadRepositoryContract
 import com.itm.gestordeturnos.domain.repository.TurnoRepositoryContract
+import com.itm.gestordeturnos.domain.usecase.ControlarVencimientoYCancelacionCambioUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidacionAprobacionCambioResult
+import com.itm.gestordeturnos.domain.usecase.ValidacionCancelacionResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionEstadoEmpleadoResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionSolicitudCambioResult
 import com.itm.gestordeturnos.domain.usecase.ValidarAprobacionCambioTurnoUseCase
@@ -58,7 +60,8 @@ class CambiosTurnoViewModel(
     private val novedadRepository: NovedadRepositoryContract = NovedadRepository,
     private val validarEstadoEmpleadoActivoUseCase: ValidarEstadoEmpleadoActivoUseCase = ValidarEstadoEmpleadoActivoUseCase(),
     private val validarSolicitudCambioUseCase: ValidarSolicitudCambioTurnoUseCase = ValidarSolicitudCambioTurnoUseCase(),
-    private val validarAprobacionCambioUseCase: ValidarAprobacionCambioTurnoUseCase = ValidarAprobacionCambioTurnoUseCase()
+    private val validarAprobacionCambioUseCase: ValidarAprobacionCambioTurnoUseCase = ValidarAprobacionCambioTurnoUseCase(),
+    private val controlarVencimientoYCancelacionUseCase: ControlarVencimientoYCancelacionCambioUseCase = ControlarVencimientoYCancelacionCambioUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CambiosTurnoState())
     val uiState: StateFlow<CambiosTurnoState> = _uiState.asStateFlow()
@@ -90,17 +93,33 @@ class CambiosTurnoViewModel(
                 } ?: usuario?.nombre ?: "Empleado"
                 val empCargo = emp?.cargo
 
-                // 1. Filtrar solicitudes según el rol y usuario
+                // 1. RN-22: Evaluar vencimiento automático de solicitudes antes del inicio del turno
+                val (solicitudesConVencimiento, recienVencidas) = controlarVencimientoYCancelacionUseCase.procesarVencimientos(
+                    solicitudes = solicitudes,
+                    todasAsignaciones = asignaciones
+                )
+                if (recienVencidas.isNotEmpty()) {
+                    for (vencida in recienVencidas) {
+                        cambiosTurnoRepository.marcarSolicitudVencida(vencida.id)
+                    }
+                }
+
+                // 2. Filtrar solicitudes según el rol y usuario
                 val solicitudesFiltradas = if (esAdmin) {
-                    if (usuario?.rol == RolUsuario.ADMINISTRADOR_GENERAL) {
-                        solicitudes
+                    val lista = if (usuario?.rol == RolUsuario.ADMINISTRADOR_GENERAL) {
+                        solicitudesConVencimiento
                     } else {
-                        solicitudes.filter {
+                        solicitudesConVencimiento.filter {
                             it.sucursalNombre.isBlank() || it.sucursalNombre.equals(sucursalUsuario, ignoreCase = true)
                         }
                     }
+                    lista.map { s ->
+                        s.copy(
+                            esRemitente = s.empleadoSolicitanteId == empId || s.nombreSolicitante.equals(empNombre, ignoreCase = true)
+                        )
+                    }
                 } else {
-                    solicitudes.filter { s ->
+                    solicitudesConVencimiento.filter { s ->
                         s.empleadoSolicitanteId == empId ||
                         s.empleadoCompaneroId == empId ||
                         s.nombreSolicitante.equals(empNombre, ignoreCase = true) ||
@@ -112,12 +131,12 @@ class CambiosTurnoViewModel(
                     }
                 }
 
-                // 2. Extraer turnos propios publicables y elegibles (RN-19)
-                val propiosDinamicos = extraerTurnosPropios(empId, empNombre, asignaciones, solicitudes)
+                // 3. Extraer turnos propios publicables y elegibles (RN-19)
+                val propiosDinamicos = extraerTurnosPropios(empId, empNombre, asignaciones, solicitudesConVencimiento)
                 val propiosFinales = if (propiosDinamicos.isNotEmpty()) propiosDinamicos else MockDataProviders.inicialTurnosPropios()
 
-                // 3. Extraer turnos de compañeros elegibles (misma sucursal, mismo cargo, publicados y sin solicitud en curso) (RN-19)
-                val companerosDinamicos = extraerTurnosCompaneros(empId, empNombre, sucursalUsuario, empCargo, asignaciones, empleados, solicitudes)
+                // 4. Extraer turnos de compañeros elegibles (misma sucursal, mismo cargo, publicados y sin solicitud en curso) (RN-19)
+                val companerosDinamicos = extraerTurnosCompaneros(empId, empNombre, sucursalUsuario, empCargo, asignaciones, empleados, solicitudesConVencimiento)
                 val companerosFinales = if (companerosDinamicos.isNotEmpty()) companerosDinamicos else generarCompanerosMockFallback(sucursalUsuario)
 
                 _uiState.update { actual ->
@@ -418,6 +437,17 @@ class CambiosTurnoViewModel(
             return
         }
 
+        if (solicitud.esTerminal) {
+            _uiState.update { it.copy(mensajeFeedback = "La solicitud ya ha sido finalizada y no puede modificarse ni aceptarse.") }
+            return
+        }
+
+        if (controlarVencimientoYCancelacionUseCase.esSolicitudVencida(solicitud, turnoRepository.asignaciones.value)) {
+            cambiosTurnoRepository.marcarSolicitudVencida(solicitud.id)
+            _uiState.update { it.copy(mensajeFeedback = "La solicitud ha vencido porque el turno programado ya inició.") }
+            return
+        }
+
         if (solicitud.estado != EstadoSolicitudCambio.PENDIENTE) {
             _uiState.update { it.copy(mensajeFeedback = "La solicitud ya no se encuentra pendiente de aceptación.") }
             return
@@ -432,6 +462,11 @@ class CambiosTurnoViewModel(
         val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(emp, "cambio_turno")
         if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
             _uiState.update { it.copy(mensajeFeedback = validacionActivo.mensaje) }
+            return
+        }
+
+        if (solicitud.esTerminal) {
+            _uiState.update { it.copy(mensajeFeedback = "La solicitud ya ha sido finalizada y no puede resolverse nuevamente.") }
             return
         }
 
@@ -466,6 +501,25 @@ class CambiosTurnoViewModel(
     }
 
     fun cancelarSolicitud(solicitud: SolicitudCambioTurno) {
+        val usuario = SessionManager.usuarioActivo
+        val emp = resolverEmpleado(usuario, empleadoRepository.empleados.value)
+        val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(emp, "cambio_turno")
+        if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
+            _uiState.update { it.copy(mensajeFeedback = validacionActivo.mensaje) }
+            return
+        }
+
+        // RN-22: Solo el solicitante puede cancelar antes de inicio de turno / resolución final
+        val validacionCancelacion = controlarVencimientoYCancelacionUseCase.validarCancelacion(
+            solicitante = emp,
+            solicitud = solicitud,
+            todasAsignaciones = turnoRepository.asignaciones.value
+        )
+        if (validacionCancelacion is ValidacionCancelacionResult.Invalido) {
+            _uiState.update { it.copy(mensajeFeedback = validacionCancelacion.mensaje) }
+            return
+        }
+
         cambiosTurnoRepository.cancelarSolicitud(solicitud.id)
     }
 
@@ -475,6 +529,17 @@ class CambiosTurnoViewModel(
         val validacionActivo = validarEstadoEmpleadoActivoUseCase.validar(emp, "cambio_turno")
         if (validacionActivo is ValidacionEstadoEmpleadoResult.Inactivo) {
             _uiState.update { it.copy(mensajeFeedback = validacionActivo.mensaje) }
+            return
+        }
+
+        if (solicitud.esTerminal) {
+            _uiState.update { it.copy(mensajeFeedback = "La solicitud ya fue finalizada y no puede ser aprobada.") }
+            return
+        }
+
+        if (controlarVencimientoYCancelacionUseCase.esSolicitudVencida(solicitud, turnoRepository.asignaciones.value)) {
+            cambiosTurnoRepository.marcarSolicitudVencida(solicitud.id)
+            _uiState.update { it.copy(mensajeFeedback = "La solicitud ha vencido porque el turno programado ya inició.") }
             return
         }
 

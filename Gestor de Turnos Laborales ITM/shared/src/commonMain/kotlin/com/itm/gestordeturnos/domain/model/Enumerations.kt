@@ -54,6 +54,7 @@ enum class EstadoSolicitudCambio(val displayName: String) {
     ACEPTADA_COMPANERO("Aceptada por Compañero"),
     APROBADA("Aprobada"),
     RECHAZADA("Rechazada"),
+    CANCELADA("Cancelada"),
     VENCIDA("Vencida")
 }
 
