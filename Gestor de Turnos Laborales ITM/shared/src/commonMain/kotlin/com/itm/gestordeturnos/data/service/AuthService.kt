@@ -1,5 +1,6 @@
 package com.itm.gestordeturnos.data.service
 
+import com.itm.gestordeturnos.actualizarContrasenaPlataforma
 import com.itm.gestordeturnos.cerrarSesionPlataforma
 import com.itm.gestordeturnos.data.repository.EmpleadoRepository
 import com.itm.gestordeturnos.domain.model.EstadoUsuario
@@ -29,6 +30,7 @@ interface AuthService {
     suspend fun iniciarSesion(correo: String, clave: String): AuthResult
     suspend fun loginConGoogle(): AuthResult
     suspend fun recuperarContrasena(correo: String): Result<Unit>
+    suspend fun cambiarContrasena(claveActual: String, nuevaClave: String): Result<Unit>
     suspend fun registrarCuentaEmpleado(correo: String): Result<Unit>
     suspend fun cerrarSesion()
     fun obtenerUsuarioActivo(): UsuarioActual?
@@ -198,6 +200,43 @@ class FirebaseAuthService(
         // RN-02: El contador se reinicia con un cambio/recuperación de contraseña
         if (resultado.isSuccess) {
             reiniciarIntentosDeCuenta(correoNormalizado)
+        }
+        return resultado
+    }
+
+    override suspend fun cambiarContrasena(claveActual: String, nuevaClave: String): Result<Unit> {
+        val user = auth?.currentUser
+        val email = user?.email
+        val authInstance = auth
+
+        val resultado = try {
+            if (authInstance != null && user != null && email != null) {
+                // Reautenticar con la contraseña actual
+                authInstance.signInWithEmailAndPassword(email, claveActual)
+                user.updatePassword(nuevaClave)
+                Result.success(Unit)
+            } else {
+                actualizarContrasenaPlataforma(claveActual, nuevaClave)
+            }
+        } catch (e: Exception) {
+            val codeOrMessage = e.message ?: ""
+            val mensajeLimpio = when {
+                codeOrMessage.contains("wrong-password", ignoreCase = true) ||
+                codeOrMessage.contains("invalid-credential", ignoreCase = true) ->
+                    "La contraseña actual es incorrecta."
+                codeOrMessage.contains("weak-password", ignoreCase = true) ->
+                    "La nueva contraseña debe tener al menos 6 caracteres (mínimo exigido por Firebase)."
+                codeOrMessage.contains("requires-recent-login", ignoreCase = true) ->
+                    "Por seguridad, debes cerrar sesión e iniciarla nuevamente antes de cambiar la contraseña."
+                else ->
+                    codeOrMessage.ifBlank { "Error al actualizar la contraseña." }
+            }
+            Result.failure(Exception(mensajeLimpio))
+        }
+
+        // RN-02 / RN-04: Al cambiar contraseña exitosamente, reiniciar contador de intentos fallidos
+        if (resultado.isSuccess && !email.isNullOrBlank()) {
+            reiniciarIntentosDeCuenta(email)
         }
         return resultado
     }

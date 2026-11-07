@@ -144,7 +144,13 @@ fun MainScreen(viewModel: MainViewModel, onLogoutSuccess: () -> Unit) {
                     nombre = usuario.nombre,
                     iniciales = usuario.iniciales,
                     cargo = usuario.cargo,
-                    onLogoutClick = { viewModel.cerrarSesion(onLogoutSuccess) }
+                    onLogoutClick = { viewModel.cerrarSesion(onLogoutSuccess) },
+                    onCambiarContrasenaClick = {
+                        internalNavController.navigate("cambiar_contrasena") {
+                            launchSingleTop = true
+                        }
+                        scope.launch { drawerState.close() }
+                    }
                 )
             }
         }
@@ -252,5 +258,12 @@ fun DashboardNavHost(navController: NavHostController, usuario: UsuarioActual?, 
         composable("asistencia") { AsistenciaScreen(viewModel = viewModel { AsistenciaViewModel() }) }
         composable("reportar_novedad") { ReportarNovedadScreen(viewModel = viewModel{ ReportarNovedadViewModel() }) }
         composable("marcar_asistencia") { MarcarAsistenciaScreen(viewModel = viewModel { MarcarAsistenciaViewModel() }) }
+        composable("cambiar_contrasena") {
+            CambiarContrasenaScreen(
+                viewModel = viewModel { com.itm.gestordeturnos.viewmodel.CambiarContrasenaViewModel() },
+                usuario = usuario,
+                onVolver = { navController.popBackStack() }
+            )
+        }
     }
 }

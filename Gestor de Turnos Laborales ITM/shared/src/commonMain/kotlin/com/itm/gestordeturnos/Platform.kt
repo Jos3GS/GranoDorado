@@ -20,4 +20,6 @@ expect suspend fun enviarRecuperacionPlataforma(correo: String): Result<Unit>
 
 expect suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Unit>
 
+expect suspend fun actualizarContrasenaPlataforma(claveActual: String, nuevaClave: String): Result<Unit>
+
 expect fun cerrarSesionPlataforma()

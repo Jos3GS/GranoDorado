@@ -165,6 +165,52 @@ actual suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Uni
     """)
 }
 
+actual suspend fun actualizarContrasenaPlataforma(claveActual: String, nuevaClave: String): Result<Unit> = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = {
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val code = error?.code as? String ?: ""
+        val msg = when {
+            code == "auth/wrong-password" || code == "auth/invalid-credential" ->
+                "La contraseña actual es incorrecta."
+            code == "auth/weak-password" ->
+                "La nueva contraseña debe tener al menos 6 caracteres (mínimo exigido por Firebase)."
+            code == "auth/requires-recent-login" ->
+                "Por seguridad, debes cerrar sesión e iniciarla nuevamente antes de cambiar la contraseña."
+            else ->
+                error?.message as? String ?: "Error al actualizar la contraseña."
+        }
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    js("""
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebase.auth === 'function') {
+                var auth = firebase.auth();
+                var user = auth.currentUser;
+                if (!user || !user.email) {
+                    continuation.resume(Result.failure(new Error("No hay usuario autenticado")));
+                } else {
+                    var credential = firebase.auth.EmailAuthProvider.credential(user.email, claveActual);
+                    user.reauthenticateWithCredential(credential)
+                        .then(function() {
+                            return user.updatePassword(nuevaClave);
+                        })
+                        .then(function() {
+                            onSuccess(null);
+                        })
+                        .catch(onError);
+                }
+            } else {
+                onSuccess(null);
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
 actual fun cerrarSesionPlataforma() {
     js("""
         try {

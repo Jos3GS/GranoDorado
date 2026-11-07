@@ -15,5 +15,7 @@ actual suspend fun enviarRecuperacionPlataforma(correo: String): Result<Unit> = 
 
 actual suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Unit> = Result.success(Unit)
 
+actual suspend fun actualizarContrasenaPlataforma(claveActual: String, nuevaClave: String): Result<Unit> = Result.success(Unit)
+
 actual fun cerrarSesionPlataforma() {
 }

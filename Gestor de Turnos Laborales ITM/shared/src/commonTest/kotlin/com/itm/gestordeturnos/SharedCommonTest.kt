@@ -9,7 +9,9 @@ import com.itm.gestordeturnos.domain.usecase.ControlInactividadSesionUseCase
 import com.itm.gestordeturnos.domain.usecase.ControlIntentosLoginUseCase
 import com.itm.gestordeturnos.domain.usecase.EvaluacionIntentoLogin
 import com.itm.gestordeturnos.domain.usecase.IntercambiarTurnosUseCase
+import com.itm.gestordeturnos.domain.usecase.ValidacionClaveResult
 import com.itm.gestordeturnos.domain.usecase.ValidacionTurnoResult
+import com.itm.gestordeturnos.domain.usecase.ValidarContrasenaFirebaseAuthUseCase
 import com.itm.gestordeturnos.domain.usecase.VerificarCoberturaDiariaUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -397,6 +399,60 @@ class SharedCommonTest {
         // Avanzar otros 15 minutos + 1 ms sin interactuar (30 minutos desde la última interacción)
         relojSimulado += (15 * 60_000L) + 1L
         assertTrue(useCase.verificarSiExpiro(), "La sesión debe expirar al cumplirse 30 minutos desde la última interacción")
+    }
+
+    // =========================================================================
+    // 6. PRUEBAS DE CAMBIO DE CONTRASEÑA CON REGLAS FIREBASE AUTH (RN-04)
+    // =========================================================================
+
+    @Test
+    fun validarContrasenaFirebaseAuth_rechazaClaveMenorASeisCaracteres() {
+        val useCase = ValidarContrasenaFirebaseAuthUseCase()
+
+        val resultado = useCase.validar(
+            claveActual = "Clave123",
+            nuevaClave = "12345", // Menor a 6 caracteres
+            confirmacionClave = "12345"
+        )
+
+        val invalida = assertIs<ValidacionClaveResult.Invalida>(resultado)
+        assertTrue(invalida.motivo.contains("al menos 6 caracteres"))
+    }
+
+    @Test
+    fun validarContrasenaFirebaseAuth_rechazaClaveIgualALaActualODiscrepanciaEnConfirmacion() {
+        val useCase = ValidarContrasenaFirebaseAuthUseCase()
+
+        // Caso 1: Nueva clave igual a la actual
+        val resultadoIgual = useCase.validar(
+            claveActual = "MiClave123",
+            nuevaClave = "MiClave123",
+            confirmacionClave = "MiClave123"
+        )
+        val invalidaIgual = assertIs<ValidacionClaveResult.Invalida>(resultadoIgual)
+        assertTrue(invalidaIgual.motivo.contains("distinta"))
+
+        // Caso 2: Confirmación no coincide
+        val resultadoDiscrepante = useCase.validar(
+            claveActual = "MiClave123",
+            nuevaClave = "NuevaClave456",
+            confirmacionClave = "OtraClave789"
+        )
+        val invalidaDiscrepante = assertIs<ValidacionClaveResult.Invalida>(resultadoDiscrepante)
+        assertTrue(invalidaDiscrepante.motivo.contains("no coincide"))
+    }
+
+    @Test
+    fun validarContrasenaFirebaseAuth_aceptaClaveValidaSegunFirebase() {
+        val useCase = ValidarContrasenaFirebaseAuthUseCase()
+
+        val resultado = useCase.validar(
+            claveActual = "Antigua123",
+            nuevaClave = "Nueva456", // >= 6 caracteres y distinta
+            confirmacionClave = "Nueva456"
+        )
+
+        assertIs<ValidacionClaveResult.Valida>(resultado)
     }
 }
 

@@ -136,7 +136,8 @@ fun UserProfileInfo(
     nombre: String,
     iniciales: String,
     cargo: String,
-    onLogoutClick: () -> Unit
+    onLogoutClick: () -> Unit,
+    onCambiarContrasenaClick: (() -> Unit)? = null
 ){
     Column(
         modifier = Modifier.padding(24.dp)
@@ -172,6 +173,17 @@ fun UserProfileInfo(
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (onCambiarContrasenaClick != null) {
+            Text(
+                text = "Cambiar contraseña",
+                color = CafeAccentYellow,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { onCambiarContrasenaClick() }
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
 
         Text(
             text = "Cerrar sesión",

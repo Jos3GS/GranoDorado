@@ -27,6 +27,10 @@ actual suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Uni
     return Result.success(Unit)
 }
 
+actual suspend fun actualizarContrasenaPlataforma(claveActual: String, nuevaClave: String): Result<Unit> {
+    return Result.success(Unit)
+}
+
 actual fun cerrarSesionPlataforma() {
     // No-op en Android desarrollo
 }
