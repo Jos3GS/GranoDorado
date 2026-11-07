@@ -40,7 +40,8 @@ class AsistenciaViewModel(
     private val turnoRepository: TurnoRepositoryContract = TurnoRepository,
     private val asistenciaRepository: AsistenciaRepositoryContract = AsistenciaRepository,
     private val validarMarcaSupervisorUseCase: com.itm.gestordeturnos.domain.usecase.ValidarMarcaSupervisorUseCase = com.itm.gestordeturnos.domain.usecase.ValidarMarcaSupervisorUseCase(),
-    private val calcularJornadaUseCase: com.itm.gestordeturnos.domain.usecase.CalcularJornadaAsistenciaUseCase = com.itm.gestordeturnos.domain.usecase.CalcularJornadaAsistenciaUseCase()
+    private val calcularJornadaUseCase: com.itm.gestordeturnos.domain.usecase.CalcularJornadaAsistenciaUseCase = com.itm.gestordeturnos.domain.usecase.CalcularJornadaAsistenciaUseCase(),
+    private val controlarIncumplimientosUseCase: com.itm.gestordeturnos.domain.usecase.ControlarIncumplimientosAsistenciaUseCase = com.itm.gestordeturnos.domain.usecase.ControlarIncumplimientosAsistenciaUseCase()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AsistenciaState())
     val uiState: StateFlow<AsistenciaState> = _uiState.asStateFlow()
@@ -101,8 +102,10 @@ class AsistenciaViewModel(
         val diaSem = nombresDias.getOrElse(hoy.dayOfWeek.ordinal) { "" }
         val fechaTexto = "$diaSem, ${hoy.dayOfMonth}/${hoy.monthNumber}/${hoy.year}"
 
-        // Asignaciones de hoy
-        val asigsHoy = asignaciones.filter { it.fechaIso == hoyIso && !it.esDescanso }
+        // Asignaciones de hoy (RN-31: Filtrar solo PUBLICADA y excluir descansos, incapacidades, vacaciones y permisos)
+        val asigsHoy = asignaciones.filter {
+            controlarIncumplimientosUseCase.esAsignacionExigibleParaAsistencia(it, hoyIso)
+        }
 
         // Registros reales de asistencia de hoy
         val registrosDeHoy = registros.filter { it.fechaIso == hoyIso }
@@ -126,9 +129,9 @@ class AsistenciaViewModel(
             )
             listaFilas.add(regEvaluado)
 
-            // Si llegó tarde, generar notificación
-            if (reg.estado == "TARDE" || reg.minutosTarde > 10) {
-                val notifId = "inc_tarde_${reg.id}"
+            // RN-31: Si llegó tarde, generar notificación
+            if (controlarIncumplimientosUseCase.esLlegadaTarde(reg)) {
+                val notifId = controlarIncumplimientosUseCase.generarIdAlertaTarde(reg.id)
                 val atendidaExistente = notificacionesRepositorio.find { it.id == notifId }
                 notificacionesGeneradas.add(
                     NotificacionIncumplimiento(
@@ -171,29 +174,33 @@ class AsistenciaViewModel(
                 )
                 listaFilas.add(filaPendiente)
 
-                // CA-17.1: Notificación automática si pasaron 15 minutos de la hora de inicio programada sin marcación
-                val partesHorario = asig.horario.split("-")
-                if (partesHorario.isNotEmpty()) {
-                    val horaInicioProg = parsearMinutos(partesHorario[0])
-                    if (horaInicioProg != null && minutosActuales >= (horaInicioProg + 15)) {
-                        val notifAutoId = "inc_retraso_${asig.empleadoId}_${hoyIso}"
-                        val atendidaExistente = notificacionesRepositorio.find { it.id == notifAutoId }
-                        val notifAuto = NotificacionIncumplimiento(
-                            id = notifAutoId,
-                            empleadoId = asig.empleadoId,
-                            empleado = empNombre,
-                            tipo = "Retraso > 15 min sin marcación de entrada",
-                            detalleHora = "Programado a las ${partesHorario[0].trim()}. Sin ingreso registrado a las $horaActualStr.",
-                            fechaIso = hoyIso,
-                            sucursal = asig.sucursalId.ifBlank { empInfo?.sucursal ?: "CENTRO" },
-                            atendida = atendidaExistente?.atendida ?: false,
-                            motivoAtencion = atendidaExistente?.motivoAtencion ?: "",
-                            horaAtencion = atendidaExistente?.horaAtencion ?: ""
-                        )
-                        notificacionesGeneradas.add(notifAuto)
-                        if (atendidaExistente == null) {
-                            asistenciaRepository.registrarIncumplimiento(notifAuto)
-                        }
+                // RN-31 / CA-17.1: Notificación automática si pasaron 15 minutos de la hora de inicio programada sin marcación
+                if (controlarIncumplimientosUseCase.debeGenerarAlertaRetrasoInicio(
+                        asignacion = asig,
+                        fechaActualIso = hoyIso,
+                        horaActualMinutos = minutosActuales,
+                        tieneEntradaRegistrada = false
+                    )
+                ) {
+                    val partesHorario = asig.horario.split("-")
+                    val horaProgStr = if (partesHorario.isNotEmpty()) partesHorario[0].trim() else ""
+                    val notifAutoId = controlarIncumplimientosUseCase.generarIdAlertaRetraso(asig.empleadoId, hoyIso)
+                    val atendidaExistente = notificacionesRepositorio.find { it.id == notifAutoId }
+                    val notifAuto = NotificacionIncumplimiento(
+                        id = notifAutoId,
+                        empleadoId = asig.empleadoId,
+                        empleado = empNombre,
+                        tipo = "Retraso > 15 min sin marcación de entrada",
+                        detalleHora = "Programado a las $horaProgStr. Sin ingreso registrado a las $horaActualStr.",
+                        fechaIso = hoyIso,
+                        sucursal = asig.sucursalId.ifBlank { empInfo?.sucursal ?: "CENTRO" },
+                        atendida = atendidaExistente?.atendida ?: false,
+                        motivoAtencion = atendidaExistente?.motivoAtencion ?: "",
+                        horaAtencion = atendidaExistente?.horaAtencion ?: ""
+                    )
+                    notificacionesGeneradas.add(notifAuto)
+                    if (atendidaExistente == null) {
+                        asistenciaRepository.registrarIncumplimiento(notifAuto)
                     }
                 }
             }

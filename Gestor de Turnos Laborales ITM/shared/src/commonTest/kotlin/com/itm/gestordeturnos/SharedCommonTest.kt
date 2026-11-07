@@ -38,6 +38,7 @@ import com.itm.gestordeturnos.domain.usecase.ValidarEstadoEmpleadoActivoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarModificacionRolEstadoUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarPermisosAdminSucursalEmpleadoUseCase
 import com.itm.gestordeturnos.domain.usecase.CalcularJornadaAsistenciaUseCase
+import com.itm.gestordeturnos.domain.usecase.ControlarIncumplimientosAsistenciaUseCase
 import com.itm.gestordeturnos.domain.usecase.JornadaEvaluada
 import com.itm.gestordeturnos.domain.usecase.ValidarRecuperacionContrasenaUseCase
 import com.itm.gestordeturnos.domain.usecase.ValidarSolicitudCambioTurnoUseCase
@@ -65,6 +66,7 @@ class SharedCommonTest {
     private val validarMarcacionAsistenciaUseCase = ValidarMarcacionAsistenciaUseCase()
     private val validarMarcaSupervisorUseCase = ValidarMarcaSupervisorUseCase()
     private val calcularJornadaUseCase = CalcularJornadaAsistenciaUseCase()
+    private val controlarIncumplimientosUseCase = ControlarIncumplimientosAsistenciaUseCase()
 
     // =========================================================================
     // 1. PRUEBAS DE COBERTURA DIARIA Y CÁLCULO DE HORAS SEMANALES
@@ -4295,6 +4297,195 @@ class SharedCommonTest {
         )
         val evaluacion = calcularJornadaUseCase.evaluarJornada(registro, "2026-11-07", 10 * 60)
         assertFalse(evaluacion.estadoTexto.contains("RN-30"), "No debe exponer identificadores técnicos de regla en texto")
+    }
+
+    // =========================================================================
+    // 30. PRUEBAS DE CONTROL DE ASIGNACIONES E INCUMPLIMIENTOS (RN-31)
+    // =========================================================================
+
+    @Test
+    fun rn31_asignacionExigible_aceptaTurnoPublicadoEnFechaHoy() {
+        val asignacion = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            estado = "PUBLICADA",
+            esDescanso = false
+        )
+        val exigible = controlarIncumplimientosUseCase.esAsignacionExigibleParaAsistencia(asignacion, "2026-11-07")
+        assertTrue(exigible, "Un turno publicado en la fecha actual debe ser exigible para control de asistencia")
+    }
+
+    @Test
+    fun rn31_asignacionExigible_excluyeTurnoEnBorrador() {
+        val asignacion = AsignacionTurno(
+            id = "asig_borrador",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Apertura",
+            horario = "06:00 - 14:00",
+            estado = "BORRADOR",
+            esDescanso = false
+        )
+        val exigible = controlarIncumplimientosUseCase.esAsignacionExigibleParaAsistencia(asignacion, "2026-11-07")
+        assertFalse(exigible, "Un turno en borrador NO debe ser evaluado para asistencia ni generar alertas de retraso")
+    }
+
+    @Test
+    fun rn31_asignacionExigible_excluyeIncapacidadMedica() {
+        val asigIncapacidad = AsignacionTurno(
+            id = "asig_incap",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Incapacidad médica",
+            horario = "-",
+            estado = "PUBLICADA",
+            esDescanso = false
+        )
+        val exigible = controlarIncumplimientosUseCase.esAsignacionExigibleParaAsistencia(asigIncapacidad, "2026-11-07")
+        assertFalse(exigible, "Una asignación con incapacidad médica NO debe figurar como pendiente ni generar alertas de incumplimiento")
+    }
+
+    @Test
+    fun rn31_asignacionExigible_excluyeDescansosVacacionesYPermisos() {
+        val asigDescanso = AsignacionTurno(
+            id = "asig_desc",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Descanso",
+            estado = "PUBLICADA",
+            esDescanso = true
+        )
+        assertFalse(controlarIncumplimientosUseCase.esAsignacionExigibleParaAsistencia(asigDescanso, "2026-11-07"))
+
+        val asigVacaciones = AsignacionTurno(
+            id = "asig_vac",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Vacaciones",
+            estado = "PUBLICADA",
+            esDescanso = false
+        )
+        assertFalse(controlarIncumplimientosUseCase.esAsignacionExigibleParaAsistencia(asigVacaciones, "2026-11-07"))
+
+        val asigPermiso = AsignacionTurno(
+            id = "asig_perm",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Permiso especial",
+            estado = "PUBLICADA",
+            esDescanso = false
+        )
+        assertFalse(controlarIncumplimientosUseCase.esAsignacionExigibleParaAsistencia(asigPermiso, "2026-11-07"))
+    }
+
+    @Test
+    fun rn31_alertaRetrasoInicio_seGeneraTras15MinutosSinEntrada() {
+        val asignacion = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Apertura",
+            horario = "08:00 - 16:00",
+            estado = "PUBLICADA",
+            esDescanso = false
+        )
+
+        // 08:14 (494 min): Dentro de los 15 minutos de tolerancia -> No debe generar alerta
+        val antesDe15Min = controlarIncumplimientosUseCase.debeGenerarAlertaRetrasoInicio(
+            asignacion = asignacion,
+            fechaActualIso = "2026-11-07",
+            horaActualMinutos = 8 * 60 + 14,
+            tieneEntradaRegistrada = false
+        )
+        assertFalse(antesDe15Min, "No debe generar alerta si aún no transcurren 15 minutos")
+
+        // 08:15 (495 min): Justo al cumplirse los 15 minutos -> Debe generar alerta
+        val alCumplirse15Min = controlarIncumplimientosUseCase.debeGenerarAlertaRetrasoInicio(
+            asignacion = asignacion,
+            fechaActualIso = "2026-11-07",
+            horaActualMinutos = 8 * 60 + 15,
+            tieneEntradaRegistrada = false
+        )
+        assertTrue(alCumplirse15Min, "Debe generar alerta tras 15 minutos de retraso sin marcación")
+    }
+
+    @Test
+    fun rn31_alertaRetrasoInicio_noSeGeneraParaIncapacidadesNiBorradores() {
+        val asigIncapacidad = AsignacionTurno(
+            id = "asig_incap",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Incapacidad médica",
+            horario = "08:00 - 16:00",
+            estado = "PUBLICADA",
+            esDescanso = false
+        )
+        assertFalse(
+            controlarIncumplimientosUseCase.debeGenerarAlertaRetrasoInicio(asigIncapacidad, "2026-11-07", 8 * 60 + 30, false),
+            "No debe generar alerta de retraso para incapacidad médica"
+        )
+
+        val asigBorrador = AsignacionTurno(
+            id = "asig_draft",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Apertura",
+            horario = "08:00 - 16:00",
+            estado = "BORRADOR",
+            esDescanso = false
+        )
+        assertFalse(
+            controlarIncumplimientosUseCase.debeGenerarAlertaRetrasoInicio(asigBorrador, "2026-11-07", 8 * 60 + 30, false),
+            "No debe generar alerta de retraso para asignación no publicada"
+        )
+    }
+
+    @Test
+    fun rn31_alertaRetrasoInicio_noSeGeneraSiYaTieneEntradaRegistrada() {
+        val asignacion = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Apertura",
+            horario = "08:00 - 16:00",
+            estado = "PUBLICADA",
+            esDescanso = false
+        )
+        val alertaConEntrada = controlarIncumplimientosUseCase.debeGenerarAlertaRetrasoInicio(
+            asignacion = asignacion,
+            fechaActualIso = "2026-11-07",
+            horaActualMinutos = 8 * 60 + 30,
+            tieneEntradaRegistrada = true
+        )
+        assertFalse(alertaConEntrada, "No debe generar alerta de retraso si el empleado ya registró entrada")
+    }
+
+    @Test
+    fun rn31_determinismoIdAlertas_garantizaMaximoUnaNotificacionPorTurno() {
+        val idRetraso = controlarIncumplimientosUseCase.generarIdAlertaRetraso("emp_123", "2026-11-07")
+        assertEquals("inc_retraso_emp_123_2026-11-07", idRetraso, "El ID debe ser determinístico y único por empleado y fecha")
+
+        val idTarde = controlarIncumplimientosUseCase.generarIdAlertaTarde("reg_456")
+        assertEquals("inc_tarde_reg_456", idTarde)
+    }
+
+    @Test
+    fun rn31_mensajesDeAlerta_noContienenIdentificadoresTecnicosDeRegla() {
+        val asig = AsignacionTurno(
+            id = "asig_1",
+            empleadoId = "emp_1",
+            fechaIso = "2026-11-07",
+            tipoTurno = "Apertura",
+            horario = "08:00 - 16:00",
+            estado = "PUBLICADA"
+        )
+        val reg = RegistroAsistencia(id = "reg_1", empleadoId = "emp_1", minutosTarde = 15, estado = "TARDE")
+        assertTrue(controlarIncumplimientosUseCase.esLlegadaTarde(reg))
+        val id = controlarIncumplimientosUseCase.generarIdAlertaRetraso(asig.empleadoId, asig.fechaIso)
+        assertFalse(id.contains("RN-31"), "Los identificadores no deben exponer identificadores técnicos de regla")
     }
 }
 
