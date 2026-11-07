@@ -95,7 +95,7 @@ class VerificarCoberturaDiariaUseCase {
         return finAlcanzado >= jornadaFin
     }
 
-    fun calcularTotalHoras(turnos: List<TurnoCelda>): String {
+    fun calcularTotalMinutosEfectivos(turnos: List<TurnoCelda>): Int {
         var minutosTotales = 0
         turnos.forEach { t ->
             if (t.tipoCelda == TipoCeldaMalla.TURNO) {
@@ -116,7 +116,11 @@ class VerificarCoberturaDiariaUseCase {
                 }
             }
         }
+        return minutosTotales
+    }
 
+    fun calcularTotalHoras(turnos: List<TurnoCelda>): String {
+        val minutosTotales = calcularTotalMinutosEfectivos(turnos)
         val horas = minutosTotales / 60
         val minutos = minutosTotales % 60
         return if (minutos > 0) {

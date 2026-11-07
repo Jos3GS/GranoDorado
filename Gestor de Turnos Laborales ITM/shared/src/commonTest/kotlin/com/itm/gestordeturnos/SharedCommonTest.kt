@@ -1152,6 +1152,169 @@ class SharedCommonTest {
         assertTrue(validarAsignacionUseCase.esSemanaModificable(LocalDate(2026, 11, 9), fechaActual))
         assertTrue(validarAsignacionUseCase.esSemanaModificable(LocalDate(2026, 11, 16), fechaActual))
     }
+
+    // =========================================================================
+    // 9. PRUEBAS DE LÍMITE DE HORAS SEMANALES Y TURNOS SOLAPADOS (RN-16)
+    // =========================================================================
+
+    @Test
+    fun validarMaximoHorasSemanales_rechazaCuandoSupera42HorasEfectivas() {
+        // 6 turnos de 8 horas (08:00 a 16:00, con descanso de 30m = 7.5h efectivas cada uno = 45 horas = 2700 min > 2520 min)
+        val turnosExcedidos = List(6) {
+            TurnoCelda(tipo = "Completo", horario = "08:00-16:00", tipoCelda = TipoCeldaMalla.TURNO)
+        }
+
+        val resultado = validarAsignacionUseCase.validarMaximoHorasSemanales(turnosExcedidos)
+
+        val invalido = assertIs<ValidacionAsignacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("42 horas efectivas"))
+        assertFalse(invalido.mensaje.contains("(RN-16)"), "No debe exponer identificadores técnicos de regla")
+    }
+
+    @Test
+    fun validarMaximoHorasSemanales_permiteHasta42HorasEfectivas() {
+        // 5 turnos de 8 horas (7.5h efectivas cada uno = 37.5 horas = 2250 min <= 2520 min)
+        val turnosValidos = List(5) {
+            TurnoCelda(tipo = "Completo", horario = "08:00-16:00", tipoCelda = TipoCeldaMalla.TURNO)
+        }
+
+        val resultado = validarAsignacionUseCase.validarMaximoHorasSemanales(turnosValidos)
+
+        assertIs<ValidacionAsignacionResult.Valido>(resultado)
+    }
+
+    @Test
+    fun validarAsignacion_rechazaCuandoTurnoNuevoSupera42Horas() {
+        val empleadoActivo = Empleado(
+            id = "emp_1",
+            nombre = "Ana",
+            apellido = "Torres",
+            estado = EstadoUsuario.ACTIVO,
+            sucursal = "Centro"
+        )
+
+        // 5 turnos previos de 8 horas = 37.5 horas efectivas
+        val turnosSemana = MutableList(7) {
+            TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR)
+        }
+        for (i in 0..4) {
+            turnosSemana[i] = TurnoCelda(tipo = "Completo", horario = "08:00-16:00", tipoCelda = TipoCeldaMalla.TURNO)
+        }
+
+        // Se intenta asignar un 6to turno de 8h (7.5h efectivas) -> 37.5 + 7.5 = 45 horas > 42 horas
+        val nuevoTurno = TurnoCelda(tipo = "Extra", horario = "08:00-16:00", tipoCelda = TipoCeldaMalla.TURNO)
+
+        val resultado = validarAsignacionUseCase.validarAsignacion(
+            empleado = empleadoActivo,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = LocalDate(2026, 11, 7),
+            lunesSemana = LocalDate(2026, 11, 2),
+            fechaActual = LocalDate(2026, 11, 6),
+            turnosSemanaActuales = turnosSemana,
+            nuevoTurno = nuevoTurno,
+            diaIndex = 5
+        )
+
+        val invalido = assertIs<ValidacionAsignacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("42 horas efectivas"))
+    }
+
+    @Test
+    fun validarAsignacion_rechazaDosTurnosElMismoDiaEnOtraSucursal() {
+        val empleadoActivo = Empleado(
+            id = "emp_1",
+            nombre = "Ana",
+            apellido = "Torres",
+            estado = EstadoUsuario.ACTIVO,
+            sucursal = "Centro"
+        )
+
+        val asignacionesExistentes = listOf(
+            AsignacionTurno(
+                id = "emp_1_2026-11-06",
+                fechaIso = "2026-11-06",
+                empleadoId = "emp_1",
+                empleadoNombre = "Ana Torres",
+                tipoTurno = "Apertura",
+                horario = "06:00-14:00",
+                sucursalId = "Norte"
+            )
+        )
+
+        val nuevoTurno = TurnoCelda(tipo = "Cierre", horario = "14:00-22:00", tipoCelda = TipoCeldaMalla.TURNO)
+
+        val resultado = validarAsignacionUseCase.validarAsignacion(
+            empleado = empleadoActivo,
+            sucursalEmpleado = "Centro",
+            sucursalProgramacion = "Centro",
+            fechaAsignacion = LocalDate(2026, 11, 6),
+            lunesSemana = LocalDate(2026, 11, 2),
+            fechaActual = LocalDate(2026, 11, 6),
+            nuevoTurno = nuevoTurno,
+            diaIndex = 4,
+            todasAsignaciones = asignacionesExistentes
+        )
+
+        val invalido = assertIs<ValidacionAsignacionResult.Invalido>(resultado)
+        assertTrue(invalido.mensaje.contains("dos turnos"))
+    }
+
+    @Test
+    fun intercambiarTurnosUseCase_rechazaIntercambioSiResultariaEnDosTurnosMismoDia() = runBlocking {
+        val fakeTurnoRepo = FakeTurnoRepository(
+            asignacionesIniciales = listOf(
+                AsignacionTurno(
+                    id = "emp_1_2026-10-29",
+                    fechaIso = "2026-10-29",
+                    empleadoId = "emp_1",
+                    empleadoNombre = "Carlos Ruiz",
+                    tipoTurno = "Apertura",
+                    horario = "06:00-14:00",
+                    sucursalId = "CENTRO"
+                ),
+                AsignacionTurno(
+                    id = "emp_2_2026-10-30",
+                    fechaIso = "2026-10-30",
+                    empleadoId = "emp_2",
+                    empleadoNombre = "Laura Mejía",
+                    tipoTurno = "Cierre",
+                    horario = "14:00-22:00",
+                    sucursalId = "CENTRO"
+                ),
+                // Laura ya tiene un turno laboral el 2026-10-29 también!
+                AsignacionTurno(
+                    id = "emp_2_2026-10-29",
+                    fechaIso = "2026-10-29",
+                    empleadoId = "emp_2",
+                    empleadoNombre = "Laura Mejía",
+                    tipoTurno = "Intermedio",
+                    horario = "10:00-18:00",
+                    sucursalId = "CENTRO"
+                )
+            )
+        )
+
+        val useCase = IntercambiarTurnosUseCase(fakeTurnoRepo)
+        val solicitud = SolicitudCambioTurno(
+            id = "sol_conflictiva",
+            numeroSolicitud = "SOL-002",
+            empleadoSolicitanteId = "emp_1",
+            nombreSolicitante = "Carlos Ruiz",
+            empleadoCompaneroId = "emp_2",
+            nombreCompanero = "Laura Mejía",
+            turnoEntregaId = "emp_1_2026-10-29",
+            detalleTurnoEntrega = "Apertura · 2026-10-29",
+            turnoRecibeId = "emp_2_2026-10-30",
+            detalleTurnoRecibe = "Cierre · 2026-10-30",
+            estado = EstadoSolicitudCambio.APROBADA
+        )
+
+        val resultado = useCase(solicitud)
+        assertTrue(resultado.isFailure, "El intercambio debe ser rechazado si causa dos turnos el mismo día")
+        val errorMsg = resultado.exceptionOrNull()?.message ?: ""
+        assertTrue(errorMsg.contains("dos turnos"))
+    }
 }
 
 // =========================================================================

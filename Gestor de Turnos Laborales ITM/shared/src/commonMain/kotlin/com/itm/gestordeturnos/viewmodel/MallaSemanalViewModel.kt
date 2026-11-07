@@ -467,21 +467,6 @@ class MallaSemanalViewModel(
         val sucursalActual = _uiState.value.sucursal
         val sucursalEmp = emp?.let { resolverSucursalEmpleadoParaSemana(it, _uiState.value.fechaInicioSemana, turnoRepository.asignaciones.value) } ?: ""
 
-        val validacion = validarAsignacionUseCase.validarAsignacion(
-            empleado = emp,
-            sucursalEmpleado = sucursalEmp,
-            sucursalProgramacion = sucursalActual,
-            fechaAsignacion = fechaDia,
-            lunesSemana = _uiState.value.fechaInicioSemana
-        )
-
-        if (validacion is ValidacionAsignacionResult.Invalido) {
-            _uiState.update { it.copy(mensajeError = validacion.mensaje) }
-            return
-        }
-
-        _uiState.update { it.copy(mensajeError = null) }
-
         val horarioFormateado = if (turnoTemplate.horaInicio.isNotBlank() && turnoTemplate.horaFin.isNotBlank()) {
             "${turnoTemplate.horaInicio}-${turnoTemplate.horaFin}"
         } else {
@@ -491,14 +476,36 @@ class MallaSemanalViewModel(
         val celdas = turnosPorEmpleado.getOrPut(idEmpleado) {
             MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
         }
+
+        val nuevoTurno = TurnoCelda(
+            tipo = turnoTemplate.nombre,
+            horario = horarioFormateado,
+            tipoCelda = TipoCeldaMalla.TURNO,
+            modificadoTrasPublicar = _uiState.value.publicado
+        )
+
+        val validacion = validarAsignacionUseCase.validarAsignacion(
+            empleado = emp,
+            sucursalEmpleado = sucursalEmp,
+            sucursalProgramacion = sucursalActual,
+            fechaAsignacion = fechaDia,
+            lunesSemana = _uiState.value.fechaInicioSemana,
+            turnosSemanaActuales = celdas,
+            nuevoTurno = nuevoTurno,
+            diaIndex = diaIndex,
+            todasAsignaciones = turnoRepository.asignaciones.value
+        )
+
+        if (validacion is ValidacionAsignacionResult.Invalido) {
+            _uiState.update { it.copy(mensajeError = validacion.mensaje) }
+            return
+        }
+
+        _uiState.update { it.copy(mensajeError = null) }
+
         if (diaIndex in celdas.indices) {
             if (celdas[diaIndex].tipoCelda == TipoCeldaMalla.INCAPACIDAD) return
-            celdas[diaIndex] = TurnoCelda(
-                tipo = turnoTemplate.nombre,
-                horario = horarioFormateado,
-                tipoCelda = TipoCeldaMalla.TURNO,
-                modificadoTrasPublicar = _uiState.value.publicado
-            )
+            celdas[diaIndex] = nuevoTurno
         }
 
         // Garantizar 2 días de descanso:

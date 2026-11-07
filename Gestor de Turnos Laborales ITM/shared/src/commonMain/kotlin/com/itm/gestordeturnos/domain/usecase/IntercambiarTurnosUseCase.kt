@@ -61,6 +61,10 @@ class IntercambiarTurnosUseCase(
         } else {
             if (fechaEntregaIso.isNotBlank() && asigEntrega != null) {
                 val bEnFechaEntrega = asignacionesActuales.find { it.empleadoId == empBId && it.fechaIso == fechaEntregaIso }
+                if (bEnFechaEntrega != null && !bEnFechaEntrega.esDescanso && bEnFechaEntrega.tipoTurno.isNotBlank() && !bEnFechaEntrega.tipoTurno.equals("Descanso", ignoreCase = true)) {
+                    return Result.failure(Exception("Un empleado no puede tener dos turnos asignados el mismo día ni turnos que se solapen entre sí."))
+                }
+
                 val nuevoTurnoB = if (bEnFechaEntrega != null) {
                     bEnFechaEntrega.copy(
                         tipoTurno = asigEntrega.tipoTurno,
@@ -98,6 +102,10 @@ class IntercambiarTurnosUseCase(
 
             if (fechaRecibeIso.isNotBlank() && asigRecibe != null) {
                 val aEnFechaRecibe = asignacionesActuales.find { it.empleadoId == empAId && it.fechaIso == fechaRecibeIso }
+                if (aEnFechaRecibe != null && !aEnFechaRecibe.esDescanso && aEnFechaRecibe.tipoTurno.isNotBlank() && !aEnFechaRecibe.tipoTurno.equals("Descanso", ignoreCase = true)) {
+                    return Result.failure(Exception("Un empleado no puede tener dos turnos asignados el mismo día ni turnos que se solapen entre sí."))
+                }
+
                 val nuevoTurnoA = if (aEnFechaRecibe != null) {
                     aEnFechaRecibe.copy(
                         tipoTurno = asigRecibe.tipoTurno,
