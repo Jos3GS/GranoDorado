@@ -34,3 +34,6 @@ actual suspend fun actualizarContrasenaPlataforma(claveActual: String, nuevaClav
 actual fun cerrarSesionPlataforma() {
     // No-op en Android desarrollo
 }
+
+actual suspend fun guardarEmpleadoPlataforma(empleado: com.itm.gestordeturnos.domain.model.Empleado): Result<Unit>? = null
+

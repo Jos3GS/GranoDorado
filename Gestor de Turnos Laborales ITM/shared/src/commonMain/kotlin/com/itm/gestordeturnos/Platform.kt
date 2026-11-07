@@ -23,3 +23,6 @@ expect suspend fun registrarCuentaEmpleadoPlataforma(correo: String): Result<Uni
 expect suspend fun actualizarContrasenaPlataforma(claveActual: String, nuevaClave: String): Result<Unit>
 
 expect fun cerrarSesionPlataforma()
+
+expect suspend fun guardarEmpleadoPlataforma(empleado: com.itm.gestordeturnos.domain.model.Empleado): Result<Unit>?
+

@@ -220,3 +220,62 @@ actual fun cerrarSesionPlataforma() {
         } catch(e) {}
     """)
 }
+
+actual suspend fun guardarEmpleadoPlataforma(empleado: com.itm.gestordeturnos.domain.model.Empleado): Result<Unit>? = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = {
+        continuation.resume(Result.success(Unit))
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = error?.message as? String ?: "Error al guardar empleado en Firestore"
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    val id = empleado.id.ifBlank { "emp_${(10000..99999).random()}" }
+    val empSucursal = empleado.sucursalId.ifBlank { empleado.sucursal }
+    val docStr = empleado.documento.toString()
+    val bloqStr = empleado.bloqueadoHastaEpochMillis.toString()
+    val cargoStr = empleado.cargo.name
+    val estadoLaboralStr = empleado.estadoLaboral.name
+    val estadoStr = empleado.estado.name
+    val fechaRegStr = empleado.fechaRegistro?.toString() ?: ""
+
+    js("""
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                var docData = {
+                    id: id,
+                    nombre: empleado.nombre,
+                    apellido: empleado.apellido,
+                    documento: Number(docStr),
+                    tipoDocumento: empleado.tipoDocumento,
+                    correo: empleado.correo,
+                    telefono: empleado.telefono,
+                    claveHash: empleado.claveHash,
+                    cargo: cargoStr,
+                    estadoLaboral: estadoLaboralStr,
+                    estado: estadoStr,
+                    fechaRegistro: fechaRegStr,
+                    sucursalId: empSucursal,
+                    sucursal: empleado.sucursal,
+                    fechaIngreso: empleado.fechaIngreso,
+                    iniciales: empleado.iniciales,
+                    sucursalAnterior: empleado.sucursalAnterior,
+                    fechaCambioSucursal: empleado.fechaCambioSucursal,
+                    intentosFallidosLogin: empleado.intentosFallidosLogin,
+                    bloqueadoHastaEpochMillis: Number(bloqStr)
+                };
+
+                firebase.firestore().collection("empleados").doc(id).set(docData)
+                    .then(function() {
+                        onSuccess(null);
+                    })
+                    .catch(onError);
+            } else {
+                continuation.resume(null);
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+

@@ -19,3 +19,6 @@ actual suspend fun actualizarContrasenaPlataforma(claveActual: String, nuevaClav
 
 actual fun cerrarSesionPlataforma() {
 }
+
+actual suspend fun guardarEmpleadoPlataforma(empleado: com.itm.gestordeturnos.domain.model.Empleado): Result<Unit>? = null
+

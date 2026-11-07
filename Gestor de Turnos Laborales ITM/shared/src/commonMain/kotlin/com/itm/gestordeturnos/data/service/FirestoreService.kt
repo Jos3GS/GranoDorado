@@ -9,6 +9,7 @@ import com.itm.gestordeturnos.domain.model.NotificacionIncumplimiento
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
 import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
+import com.itm.gestordeturnos.guardarEmpleadoPlataforma
 import com.itm.gestordeturnos.initPlatformFirebase
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.firestore.FirebaseFirestore
@@ -59,6 +60,11 @@ object FirestoreService {
     }
 
     suspend fun guardarEmpleado(empleado: Empleado): Result<Unit> {
+        val plataformaRes = guardarEmpleadoPlataforma(empleado)
+        if (plataformaRes != null) {
+            return plataformaRes
+        }
+
         val firestore = db ?: return Result.failure(IllegalStateException("Firebase Firestore no está inicializado"))
         return try {
             val id = empleado.id.ifBlank { "emp_${Random.nextInt(10000, 99999)}" }
