@@ -26,3 +26,6 @@ expect fun cerrarSesionPlataforma()
 
 expect suspend fun guardarEmpleadoPlataforma(empleado: com.itm.gestordeturnos.domain.model.Empleado): Result<Unit>?
 
+expect suspend fun guardarAsignacionPlataforma(asignacion: com.itm.gestordeturnos.domain.model.AsignacionTurno): Result<Unit>?
+
+expect suspend fun guardarAsignacionesBatchPlataforma(asignaciones: List<com.itm.gestordeturnos.domain.model.AsignacionTurno>): Result<Unit>?

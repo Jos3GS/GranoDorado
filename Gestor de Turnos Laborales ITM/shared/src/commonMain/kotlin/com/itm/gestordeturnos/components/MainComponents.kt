@@ -869,6 +869,16 @@ fun MallaCeldaTurno(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 )
+
+                if (turno.modificadoTrasPublicar) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(6.dp)
+                            .background(Color(0xFFF97316), shape = CircleShape)
+                    )
+                }
             }
         }
 
@@ -1137,6 +1147,7 @@ fun ModalAsignarTurno(
     turnosDisponibles: List<TurnoTemplate>,
     onSeleccionarTurno: (TurnoTemplate) -> Unit,
     onAsignarDescanso: (() -> Unit)? = null,
+    onQuitarAsignacion: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -1281,6 +1292,35 @@ fun ModalAsignarTurno(
                                 )
                                 Text(
                                     text = "D\u00EDa libre",
+                                    color = CafeTextSecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+
+                        if (onQuitarAsignacion != null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.White, RoundedCornerShape(3.dp))
+                                    .border(
+                                        width = 1.dp,
+                                        color = Color(0xFFE5E7EB),
+                                        shape = RoundedCornerShape(3.dp)
+                                    )
+                                    .clickable { onQuitarAsignacion() }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Quitar asignaci\u00F3n",
+                                    color = CafeStatusErrorText,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "Dejar sin asignar",
                                     color = CafeTextSecondary,
                                     fontSize = 12.sp
                                 )

@@ -128,6 +128,13 @@ class FirebaseAuthService(
             if (googleUser != null && googleUser.email.isNotBlank()) {
                 val email = googleUser.email.trim()
 
+                if (!googleUser.idToken.isNullOrBlank()) {
+                    runCatching {
+                        val cred = dev.gitlive.firebase.auth.GoogleAuthProvider.credential(googleUser.idToken, null)
+                        auth?.signInWithCredential(cred)
+                    }
+                }
+
                 val empleadoConocido = empleadoRepository.buscarPorCorreo(email)
                 if (empleadoConocido != null) {
                     controlIntentosUseCase.sincronizarDesdeEmpleado(

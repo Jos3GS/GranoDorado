@@ -36,6 +36,64 @@ object TurnoRepository : TurnoRepositoryContract {
 
     private var jobSincronizacion: Job? = null
 
+    private val asignacionesEnVuelo = mutableMapOf<String, AsignacionTurno>()
+
+    private fun claveAsignacion(asig: AsignacionTurno): String {
+        return if (asig.empleadoId.isNotBlank() && asig.fechaIso.isNotBlank()) {
+            "${asig.empleadoId}_${asig.fechaIso}"
+        } else {
+            asig.id
+        }
+    }
+
+    private fun aplicarAsignacionesEnMemoria(lista: List<AsignacionTurno>) {
+        if (lista.isEmpty()) return
+        val normalizadas = lista.map { asig ->
+            val id = asig.id.ifBlank { "${asig.empleadoId}_${asig.fechaIso}" }
+            asig.copy(id = id)
+        }
+        for (asig in normalizadas) {
+            asignacionesEnVuelo[claveAsignacion(asig)] = asig
+        }
+        val ids = normalizadas.map { it.id }.toSet()
+        val empFechas = normalizadas.map { claveAsignacion(it) }.toSet()
+        _asignaciones.update { existentes ->
+            existentes.filterNot { it.id in ids || claveAsignacion(it) in empFechas } + normalizadas
+        }
+    }
+
+    private fun aplicarAsignacionesRemotas(remotas: List<AsignacionTurno>) {
+        if (remotas.isEmpty()) return
+        _asignaciones.update { locales ->
+            val mapaCombinado = LinkedHashMap<String, AsignacionTurno>()
+            // 1. Mantener las existentes en memoria como base (para no perder borradores locales aún no reflejados)
+            for (local in locales) {
+                mapaCombinado[claveAsignacion(local)] = local
+            }
+            // 2. Aplicar las remotas de Firestore salvo que haya una escritura local en vuelo más reciente para esa celda
+            for (remota in remotas) {
+                val clave = claveAsignacion(remota)
+                val enVuelo = asignacionesEnVuelo[clave]
+                if (enVuelo != null) {
+                    // Si el snapshot remoto ya coincide con lo que enviamos en vuelo, limpiamos la marca en vuelo
+                    if (remota.tipoTurno == enVuelo.tipoTurno &&
+                        remota.esDescanso == enVuelo.esDescanso &&
+                        remota.estado == enVuelo.estado &&
+                        remota.horario == enVuelo.horario
+                    ) {
+                        asignacionesEnVuelo.remove(clave)
+                        mapaCombinado[clave] = remota
+                    } else {
+                        mapaCombinado[clave] = enVuelo
+                    }
+                } else {
+                    mapaCombinado[clave] = remota
+                }
+            }
+            mapaCombinado.values.toList()
+        }
+    }
+
     init {
         iniciarSincronizacionFirestore()
     }
@@ -63,7 +121,7 @@ object TurnoRepository : TurnoRepositoryContract {
                 // Cargar asignaciones guardadas de Firestore
                 val asignacionesRemotas = FirestoreService.obtenerAsignaciones()
                 if (asignacionesRemotas.isNotEmpty()) {
-                    _asignaciones.value = asignacionesRemotas
+                    aplicarAsignacionesRemotas(asignacionesRemotas)
                 }
 
                 // 2. Escuchar en tiempo real los cambios en la colección "turnos"
@@ -79,7 +137,7 @@ object TurnoRepository : TurnoRepositoryContract {
                 launch {
                     FirestoreService.observarAsignaciones().collect { listaAsignaciones ->
                         if (listaAsignaciones.isNotEmpty()) {
-                            _asignaciones.value = listaAsignaciones
+                            aplicarAsignacionesRemotas(listaAsignaciones)
                         }
                     }
                 }
@@ -103,7 +161,7 @@ object TurnoRepository : TurnoRepositoryContract {
                 }
                 val asigs = FirestoreService.obtenerAsignaciones()
                 if (asigs.isNotEmpty()) {
-                    _asignaciones.value = asigs
+                    aplicarAsignacionesRemotas(asigs)
                 }
             } catch (e: Exception) {
                 println("Error al refrescar desde Firestore: ${e.message}")
@@ -112,13 +170,11 @@ object TurnoRepository : TurnoRepositoryContract {
     }
 
     override suspend fun guardarAsignacion(asignacion: AsignacionTurno): Result<Unit> {
-        // Optimistic update
-        _asignaciones.update { lista ->
-            val filtrada = lista.filterNot { it.id == asignacion.id || (it.empleadoId == asignacion.empleadoId && it.fechaIso == asignacion.fechaIso) }
-            filtrada + asignacion
-        }
+        aplicarAsignacionesEnMemoria(listOf(asignacion))
         val res = FirestoreService.guardarAsignacion(asignacion)
-        if (res.isFailure) {
+        if (res.isSuccess) {
+            asignacionesEnVuelo.remove(claveAsignacion(asignacion))
+        } else {
             println("Error al guardar asignación en Firestore: ${res.exceptionOrNull()?.message}")
         }
         return res
@@ -126,14 +182,11 @@ object TurnoRepository : TurnoRepositoryContract {
 
     override suspend fun guardarAsignaciones(lista: List<AsignacionTurno>): Result<Unit> {
         if (lista.isEmpty()) return Result.success(Unit)
-        // Optimistic update
-        val ids = lista.map { it.id }.toSet()
-        val empFechas = lista.map { "${it.empleadoId}_${it.fechaIso}" }.toSet()
-        _asignaciones.update { existentes ->
-            existentes.filterNot { it.id in ids || "${it.empleadoId}_${it.fechaIso}" in empFechas } + lista
-        }
+        aplicarAsignacionesEnMemoria(lista)
         val res = FirestoreService.guardarAsignacionesBatch(lista)
-        if (res.isFailure) {
+        if (res.isSuccess) {
+            lista.forEach { asignacionesEnVuelo.remove(claveAsignacion(it)) }
+        } else {
             println("Error al guardar lote de asignaciones en Firestore: ${res.exceptionOrNull()?.message}")
         }
         return res
@@ -141,8 +194,15 @@ object TurnoRepository : TurnoRepositoryContract {
 
     override fun guardarAsignacionesEnBackground(lista: List<AsignacionTurno>) {
         if (lista.isEmpty()) return
+        // Actualizar inmediatamente en memoria de forma síncrona para que cambios de semana o de pantalla vean los datos al instante
+        aplicarAsignacionesEnMemoria(lista)
         repositoryScope.launch {
-            guardarAsignaciones(lista)
+            val res = FirestoreService.guardarAsignacionesBatch(lista)
+            if (res.isSuccess) {
+                lista.forEach { asignacionesEnVuelo.remove(claveAsignacion(it)) }
+            } else {
+                println("Error al guardar lote de asignaciones en Firestore: ${res.exceptionOrNull()?.message}")
+            }
         }
     }
 

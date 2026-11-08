@@ -37,3 +37,6 @@ actual fun cerrarSesionPlataforma() {
 
 actual suspend fun guardarEmpleadoPlataforma(empleado: com.itm.gestordeturnos.domain.model.Empleado): Result<Unit>? = null
 
+actual suspend fun guardarAsignacionPlataforma(asignacion: com.itm.gestordeturnos.domain.model.AsignacionTurno): Result<Unit>? = null
+
+actual suspend fun guardarAsignacionesBatchPlataforma(asignaciones: List<com.itm.gestordeturnos.domain.model.AsignacionTurno>): Result<Unit>? = null

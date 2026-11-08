@@ -53,8 +53,9 @@ actual suspend fun iniciarSesionGooglePlataforma(): GoogleUserData? = suspendCan
             val user = result.user
             val email = user.email as? String
             val displayName = user.displayName as? String
+            val idToken = result.credential?.idToken as? String
             if (email != null) {
-                continuation.resume(GoogleUserData(email = email, displayName = displayName))
+                continuation.resume(GoogleUserData(email = email, displayName = displayName, idToken = idToken))
             } else {
                 continuation.resume(null)
             }
@@ -190,7 +191,7 @@ actual suspend fun actualizarContrasenaPlataforma(claveActual: String, nuevaClav
                 var auth = firebase.auth();
                 var user = auth.currentUser;
                 if (!user || !user.email) {
-                    continuation.resume(Result.failure(new Error("No hay usuario autenticado")));
+                    onError(new Error("No hay usuario autenticado"));
                 } else {
                     var credential = firebase.auth.EmailAuthProvider.credential(user.email, claveActual);
                     user.reauthenticateWithCredential(credential)
@@ -225,44 +226,59 @@ actual suspend fun guardarEmpleadoPlataforma(empleado: com.itm.gestordeturnos.do
     val onSuccess: (dynamic) -> Unit = {
         continuation.resume(Result.success(Unit))
     }
+    val onNotAvailable: (dynamic) -> Unit = {
+        continuation.resume(null)
+    }
     val onError: (dynamic) -> Unit = { error ->
         val msg = error?.message as? String ?: "Error al guardar empleado en Firestore"
         continuation.resume(Result.failure(Exception(msg)))
     }
 
     val id = empleado.id.ifBlank { "emp_${(10000..99999).random()}" }
-    val empSucursal = empleado.sucursalId.ifBlank { empleado.sucursal }
-    val docStr = empleado.documento.toString()
-    val bloqStr = empleado.bloqueadoHastaEpochMillis.toString()
+    val nombre = empleado.nombre
+    val apellido = empleado.apellido
+    val docNum = empleado.documento.toDouble()
+    val tipoDocumento = empleado.tipoDocumento
+    val correo = empleado.correo
+    val telefono = empleado.telefono
+    val claveHash = empleado.claveHash
     val cargoStr = empleado.cargo.name
     val estadoLaboralStr = empleado.estadoLaboral.name
     val estadoStr = empleado.estado.name
-    val fechaRegStr = empleado.fechaRegistro?.toString() ?: ""
+    val fechaRegStr: String? = empleado.fechaRegistro?.toString()
+    val empSucursal = empleado.sucursalId.ifBlank { empleado.sucursal }
+    val sucursal = empleado.sucursal
+    val fechaIngreso = empleado.fechaIngreso
+    val iniciales = empleado.iniciales
+    val sucursalAnterior = empleado.sucursalAnterior
+    val fechaCambioSucursal = empleado.fechaCambioSucursal
+    val intentosFallidosLogin = empleado.intentosFallidosLogin
+    val bloqNum = empleado.bloqueadoHastaEpochMillis.toDouble()
 
     js("""
         try {
             if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
                 var docData = {
                     id: id,
-                    nombre: empleado.nombre,
-                    apellido: empleado.apellido,
-                    documento: Number(docStr),
-                    tipoDocumento: empleado.tipoDocumento,
-                    correo: empleado.correo,
-                    telefono: empleado.telefono,
-                    claveHash: empleado.claveHash,
+                    nombre: nombre,
+                    apellido: apellido,
+                    documento: Number(docNum),
+                    tipoDocumento: tipoDocumento,
+                    correo: correo,
+                    telefono: telefono,
+                    claveHash: claveHash,
                     cargo: cargoStr,
                     estadoLaboral: estadoLaboralStr,
                     estado: estadoStr,
                     fechaRegistro: fechaRegStr,
                     sucursalId: empSucursal,
-                    sucursal: empleado.sucursal,
-                    fechaIngreso: empleado.fechaIngreso,
-                    iniciales: empleado.iniciales,
-                    sucursalAnterior: empleado.sucursalAnterior,
-                    fechaCambioSucursal: empleado.fechaCambioSucursal,
-                    intentosFallidosLogin: empleado.intentosFallidosLogin,
-                    bloqueadoHastaEpochMillis: Number(bloqStr)
+                    sucursal: sucursal,
+                    fechaIngreso: fechaIngreso,
+                    iniciales: iniciales,
+                    sucursalAnterior: sucursalAnterior,
+                    fechaCambioSucursal: fechaCambioSucursal,
+                    intentosFallidosLogin: Number(intentosFallidosLogin),
+                    bloqueadoHastaEpochMillis: Number(bloqNum)
                 };
 
                 firebase.firestore().collection("empleados").doc(id).set(docData)
@@ -271,7 +287,7 @@ actual suspend fun guardarEmpleadoPlataforma(empleado: com.itm.gestordeturnos.do
                     })
                     .catch(onError);
             } else {
-                continuation.resume(null);
+                onNotAvailable(null);
             }
         } catch(e) {
             onError(e);
@@ -279,3 +295,116 @@ actual suspend fun guardarEmpleadoPlataforma(empleado: com.itm.gestordeturnos.do
     """)
 }
 
+private fun construirObjetoJsAsignacion(asignacion: com.itm.gestordeturnos.domain.model.AsignacionTurno): dynamic {
+    val id = asignacion.id.ifBlank { "${asignacion.empleadoId}_${asignacion.fechaIso}" }
+    val fechaStr: String? = asignacion.fecha?.toString()
+    val empleadoId = asignacion.empleadoId
+    val turnoId = asignacion.turnoId
+    val sucursalId = asignacion.sucursalId
+    val programacionId = asignacion.programacionId
+    val esDescanso = asignacion.esDescanso
+    val fechaIso = asignacion.fechaIso
+    val empleadoNombre = asignacion.empleadoNombre
+    val tipoTurno = asignacion.tipoTurno
+    val horario = asignacion.horario
+    val estado = asignacion.estado
+    val modificadoTrasPublicar = asignacion.modificadoTrasPublicar
+
+    return js("""({
+        id: id,
+        fecha: fechaStr,
+        empleadoId: empleadoId,
+        turnoId: turnoId,
+        turno: null,
+        sucursalId: sucursalId,
+        programacionId: programacionId,
+        marcas: [],
+        novedades: [],
+        incumplimiento: null,
+        esDescanso: Boolean(esDescanso),
+        fechaIso: fechaIso,
+        empleadoNombre: empleadoNombre,
+        tipoTurno: tipoTurno,
+        horario: horario,
+        estado: estado,
+        modificadoTrasPublicar: Boolean(modificadoTrasPublicar)
+    })""")
+}
+
+actual suspend fun guardarAsignacionPlataforma(asignacion: com.itm.gestordeturnos.domain.model.AsignacionTurno): Result<Unit>? = suspendCancellableCoroutine { continuation ->
+    val onSuccess: (dynamic) -> Unit = {
+        continuation.resume(Result.success(Unit))
+    }
+    val onNotAvailable: (dynamic) -> Unit = {
+        continuation.resume(null)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = error?.message as? String ?: "Error al guardar asignación en Firestore"
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    val id = asignacion.id.ifBlank { "${asignacion.empleadoId}_${asignacion.fechaIso}" }
+    val docData = construirObjetoJsAsignacion(asignacion.copy(id = id))
+
+    js("""
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                firebase.firestore().collection("asignaciones").doc(id).set(docData)
+                    .then(function() {
+                        onSuccess(null);
+                    })
+                    .catch(onError);
+            } else {
+                onNotAvailable(null);
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}
+
+actual suspend fun guardarAsignacionesBatchPlataforma(asignaciones: List<com.itm.gestordeturnos.domain.model.AsignacionTurno>): Result<Unit>? = suspendCancellableCoroutine { continuation ->
+    if (asignaciones.isEmpty()) {
+        continuation.resume(Result.success(Unit))
+        return@suspendCancellableCoroutine
+    }
+
+    val onSuccess: (dynamic) -> Unit = {
+        continuation.resume(Result.success(Unit))
+    }
+    val onNotAvailable: (dynamic) -> Unit = {
+        continuation.resume(null)
+    }
+    val onError: (dynamic) -> Unit = { error ->
+        val msg = error?.message as? String ?: "Error al guardar lote de asignaciones en Firestore"
+        continuation.resume(Result.failure(Exception(msg)))
+    }
+
+    val docsArray = asignaciones.map { asig ->
+        val id = asig.id.ifBlank { "${asig.empleadoId}_${asig.fechaIso}" }
+        construirObjetoJsAsignacion(asig.copy(id = id))
+    }.toTypedArray()
+
+    js("""
+        try {
+            if (typeof firebase !== 'undefined' && typeof firebase.firestore === 'function') {
+                var db = firebase.firestore();
+                var batch = db.batch();
+                var col = db.collection("asignaciones");
+                for (var i = 0; i < docsArray.length; i++) {
+                    var item = docsArray[i];
+                    batch.set(col.doc(item.id), item);
+                }
+                batch.commit()
+                    .then(function() {
+                        onSuccess(null);
+                    })
+                    .catch(onError);
+            } else {
+                onNotAvailable(null);
+            }
+        } catch(e) {
+            onError(e);
+        }
+    """)
+}

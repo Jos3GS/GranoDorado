@@ -112,12 +112,15 @@ class MallaSemanalViewModel(
     private var hayCambiosPendientes = false
 
     // Colección de todos los empleados en la base de datos (sincronizados desde Firestore / EmpleadoRepository)
-    private var todosLosEmpleados: List<Empleado> = emptyList()
+    private var todosLosEmpleados: List<Empleado> = empleadoRepository.empleados.value
 
     init {
         // Conectar y sincronizar con Firestore
         empleadoRepository.iniciarSincronizacionFirestore()
         turnoRepository.iniciarSincronizacionFirestore()
+
+        sincronizarAsignacionesSemana()
+        actualizarFilasPorSucursal(_uiState.value.sucursal)
 
         observarEmpleadosBackend()
         observarTurnosCatalogo()
@@ -128,6 +131,7 @@ class MallaSemanalViewModel(
         viewModelScope.launch {
             empleadoRepository.empleados.collect { listaEmpleados ->
                 todosLosEmpleados = listaEmpleados
+                sincronizarAsignacionesSemana()
                 actualizarFilasPorSucursal(_uiState.value.sucursal)
             }
         }
@@ -156,6 +160,8 @@ class MallaSemanalViewModel(
         lunesSemana: LocalDate,
         todasAsignaciones: List<AsignacionTurno>
     ): String {
+        val sucursalBase = emp.sucursal.ifBlank { emp.sucursalId }
+
         // 1. Si el empleado tiene cambio de sucursal con fecha efectiva (a partir de la próxima semana)
         if (emp.fechaCambioSucursal.isNotBlank() && emp.sucursalAnterior.isNotBlank()) {
             val fechaEfectiva = try { LocalDate.parse(emp.fechaCambioSucursal) } catch (_: Exception) { null }
@@ -163,7 +169,7 @@ class MallaSemanalViewModel(
                 return if (lunesSemana < fechaEfectiva) {
                     emp.sucursalAnterior
                 } else {
-                    emp.sucursal
+                    sucursalBase
                 }
             }
         }
@@ -178,7 +184,7 @@ class MallaSemanalViewModel(
         }
 
         // 3. Por defecto, sucursal actual del empleado
-        return emp.sucursal
+        return sucursalBase
     }
 
     private fun perteneceASucursalSemana(
@@ -221,8 +227,9 @@ class MallaSemanalViewModel(
             var algunaPublicada = false
 
             for (asig in asigsSemana) {
-                // Solo cargar en la malla si el empleado pertenece a esta sucursal en esta semana
-                if (empleadosIdsEstaSucursal.isNotEmpty() && asig.empleadoId !in empleadosIdsEstaSucursal) {
+                // Solo descartar si el empleado ya existe en todosLosEmpleados y pertenece a otra sucursal
+                val empConocido = todosLosEmpleados.find { it.id == asig.empleadoId }
+                if (empConocido != null && empConocido.id !in empleadosIdsEstaSucursal) {
                     continue
                 }
 
@@ -346,24 +353,25 @@ class MallaSemanalViewModel(
         val programacionId = "${fechaLunes}_${sucursalActual}"
 
         val asignacionesAGuardar = mutableListOf<AsignacionTurno>()
+        val existentes = turnoRepository.asignaciones.value
 
         // Solo guardar empleados que pertenecen a esta sucursal en esta semana
         val empleadosIdsEstaSucursal = todosLosEmpleados.filter { emp ->
-            esEmpleadoActivo(emp) && perteneceASucursalSemana(emp, sucursalActual, fechaLunes, turnoRepository.asignaciones.value)
+            esEmpleadoActivo(emp) && perteneceASucursalSemana(emp, sucursalActual, fechaLunes, existentes)
         }.map { it.id }.toSet()
 
         turnosPorEmpleado.forEach { (empId, celdas) ->
-            if (empleadosIdsEstaSucursal.isNotEmpty() && empId !in empleadosIdsEstaSucursal) {
+            val emp = todosLosEmpleados.find { it.id == empId }
+            if (emp != null && empId !in empleadosIdsEstaSucursal) {
                 return@forEach
             }
-            val emp = todosLosEmpleados.find { it.id == empId }
             val empNombre = emp?.let {
                 if (it.apellido.isNotBlank()) "${it.nombre} ${it.apellido}".trim() else it.nombre
             } ?: empId
 
             celdas.forEachIndexed { idx, celda ->
+                val fechaDia = fechaLunes.plus(DatePeriod(days = idx)).toString()
                 if (celda.tipoCelda in listOf(TipoCeldaMalla.TURNO, TipoCeldaMalla.DESCANSO, TipoCeldaMalla.INCAPACIDAD, TipoCeldaMalla.PERMISO, TipoCeldaMalla.VACACIONES)) {
-                    val fechaDia = fechaLunes.plus(DatePeriod(days = idx)).toString()
                     val turnoId = if (celda.esDescanso || celda.tipoCelda != TipoCeldaMalla.TURNO) "" else (_uiState.value.turnosCatalogoActivos.find { it.nombre.equals(celda.tipo, ignoreCase = true) }?.id ?: "")
                     asignacionesAGuardar.add(
                         AsignacionTurno(
@@ -381,6 +389,23 @@ class MallaSemanalViewModel(
                             modificadoTrasPublicar = celda.modificadoTrasPublicar
                         )
                     )
+                } else if (celda.tipoCelda == TipoCeldaMalla.SIN_ASIGNAR && existentes.any { it.empleadoId == empId && it.fechaIso == fechaDia }) {
+                    asignacionesAGuardar.add(
+                        AsignacionTurno(
+                            id = "${empId}_${fechaDia}",
+                            fechaIso = fechaDia,
+                            empleadoId = empId,
+                            empleadoNombre = empNombre,
+                            turnoId = "",
+                            tipoTurno = "",
+                            horario = "",
+                            sucursalId = sucursalActual,
+                            programacionId = programacionId,
+                            esDescanso = false,
+                            estado = estadoActual,
+                            modificadoTrasPublicar = false
+                        )
+                    )
                 }
             }
         }
@@ -390,6 +415,12 @@ class MallaSemanalViewModel(
         if (asignacionesAGuardar.isNotEmpty()) {
             turnoRepository.guardarAsignacionesEnBackground(asignacionesAGuardar)
         }
+    }
+
+    fun refrescarAlEntrarPantalla() {
+        todosLosEmpleados = empleadoRepository.empleados.value
+        sincronizarAsignacionesSemana()
+        actualizarFilasPorSucursal(_uiState.value.sucursal)
     }
 
     fun onSucursalCambio(nuevaSucursal: String) {
@@ -415,6 +446,30 @@ class MallaSemanalViewModel(
             return
         }
 
+        // Al publicar la semana, cualquier día sin asignar de los empleados de esta sucursal se asigna automáticamente como Descanso
+        val fechaLunes = _uiState.value.fechaInicioSemana
+        val sucursalActual = _uiState.value.sucursal
+        val empleadosEstaSucursal = todosLosEmpleados.filter { emp ->
+            esEmpleadoActivo(emp) && perteneceASucursalSemana(emp, sucursalActual, fechaLunes, turnoRepository.asignaciones.value)
+        }
+
+        empleadosEstaSucursal.forEach { emp ->
+            val celdas = turnosPorEmpleado.getOrPut(emp.id) {
+                MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
+            }
+            for (i in 0..6) {
+                if (celdas[i].tipoCelda == TipoCeldaMalla.SIN_ASIGNAR) {
+                    celdas[i] = TurnoCelda(
+                        tipo = "Descanso",
+                        horario = "-",
+                        tipoCelda = TipoCeldaMalla.DESCANSO,
+                        esDescanso = true,
+                        modificadoTrasPublicar = false
+                    )
+                }
+            }
+        }
+
         // Al publicar la semana oficial inicial, se limpia el indicador de modificado en los turnos de la semana
         turnosPorEmpleado.values.forEach { listaCeldas ->
             listaCeldas.forEachIndexed { i, celda ->
@@ -427,7 +482,8 @@ class MallaSemanalViewModel(
         _uiState.update {
             it.copy(
                 publicado = true,
-                estadoMalla = "PUBLICADA - VISIBLE PARA LOS EMPLEADOS"
+                estadoMalla = "PUBLICADA - VISIBLE PARA LOS EMPLEADOS",
+                mensajeError = null
             )
         }
         guardarCambiosSiHayPendientes(forzarPublicada = true)
@@ -541,12 +597,11 @@ class MallaSemanalViewModel(
             MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
         }
 
-        // RN-17: Rechazar asignación si el empleado tiene descanso, vacaciones, incapacidad o permiso aprobado
+        // RN-17: Rechazar asignación solo si el empleado tiene vacaciones, incapacidad o permiso aprobado
         if (diaIndex in celdas.indices) {
             val celdaActual = celdas[diaIndex]
-            if (celdaActual.tipoCelda in listOf(TipoCeldaMalla.DESCANSO, TipoCeldaMalla.VACACIONES, TipoCeldaMalla.INCAPACIDAD, TipoCeldaMalla.PERMISO)) {
+            if (celdaActual.tipoCelda in listOf(TipoCeldaMalla.VACACIONES, TipoCeldaMalla.INCAPACIDAD, TipoCeldaMalla.PERMISO)) {
                 val mensaje = when (celdaActual.tipoCelda) {
-                    TipoCeldaMalla.DESCANSO -> "No se puede asignar turno: el empleado tiene programado un descanso para este día."
                     TipoCeldaMalla.VACACIONES -> "No se puede asignar turno: el empleado tiene vacaciones registradas para este día."
                     TipoCeldaMalla.INCAPACIDAD -> "No se puede asignar turno: el empleado tiene una incapacidad médica registrada para este día."
                     TipoCeldaMalla.PERMISO -> "No se puede asignar turno: el empleado tiene un permiso aprobado para este día."
@@ -573,7 +628,8 @@ class MallaSemanalViewModel(
             turnosSemanaActuales = celdas,
             nuevoTurno = nuevoTurno,
             diaIndex = diaIndex,
-            todasAsignaciones = turnoRepository.asignaciones.value
+            todasAsignaciones = turnoRepository.asignaciones.value,
+            permitirModificarDescanso = true
         )
 
         if (validacion is ValidacionAsignacionResult.Invalido) {
@@ -584,7 +640,7 @@ class MallaSemanalViewModel(
         _uiState.update { it.copy(mensajeError = null) }
 
         if (diaIndex in celdas.indices) {
-            if (celdas[diaIndex].tipoCelda in listOf(TipoCeldaMalla.INCAPACIDAD, TipoCeldaMalla.PERMISO, TipoCeldaMalla.VACACIONES, TipoCeldaMalla.DESCANSO)) return
+            if (celdas[diaIndex].tipoCelda in listOf(TipoCeldaMalla.INCAPACIDAD, TipoCeldaMalla.PERMISO, TipoCeldaMalla.VACACIONES)) return
             celdas[diaIndex] = nuevoTurno
         }
 
@@ -605,7 +661,7 @@ class MallaSemanalViewModel(
             }
         }
 
-        // Marcamos cambios pendientes para guardar al cambiar de pantalla, sucursal o publicar
+        // Marcamos cambios pendientes para guardar en un solo lote al cambiar de semana, sucursal, pantalla o publicar
         hayCambiosPendientes = true
 
         actualizarFilasPorSucursal(_uiState.value.sucursal)
@@ -665,7 +721,8 @@ class MallaSemanalViewModel(
             turnosSemanaActuales = celdas,
             nuevoTurno = nuevoDescanso,
             diaIndex = diaIndex,
-            todasAsignaciones = turnoRepository.asignaciones.value
+            todasAsignaciones = turnoRepository.asignaciones.value,
+            permitirModificarDescanso = true
         )
 
         if (validacion is ValidacionAsignacionResult.Invalido) {
@@ -681,6 +738,50 @@ class MallaSemanalViewModel(
 
         hayCambiosPendientes = true
 
+        actualizarFilasPorSucursal(_uiState.value.sucursal)
+    }
+
+    fun quitarAsignacionAEmpleado(
+        idEmpleado: String,
+        diaIndex: Int
+    ) {
+        val permiso = consultarHorarioUseCase.validarPermisoModificarProgramacion(
+            SessionManager.usuarioActivo?.rol,
+            _uiState.value.esSemanaPasada
+        )
+        if (permiso is ValidacionSoloLecturaResult.Bloqueado) {
+            _uiState.update { it.copy(mensajeError = permiso.mensaje) }
+            return
+        }
+
+        val celdas = turnosPorEmpleado.getOrPut(idEmpleado) {
+            MutableList(7) { TurnoCelda(tipo = "", horario = "", tipoCelda = TipoCeldaMalla.SIN_ASIGNAR) }
+        }
+
+        if (diaIndex in celdas.indices) {
+            val celdaActual = celdas[diaIndex]
+            if (celdaActual.tipoCelda in listOf(TipoCeldaMalla.VACACIONES, TipoCeldaMalla.INCAPACIDAD, TipoCeldaMalla.PERMISO)) {
+                val mensaje = when (celdaActual.tipoCelda) {
+                    TipoCeldaMalla.VACACIONES -> "No se puede modificar: el empleado tiene vacaciones registradas para este día."
+                    TipoCeldaMalla.INCAPACIDAD -> "No se puede modificar: el empleado tiene una incapacidad médica registrada para este día."
+                    TipoCeldaMalla.PERMISO -> "No se puede modificar: el empleado tiene un permiso aprobado para este día."
+                    else -> "No se puede modificar: el empleado no está disponible para este día."
+                }
+                _uiState.update { it.copy(mensajeError = mensaje) }
+                return
+            }
+
+            celdas[diaIndex] = TurnoCelda(
+                tipo = "",
+                horario = "",
+                tipoCelda = TipoCeldaMalla.SIN_ASIGNAR,
+                esDescanso = false,
+                modificadoTrasPublicar = false
+            )
+        }
+
+        _uiState.update { it.copy(mensajeError = null) }
+        hayCambiosPendientes = true
         actualizarFilasPorSucursal(_uiState.value.sucursal)
     }
 

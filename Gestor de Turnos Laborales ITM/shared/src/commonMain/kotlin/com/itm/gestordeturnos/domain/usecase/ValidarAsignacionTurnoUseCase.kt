@@ -80,8 +80,11 @@ class ValidarAsignacionTurnoUseCase(
     fun validarDisponibilidadPorAusenciaODescanso(
         celdaActual: TurnoCelda?,
         asignacionExistente: AsignacionTurno? = null,
-        esAsignacionDescanso: Boolean = false
+        esAsignacionDescanso: Boolean = false,
+        permitirModificarDescanso: Boolean = false
     ): ValidacionAsignacionResult {
+        val bloquearDescanso = !esAsignacionDescanso && !permitirModificarDescanso
+
         // 1. Validar por celda actual en la malla semanal
         if (celdaActual != null) {
             when {
@@ -103,7 +106,7 @@ class ValidarAsignacionTurnoUseCase(
                         "No se puede asignar turno: el empleado tiene vacaciones registradas para este día."
                     )
                 }
-                !esAsignacionDescanso && (
+                bloquearDescanso && (
                     celdaActual.tipoCelda == TipoCeldaMalla.DESCANSO ||
                     celdaActual.esDescanso ||
                     celdaActual.tipo.equals("Descanso", ignoreCase = true)
@@ -133,7 +136,7 @@ class ValidarAsignacionTurnoUseCase(
                         "No se puede asignar turno: el empleado tiene vacaciones registradas para este día."
                     )
                 }
-                !esAsignacionDescanso && (
+                bloquearDescanso && (
                     asignacionExistente.esDescanso ||
                     asignacionExistente.tipoTurno.equals("Descanso", ignoreCase = true)
                 ) -> {
@@ -141,6 +144,53 @@ class ValidarAsignacionTurnoUseCase(
                         "No se puede asignar turno: el empleado tiene programado un descanso para este día."
                     )
                 }
+            }
+        }
+
+        return ValidacionAsignacionResult.Valido
+    }
+
+    /**
+     * Valida las reglas integrales de la semana al momento de publicar la malla:
+     * - Todos los días de cada empleado deben estar asignados (turno, descanso o novedad).
+     * - Cada empleado debe contar con sus días de descanso asignados (mínimo 2 días libres/ausencia justificada).
+     * - Ningún empleado puede superar las 42 horas efectivas semanales.
+     */
+    fun validarPublicacionMalla(filas: List<com.itm.gestordeturnos.domain.model.FilaMalla>): ValidacionAsignacionResult {
+        if (filas.isEmpty()) {
+            return ValidacionAsignacionResult.Invalido(
+                "No hay empleados activos en esta sucursal para publicar la programación semanal."
+            )
+        }
+
+        for (fila in filas) {
+            val sinAsignar = fila.turnos.count { it.tipoCelda == TipoCeldaMalla.SIN_ASIGNAR }
+            val descansos = fila.turnos.count { it.tipoCelda == TipoCeldaMalla.DESCANSO || it.esDescanso }
+            val ausencias = fila.turnos.count {
+                it.tipoCelda in listOf(
+                    TipoCeldaMalla.INCAPACIDAD,
+                    TipoCeldaMalla.PERMISO,
+                    TipoCeldaMalla.VACACIONES
+                )
+            }
+
+            if (sinAsignar > 0) {
+                return ValidacionAsignacionResult.Invalido(
+                    "No se puede publicar la semana: ${fila.nombre} tiene $sinAsignar día(s) sin asignar. Asígnale sus turnos y días de descanso antes de publicar."
+                )
+            }
+
+            if (descansos + ausencias < 2) {
+                return ValidacionAsignacionResult.Invalido(
+                    "No se puede publicar la semana: ${fila.nombre} debe tener al menos 2 días de descanso asignados en la semana."
+                )
+            }
+
+            val validacionHoras = validarMaximoHorasSemanales(fila.turnos)
+            if (validacionHoras is ValidacionAsignacionResult.Invalido) {
+                return ValidacionAsignacionResult.Invalido(
+                    "No se puede publicar la semana (${fila.nombre}): ${validacionHoras.mensaje}"
+                )
             }
         }
 
@@ -157,7 +207,9 @@ class ValidarAsignacionTurnoUseCase(
         turnosSemanaActuales: List<TurnoCelda>? = null,
         nuevoTurno: TurnoCelda? = null,
         diaIndex: Int? = null,
-        todasAsignaciones: List<AsignacionTurno>? = null
+        todasAsignaciones: List<AsignacionTurno>? = null,
+        permitirModificarDescanso: Boolean = false,
+        validarLimiteSemanal: Boolean = true
     ): ValidacionAsignacionResult {
         // 1. Validar semana modificable (semana actual o futuras)
         val diasDesdeLunes = fechaActual.dayOfWeek.ordinal
@@ -221,7 +273,7 @@ class ValidarAsignacionTurnoUseCase(
         }
 
         // 7. RN-16: Ningún empleado puede superar 42 horas efectivas de trabajo en una misma semana
-        if (turnosSemanaActuales != null && nuevoTurno != null && diaIndex != null && nuevoTurno.tipoCelda == TipoCeldaMalla.TURNO) {
+        if (validarLimiteSemanal && turnosSemanaActuales != null && nuevoTurno != null && diaIndex != null && nuevoTurno.tipoCelda == TipoCeldaMalla.TURNO) {
             val simulados = turnosSemanaActuales.toMutableList()
             if (diaIndex in simulados.indices) {
                 simulados[diaIndex] = nuevoTurno
@@ -235,7 +287,7 @@ class ValidarAsignacionTurnoUseCase(
         }
 
         // 8. RN-17: El sistema rechaza la asignación cuando el empleado tiene registrado ese día
-        // un descanso, vacaciones, una incapacidad o un permiso aprobado.
+        // vacaciones, una incapacidad o un permiso aprobado (y descanso solo si no se permite su edición).
         val esDescanso = nuevoTurno?.esDescanso == true || nuevoTurno?.tipoCelda == TipoCeldaMalla.DESCANSO
         val celdaActual = if (turnosSemanaActuales != null && diaIndex != null && diaIndex in turnosSemanaActuales.indices) {
             turnosSemanaActuales[diaIndex]
@@ -251,7 +303,8 @@ class ValidarAsignacionTurnoUseCase(
         val resDisponibilidad = validarDisponibilidadPorAusenciaODescanso(
             celdaActual = celdaActual,
             asignacionExistente = asigExistente,
-            esAsignacionDescanso = esDescanso
+            esAsignacionDescanso = esDescanso,
+            permitirModificarDescanso = permitirModificarDescanso
         )
         if (resDisponibilidad is ValidacionAsignacionResult.Invalido) {
             return resDisponibilidad

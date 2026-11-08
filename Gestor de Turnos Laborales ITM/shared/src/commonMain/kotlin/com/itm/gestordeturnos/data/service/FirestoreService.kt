@@ -9,6 +9,8 @@ import com.itm.gestordeturnos.domain.model.NotificacionIncumplimiento
 import com.itm.gestordeturnos.domain.model.RegistroAsistencia
 import com.itm.gestordeturnos.domain.model.SolicitudCambioTurno
 import com.itm.gestordeturnos.domain.model.TurnoTemplate
+import com.itm.gestordeturnos.guardarAsignacionPlataforma
+import com.itm.gestordeturnos.guardarAsignacionesBatchPlataforma
 import com.itm.gestordeturnos.guardarEmpleadoPlataforma
 import com.itm.gestordeturnos.initPlatformFirebase
 import dev.gitlive.firebase.Firebase
@@ -60,23 +62,31 @@ object FirestoreService {
     }
 
     suspend fun guardarEmpleado(empleado: Empleado): Result<Unit> {
-        val plataformaRes = guardarEmpleadoPlataforma(empleado)
+        val id = empleado.id.ifBlank { "emp_${Random.nextInt(10000, 99999)}" }
+        val normalizado = empleado.copy(
+            id = id,
+            sucursalId = empleado.sucursalId.ifBlank { empleado.sucursal }
+        )
+
+        val firestore = db
+        var ultimoError: Throwable? = null
+        if (firestore != null) {
+            try {
+                firestore.collection("empleados").document(id).set(Empleado.serializer(), normalizado)
+                return Result.success(Unit)
+            } catch (e: Throwable) {
+                ultimoError = e
+            }
+        }
+
+        val plataformaRes = guardarEmpleadoPlataforma(normalizado)
         if (plataformaRes != null) {
             return plataformaRes
         }
 
-        val firestore = db ?: return Result.failure(IllegalStateException("Firebase Firestore no está inicializado"))
-        return try {
-            val id = empleado.id.ifBlank { "emp_${Random.nextInt(10000, 99999)}" }
-            val normalizado = empleado.copy(
-                id = id,
-                sucursalId = empleado.sucursalId.ifBlank { empleado.sucursal }
-            )
-            firestore.collection("empleados").document(id).set(normalizado)
-            Result.success(Unit)
-        } catch (e: Throwable) {
-            Result.failure(e)
-        }
+        return Result.failure(
+            ultimoError ?: IllegalStateException("Firebase Firestore no está inicializado")
+        )
     }
 
     suspend fun inicializarSiEstaVacio(): Boolean {
@@ -201,33 +211,61 @@ object FirestoreService {
     }
 
     suspend fun guardarAsignacion(asignacion: AsignacionTurno): Result<Unit> {
-        val firestore = db ?: return Result.failure(IllegalStateException("Firebase Firestore no está inicializado"))
-        return try {
-            val id = asignacion.id.ifBlank { "${asignacion.empleadoId}_${asignacion.fechaIso}" }
-            val normalizada = asignacion.copy(id = id)
-            firestore.collection("asignaciones").document(id).set(normalizada)
-            Result.success(Unit)
-        } catch (e: Throwable) {
-            Result.failure(e)
+        val id = asignacion.id.ifBlank { "${asignacion.empleadoId}_${asignacion.fechaIso}" }
+        val normalizada = asignacion.copy(id = id)
+
+        val firestore = db
+        var ultimoError: Throwable? = null
+        if (firestore != null) {
+            try {
+                firestore.collection("asignaciones").document(id).set(AsignacionTurno.serializer(), normalizada)
+                return Result.success(Unit)
+            } catch (e: Throwable) {
+                ultimoError = e
+            }
         }
+
+        val plataformaRes = guardarAsignacionPlataforma(normalizada)
+        if (plataformaRes != null) {
+            return plataformaRes
+        }
+
+        return Result.failure(
+            ultimoError ?: IllegalStateException("Firebase Firestore no está inicializado")
+        )
     }
 
     suspend fun guardarAsignacionesBatch(asignaciones: List<AsignacionTurno>): Result<Unit> {
         if (asignaciones.isEmpty()) return Result.success(Unit)
-        val firestore = db ?: return Result.failure(IllegalStateException("Firebase Firestore no está inicializado"))
-        return try {
-            val batch = firestore.batch()
-            val col = firestore.collection("asignaciones")
-            for (asig in asignaciones) {
-                val id = asig.id.ifBlank { "${asig.empleadoId}_${asig.fechaIso}" }
-                val normalizada = asig.copy(id = id)
-                batch.set(col.document(id), normalizada)
-            }
-            batch.commit()
-            Result.success(Unit)
-        } catch (e: Throwable) {
-            Result.failure(e)
+        val normalizadas = asignaciones.map { asig ->
+            val id = asig.id.ifBlank { "${asig.empleadoId}_${asig.fechaIso}" }
+            asig.copy(id = id)
         }
+
+        val firestore = db
+        var ultimoError: Throwable? = null
+        if (firestore != null) {
+            try {
+                val batch = firestore.batch()
+                val col = firestore.collection("asignaciones")
+                for (normalizada in normalizadas) {
+                    batch.set(col.document(normalizada.id), AsignacionTurno.serializer(), normalizada)
+                }
+                batch.commit()
+                return Result.success(Unit)
+            } catch (e: Throwable) {
+                ultimoError = e
+            }
+        }
+
+        val plataformaRes = guardarAsignacionesBatchPlataforma(normalizadas)
+        if (plataformaRes != null) {
+            return plataformaRes
+        }
+
+        return Result.failure(
+            ultimoError ?: IllegalStateException("Firebase Firestore no está inicializado")
+        )
     }
 
     // --- Asistencia y Marcaciones ---

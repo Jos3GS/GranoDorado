@@ -40,5 +40,10 @@ service cloud.firestore {
     match /incumplimientos/{incumplimientoId} {
       allow read, write: if estaAutenticado();
     }
+
+    // Colección de eventos de auditoría y trazabilidad (RN-32)
+    match /auditoria/{auditoriaId} {
+      allow read, write: if estaAutenticado();
+    }
   }
 }

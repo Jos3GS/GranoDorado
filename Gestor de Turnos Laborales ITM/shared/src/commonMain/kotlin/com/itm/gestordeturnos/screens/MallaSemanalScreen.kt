@@ -113,8 +113,9 @@ private object MallaUtcDatePickerFormatter : DatePickerFormatter {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
-    // Al salir de la pantalla (cambiar de pantalla en la app), guardar automáticamente los cambios pendientes en Firestore
+    // Al entrar y salir de la pantalla, sincronizar y guardar automáticamente los cambios pendientes
     DisposableEffect(Unit) {
+        viewModel.refrescarAlEntrarPantalla()
         onDispose {
             viewModel.guardarCambiosSiHayPendientes()
         }
@@ -528,9 +529,6 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                                             return@MallaEmployeeRow
                                         }
                                         when (turno.tipoCelda) {
-                                            com.itm.gestordeturnos.domain.model.TipoCeldaMalla.DESCANSO -> {
-                                                viewModel.mostrarErrorAsignacion("No se puede asignar turno: el empleado tiene programado un descanso para este día.")
-                                            }
                                             com.itm.gestordeturnos.domain.model.TipoCeldaMalla.VACACIONES -> {
                                                 viewModel.mostrarErrorAsignacion("No se puede asignar turno: el empleado tiene vacaciones registradas para este día.")
                                             }
@@ -613,8 +611,12 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
         // ==========================================
         // 6. MODAL ASIGNAR TURNO
         // ==========================================
-        celdaSeleccionada?.let { (fila, diaIndex, _) ->
+        celdaSeleccionada?.let { (fila, diaIndex, celdaActual) ->
             val fechaDia = state.fechaInicioSemana.plus(DatePeriod(days = diaIndex))
+            val tieneAsignacion = celdaActual.tipoCelda in listOf(
+                com.itm.gestordeturnos.domain.model.TipoCeldaMalla.TURNO,
+                com.itm.gestordeturnos.domain.model.TipoCeldaMalla.DESCANSO
+            )
             ModalAsignarTurno(
                 nombreEmpleado = fila.nombre,
                 fechaIso = fechaDia.toString(),
@@ -627,6 +629,12 @@ fun MallaSemanalScreen(viewModel: MallaSemanalViewModel) {
                     viewModel.asignarDescansoAEmpleado(fila.idEmpleado, diaIndex)
                     celdaSeleccionada = null
                 },
+                onQuitarAsignacion = if (tieneAsignacion) {
+                    {
+                        viewModel.quitarAsignacionAEmpleado(fila.idEmpleado, diaIndex)
+                        celdaSeleccionada = null
+                    }
+                } else null,
                 onDismiss = { celdaSeleccionada = null }
             )
         }
