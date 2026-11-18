@@ -42,17 +42,14 @@ La matriz identifica, para cada transición, el estado de origen, el evento que 
 | T01 | ● Inicial | Creación de la solicitud por el empleado | — | Acciones entry de Solicitada: registrar(accion, solicitante, valores); avisarSolicitud(sol, companero) | Solicitada | HU-09 |
 | T02 | Solicitada | aceptar(usuario) | usuario = companero | cambiarA(AceptadaPorElCompanero, usuario) | AceptadaPorElCompanero | HU-09 |
 | T03 | Solicitada | rechazar(usuario, motivo) | usuario = companero ∧ motivo ≠ vacío | motivoRechazo = motivo; cambiarA(RechazadaPorElCompanero, usuario, motivo) | RechazadaPorElCompanero | CA-09.3 |
-| T04 | Solicitada | rechazar(usuario, motivo) | usuario = companero ∧ motivo = vacío | Rechazar la acción y mostrar «Indica el motivo del rechazo.» (transición interna) | Solicitada (sin cambio) | CA-09.3 |
-| T05 | Solicitada | cancelar(usuario) | usuario = solicitante | cambiarA(Cancelada, usuario) | Cancelada | HU-09 |
-| T06 | Solicitada | at(turnoMasProximo()) (evento de tiempo) | ahora ≥ turnoMasProximo() | vencer() → cambiarA(Vencida) | Vencida | CA-09.7 |
-| T07 | AceptadaPorElCompanero | aprobar(usuario) | adminHabilitado ∧ validarIntercambio(sol).valido | cambiarA(Aprobada, usuario) | Aprobada | CA-12.3 |
-| T08 | AceptadaPorElCompanero | aprobar(usuario) | adminHabilitado ∧ ¬validarIntercambio(sol).valido | Mostrar los mensajes de ResultadoValidacion (transición interna) | AceptadaPorElCompanero (sin cambio) | CA-12.5 |
-| T09 | AceptadaPorElCompanero | rechazar(usuario, motivo) | adminHabilitado ∧ motivo ≠ vacío | motivoRechazo = motivo; cambiarA(RechazadaPorElAdministrador, usuario, motivo) | RechazadaPorElAdministrador | CA-12.4 |
-| T10 | AceptadaPorElCompanero | rechazar(usuario, motivo) | adminHabilitado ∧ motivo = vacío | Rechazar la acción y mostrar «Indica el motivo del rechazo.» (transición interna) | AceptadaPorElCompanero (sin cambio) | CA-12.4 |
-| T11 | AceptadaPorElCompanero | cancelar(usuario) | usuario = solicitante | cambiarA(Cancelada, usuario) | Cancelada | HU-09 |
-| T12 | AceptadaPorElCompanero | at(turnoMasProximo()) (evento de tiempo) | ahora ≥ turnoMasProximo() | vencer() → cambiarA(Vencida) | Vencida | CA-09.7, CA-12.1 |
-| T13 | Aprobada | aplicar() | — | cambiarA(Aplicada) | Aplicada | CA-12.3 |
-| T14 | Aplicada, RechazadaPorElCompanero, RechazadaPorElAdministrador, Cancelada, Vencida | Finalización (sin evento) | — | Fin del ciclo de vida | ◉ Estado final | — |
+| T04 | Solicitada | cancelar(usuario) | usuario = solicitante | cambiarA(Cancelada, usuario) | Cancelada | HU-09 |
+| T05 | Solicitada | at(turnoMasProximo()) (evento de tiempo) | ahora ≥ turnoMasProximo() | vencer() → cambiarA(Vencida) | Vencida | CA-09.7 |
+| T06 | AceptadaPorElCompanero | aprobar(usuario) | adminHabilitado ∧ validarIntercambio(sol).valido | cambiarA(Aprobada, usuario) | Aprobada | CA-12.3 |
+| T07 | AceptadaPorElCompanero | rechazar(usuario, motivo) | adminHabilitado ∧ motivo ≠ vacío | motivoRechazo = motivo; cambiarA(RechazadaPorElAdministrador, usuario, motivo) | RechazadaPorElAdministrador | CA-12.4 |
+| T08 | AceptadaPorElCompanero /home/kevin| cancelar(usuario) | usuario = solicitante | cambiarA(Cancelada, usuario) | Cancelada | HU-09 |
+| T09 | AceptadaPorElCompanero | at(turnoMasProximo()) (evento de tiempo) | ahora ≥ turnoMasProximo() | vencer() → cambiarA(Vencida) | Vencida | CA-09.7, CA-12.1 |
+| T10 | Aprobada | aplicar() | — | cambiarA(Aplicada) | Aplicada | CA-12.3 |
+| T11 | Aplicada, RechazadaPorElCompanero, RechazadaPorElAdministrador, Cancelada, Vencida | Finalización (sin evento) | — | Fin del ciclo de vida | ◉ Estado final | — |
 
 ## 5. Relación con las funcionalidades del MVP
 
