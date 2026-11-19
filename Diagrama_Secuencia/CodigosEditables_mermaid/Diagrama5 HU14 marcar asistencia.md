@@ -1,3 +1,4 @@
+```mermaid
 ---
 title: "sd HU-14 Marcar asistencia al turno (Épica 5)"
 ---
@@ -62,3 +63,4 @@ sequenceDiagram
     deactivate MVM
     MS-->>-E: Muestra el estado de la jornada y el aviso
     deactivate E
+```
