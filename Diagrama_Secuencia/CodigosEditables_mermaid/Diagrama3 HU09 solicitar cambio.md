@@ -1,3 +1,4 @@
+```mermaid
 ---
 title: "sd HU-09 Solicitar cambio de turno (Épica 3)"
 ---
@@ -54,3 +55,4 @@ sequenceDiagram
     CS-->>-E: Muestra la solicitud pendiente o el mensaje de error
     deactivate E
     Note over CVM,CR: Continúa en el diagrama 4 - el compañero la acepta con aceptarSolicitud() (estado ACEPTADA_COMPANERO) y la resuelve el administrador
+```
