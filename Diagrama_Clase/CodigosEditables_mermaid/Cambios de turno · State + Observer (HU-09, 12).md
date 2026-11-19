@@ -1,3 +1,4 @@
+```mermaid
 classDiagram
     direction TB
 
@@ -135,3 +136,4 @@ classDiagram
     cssClass "AprobacionCambios,SolicitudesCambio" servicio
     cssClass "EstadoSolicitud,ObservadorSolicitud" interface
     cssClass "Asignacion,Empleado,MotorValidacion,PlanificadorTareas,ProgramacionSemanal,ServicioAuditoria,ServicioNotificaciones" otrobloque
+```
