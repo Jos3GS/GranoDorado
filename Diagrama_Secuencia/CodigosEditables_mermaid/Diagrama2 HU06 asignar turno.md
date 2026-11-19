@@ -1,3 +1,4 @@
+```mermaid
 ---
 title: "sd HU-06 Asignar turno y publicar semana (Épica 2)"
 ---
@@ -76,3 +77,4 @@ sequenceDiagram
     deactivate MVM
     MS-->>-A: Muestra la semana publicada
     deactivate A
+```
