@@ -1,3 +1,4 @@
+```mermaid
 classDiagram
     direction LR
 
@@ -126,3 +127,4 @@ classDiagram
     cssClass "EstadoEmpleado,ResultadoInicioSesion,Rol,Sucursal" enumeration
     cssClass "Google" externo
     cssClass "ConsultaHorarios,ServicioNotificaciones" otrobloque
+```
