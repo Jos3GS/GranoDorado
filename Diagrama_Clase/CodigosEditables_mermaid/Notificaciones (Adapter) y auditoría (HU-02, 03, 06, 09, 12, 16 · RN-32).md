@@ -1,3 +1,4 @@
+```mermaid
 classDiagram
     direction LR
 
@@ -105,3 +106,4 @@ classDiagram
     cssClass "TipoAccionAuditoria" enumeration
     cssClass "ClienteProveedorCorreo,ServicioDeAvisos" externo
     cssClass "AvisosSolicitud,Empleado,GestionEmpleados,Incumplimientos,ProgramacionSemanal,RecuperacionClave" otrobloque
+```
