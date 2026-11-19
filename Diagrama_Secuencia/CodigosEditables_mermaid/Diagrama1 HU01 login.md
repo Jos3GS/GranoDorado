@@ -1,3 +1,4 @@
+```mermaid
 ---
 title: "sd HU-01 Iniciar sesión (Épica 1)"
 ---
@@ -84,3 +85,4 @@ sequenceDiagram
     deactivate LVM
     LS-->>-U: Muestra el panel principal o el mensaje de error
     deactivate U
+```
