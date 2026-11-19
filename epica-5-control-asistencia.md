@@ -100,17 +100,9 @@ Hoy la compañía no tiene forma de llevar el control del tiempo que un empleado
 
 ### Reglas de negocio
 
-- Solo se puede marcar sobre un turno propio, ya publicado y correspondiente al día en curso.
-- Las marcas siguen un orden obligatorio: inicio de turno, luego cualquier par de salida y regreso de descanso, y por último fin de turno. Ninguna marca se acepta fuera de esa secuencia.
-- Cada marca se registra una sola vez en su posición de la secuencia: no se puede marcar dos veces el inicio ni dos veces el fin.
-- No se puede regresar de un descanso que no se inició, ni finalizar el turno estando en descanso: primero hay que registrar el regreso.
-- Si el inicio se marca después de la hora programada, el sistema registra la diferencia en minutos y la muestra al empleado, sin calificarla.
-- La hora de cada marca la toma el servidor, nunca el reloj del dispositivo del empleado.
-- Una marca registrada no puede ser modificada ni eliminada por el empleado.
-- El tiempo efectivo trabajado es la diferencia entre el fin y el inicio del turno, menos el tiempo consumido en descansos.
-- Un turno sin marca de fin al terminar el día queda como pendiente de cierre y así se le muestra al supervisor.
-- No se puede marcar en un día sin turno asignado, ni en un día registrado como descanso, vacaciones o incapacidad.
-- Cada marca guarda quién la registró (Empleado o Supervisor, en esta historia, Será el empleado)
+- **RN-13:** Solo se marca asistencia en el turno propio publicado del día, en orden: inicio, descansos, fin.
+- **RN-14:** La hora de la marca la toma el servidor. Una marca del empleado no se modifica ni se elimina.
+- **RN-16:** Toda acción relevante queda registrada con usuario, fecha y hora, y con el valor anterior y el nuevo cuando aplique.
 
 ### Criterios de aceptación
 
@@ -282,15 +274,9 @@ Olvidar una marca es lo más común en cualquier control de asistencia, sobre to
 
 ### Reglas de negocio
 
-- Solo se pueden completar marcas de empleados de la propia sucursal.
-- Solo se realizan marcas de un turno del día en curso, no turnos pasados o futuros.
-- Una marca registrada por el empleado no puede ser modificada ni eliminada por el supervisor.
-- Solo se puede registrar una marca respetando la secuencia: no se registra un fin de turno si no existe el inicio.
-- El motivo del registro es obligatorio y queda visible en el historial del turno.
-- Toda marca registrada por el supervisor queda identificada como tal, con su nombre, el momento en que la registró y la hora que se está registrando, que son dos datos distintos.
-- Una marca registrada por el supervisor puede ser corregida por él mientras el turno no esté cerrado, y cada corrección queda en el historial con su justificación.
-- El empleado puede consultar las marcas que el supervisor registró sobre sus turnos.
-- Completar una marca no altera el turno programado ni la asignación.
+- **RN-13:** Solo se marca asistencia en el turno propio publicado del día, en orden: inicio, descansos, fin.
+- **RN-14:** La hora de la marca la toma el servidor. Una marca del empleado no se modifica ni se elimina.
+- **RN-16:** Toda acción relevante queda registrada con usuario, fecha y hora, y con el valor anterior y el nuevo cuando aplique.
 
 ### Criterios de aceptación
 
@@ -474,16 +460,8 @@ Este es el punto donde la asistencia deja de ser un archivo y se vuelve una herr
 
 ### Reglas de negocio
 
-- Se genera un incumplimiento de inicio cuando transcurren 15 minutos desde la hora de inicio programada sin que exista marca de inicio.
-- Cada turno genera como máximo un incumplimiento de inicio.
-- Solo se evalúan turnos publicados. Un turno no publicado no genera incumplimientos.
-- No se evalúan días registrados como descanso, vacaciones o incapacidad, porque en ellos no debería existir un turno asignado.
-- La notificación llega al Administrador de Sucursal de la sucursal del turno. El Administrador General puede consultar las de las tres.
-- Si el empleado marca el inicio después de haberse generado el aviso, el incumplimiento pasa a atendido de forma automática y registra la hora real de la marca.
-- Un incumplimiento también pasa a atendido cuando el supervisor completa la marca faltante o deja constancia con un comentario.
-- La notificación identifica al empleado, la sucursal, el turno, la hora programada y los minutos transcurridos.
-- El incumplimiento no modifica el turno programado ni genera por sí solo ninguna consecuencia para el empleado.
-- Cada incumplimiento y cada atención quedan registrados con la fecha, la hora y el usuario que intervino.
+- **RN-15:** Si pasan 15 minutos sin marca de inicio se genera un incumplimiento (máximo uno por turno), que no genera consecuencias por sí solo.
+- **RN-16:** Toda acción relevante queda registrada con usuario, fecha y hora, y con el valor anterior y el nuevo cuando aplique.
 
 ### Criterios de aceptación
 

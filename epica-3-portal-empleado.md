@@ -72,15 +72,7 @@ Hoy el empleado recibe su horario un domingo por la noche, dentro de un grupo do
 
 ### Reglas de negocio
 
-- El empleado ve únicamente sus propios turnos; en ningún caso los de otro empleado.
-- Solo se muestran los horarios ya publicados por el administrador. Un horario en preparación no es visible para el empleado.
-- La semana va de lunes a domingo, que es el ciclo con el que hoy se comunican los horarios.
-- Cada jornada muestra el nombre del turno, la hora de inicio, la hora de fin y la sucursal en la que se realiza.
-- Los días sin turno se muestran como "Sin turno asignado" y no se dejan en blanco, para que la ausencia de información no se confunda con un error.
-- El total semanal suma las horas efectivas de cada turno, descontando los descansos definidos en él.
-- Si el horario publicado se modifica, el empleado ve la jornada afectada señalada como modificada, junto con la fecha y hora del cambio.
-- El horario es de solo lectura: ninguna acción de esta pantalla altera la programación.
-- Un empleado inactivo no accede a la aplicación y, por tanto, tampoco a esta pantalla.
+- **RN-6:** La semana (lunes a domingo) está en Borrador o Publicada. El empleado solo ve lo publicado. Todo cambio posterior genera nueva versión y notifica.
 
 ### Supuestos
 
@@ -263,20 +255,9 @@ El caso describe este proceso como caótico: cuando un empleado se enferma o nec
 
 ### Reglas de negocio
 
-- Solo se puede solicitar el intercambio de un turno propio que esté publicado y cuya fecha y hora de inicio aún no hayan pasado.
-- El compañero debe pertenecer a la misma sucursal y desempeñar el mismo perfil, para que la cobertura de la jornada no se altere con el intercambio.
-- Ambos empleados deben estar activos en el momento de la solicitud y en el momento de la aprobación.
-- Ninguno de los dos puede quedar con dos turnos el mismo día ni con turnos que se solapen.
-- El intercambio debe respetar el descanso mínimo entre turnos consecutivos y el máximo de horas semanales que aplique a cada empleado.
-- El sistema no ofrece como elegible ningún turno que incumpla alguna de las reglas anteriores.
-- La solicitud recorre los estados solicitada, aceptada por el compañero, aprobada y aplicada. Puede terminar en rechazada por el compañero, rechazada por el administrador, cancelada por el solicitante o vencida.
-- La solicitud pasa primero por el compañero y solo después llega al Administrador de Sucursal: sin la aceptación del compañero la solicitud no se somete a aprobación.
-- La aprobación corresponde al Administrador de Sucursal de la sucursal en la que están los turnos involucrados.
-- El intercambio solo se refleja en el horario cuando el Administrador de Sucursal lo aprueba: la aceptación del compañero por sí sola no cambia nada.
-- Una solicitud que no ha sido resuelta antes del inicio del turno más próximo queda vencida y no se puede aprobar.
-- El rechazo, tanto del compañero como del Administrador de Sucursal, exige un motivo escrito que el solicitante puede leer.
-- Un turno con una solicitud de intercambio en curso no admite una segunda solicitud simultánea.
-- Cada cambio de estado se registra con el usuario que lo produjo y la fecha y hora.
+- **RN-10:** Solo se intercambia un turno propio, publicado y futuro, entre empleados activos de la misma sucursal y perfil. El resultado debe cumplir las reglas de programación.
+- **RN-11:** El cambio exige aceptación del compañero y luego aprobación del administrador, que revalida las reglas. El horario cambia solo al aprobar.
+- **RN-16:** Toda acción relevante queda registrada con usuario, fecha y hora, y con el valor anterior y el nuevo cuando aplique.
 
 ### Supuestos
 
@@ -485,19 +466,8 @@ Hoy el horario programado y el horario realmente trabajado son dos cosas distint
 
 ### Reglas de negocio
 
-- Una novedad siempre se asocia a un turno propio del empleado que la reporta.
-- Solo se pueden reportar novedades sobre turnos cuya hora de inicio ya pasó.
-- El reporte debe hacerse dentro de las 48 horas siguientes al fin del turno; después el turno deja de admitir novedades.
-- El tipo de novedad y la descripción son obligatorios.
-- En una salida antes de la hora, la hora real de salida debe ser posterior al inicio del turno y anterior a su fin.
-- En una ampliación del turno, la hora real de salida debe ser posterior al fin del turno y no puede exceder las 22:00, que es el cierre de la operación.
-- En una llegada tarde, la hora real de entrada debe ser posterior al inicio del turno y anterior a su fin.
-- Un turno admite varias novedades de tipos distintos, pero no dos del mismo tipo.
-- La novedad recorre los estados reportada y revisada. Una vez revisada, el empleado no puede modificarla ni eliminarla.
-- El empleado puede corregir o eliminar su novedad mientras esté en estado reportada.
-- El administrador ve únicamente las novedades de los empleados de su sucursal; el Administrador General ve las de las tres.
-- La novedad no altera el turno programado ni el horario publicado: queda registrada junto a él.
-- Cada reporte y cada revisión se registran con el usuario y la fecha y hora.
+- **RN-12:** Una novedad se registra sobre un turno ya iniciado, dentro de las 48 h siguientes a su fin. Tipo y descripción son obligatorios.
+- **RN-16:** Toda acción relevante queda registrada con usuario, fecha y hora, y con el valor anterior y el nuevo cuando aplique.
 
 ### Supuestos
 

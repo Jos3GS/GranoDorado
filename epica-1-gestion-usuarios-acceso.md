@@ -69,14 +69,8 @@ Hoy no existe control de acceso: los horarios se publican en un grupo de WhatsAp
 
 ### Reglas de negocio
 
-- El identificador de acceso es el correo electrónico, único y no sensible a mayúsculas.
-- Solo las cuentas en estado Activo pueden iniciar sesión, aunque la contraseña sea correcta.
-- Ante credenciales inválidas se muestra siempre el mismo mensaje: "Correo o contraseña incorrectos.", sin indicar cuál falló.
-- Tras 5 intentos fallidos consecutivos la cuenta se bloquea 15 minutos; el contador se reinicia con un login exitoso o un cambio de clave
-- La sesión se cierra automáticamente tras 30 minutos sin interacción.
-- Los permisos se aplican según la matriz de permisos del Marco común.
-- La contraseña se muestra enmascarada, con un control explícito para revelarla.
-- Cada intento, exitoso o fallido, se registra con correo, fecha-hora, resultado e IP.
+- **RN-01:** El acceso es por correo electrónico, único y sin distinguir mayúsculas. Solo las cuentas Activas pueden ingresar.
+- **RN-02:** Las funciones dependen del rol. El Administrador de Sucursal gestiona solo su sucursal; el General, las tres.
 
 ### Criterios de aceptación
 
@@ -237,14 +231,8 @@ El personal trabaja en turnos dentro de una franja de 16 horas diarias los 7 dí
 
 ### Reglas de negocio
 
-- La solicitud responde siempre con el mismo mensaje, exista o no la cuenta; el correo solo se envía si existe y está Activa.
-- El enlace es de un solo uso y caduca a los 30 minutos de su emisión.
-- Emitir un enlace nuevo invalida cualquier enlace anterior vigente de esa cuenta.
-- La nueva contraseña requiere mínimo 8 caracteres, 1 mayúscula, 1 minúscula y 1 dígito.
-- La nueva contraseña no puede ser igual a la vigente.
-- Un cambio exitoso cierra todas las sesiones activas y reinicia el contador de intentos fallidos
-- Máximo 3 solicitudes por cuenta en una ventana de 60 minutos.
-- Una cuenta Inactiva no recibe correo de recuperación.
+- **RN-17:** El enlace de recuperación es de un solo uso y caduca a los 30 minutos de su emisión.
+- **RN-18:** La nueva contraseña debe tener al menos 8 caracteres, con una mayúscula, una minúscula y un dígito, y ser distinta de la vigente.
 
 ### Criterios de aceptación
 
@@ -354,9 +342,7 @@ Mitigación: enlace de un solo uso y vigencia de 30 minutos.
 - Bloqueada: cuenta con 5 fallidos + enlace vigente → cambio exitoso y desbloqueo.
 - Claves inválidas: Abc123, abcdefg1, ABCDEFG1, Abcdefgh, Cafe2026x.
 
-### Notas de UX
 
-*(Sin contenido en el documento original.)*
 
 ### Evaluación DoR
 
@@ -419,16 +405,9 @@ Hoy los horarios viven en hojas de Excel del Administrador General. Al no existi
 
 ### Reglas de negocio
 
-- Campos obligatorios: nombre, apellido, tipo y número de documento, correo, rol, sucursal y fecha de ingreso. Teléfono es opcional.
-- El número de documento es único en el sistema, sin importar el estado del empleado.
-- El correo es único y debe cumplir el formato local@dominio.tld
-- El rol solo admite uno de los 5 valores del catálogo cerrado; no se acepta texto libre.
-- La sucursal solo admite uno de los 3 valores del catálogo; un empleado pertenece a exactamente una sucursal.
-- El empleado nace con estado Activo.
-- El sistema no asigna contraseña visible: envía un correo de activación con enlace de un solo uso.
-- El Administrador de Sucursal solo crea en su propia sucursal y no puede asignar el rol Administrador General.
-- La fecha de ingreso no puede superar la fecha actual + 30 días ni ser anterior a la fecha actual.
-- El alta se registra con el usuario que la ejecuta, la fecha-hora y los valores creados.
+- **RN-02:** Las funciones dependen del rol. El Administrador de Sucursal gestiona solo su sucursal; el General, las tres.
+- **RN-03:** El documento y el correo de un empleado son únicos. El tipo y el número de documento no se editan.
+- **RN-16:** Toda acción relevante queda registrada con usuario, fecha y hora, y con el valor anterior y el nuevo cuando aplique.
 
 ### Criterios de aceptación
 
@@ -609,16 +588,9 @@ Grano Dorado es una cadena en crecimiento con 3 sucursales y personal que rota e
 
 ### Reglas de negocio
 
-- El tipo y el número de documento no son editables: identifican al empleado. Un error se corrige inactivando el registro y creando uno nuevo.
-- Al cambiar el rol, los permisos se recalculan, rigen desde el siguiente inicio de sesión y las sesiones activas se cierran.
-- Un empleado pertenece a exactamente una sucursal; cambiarla reemplaza la anterior.
-- Si el empleado tiene turnos futuros en la sucursal de origen, el sistema advierte antes de confirmar el traslado e indica la cantidad afectada; no los modifica.
-- No se permite dejar el sistema sin al menos un usuario Activo con rol Administrador General.
-- Un usuario no puede modificar su propio rol ni estado.
-- Al inactivar, las sesiones activas se cierran de inmediato y no puede volver a iniciar sesión; su historial de turnos se conserva-
-- Un empleado inactivo puede reactivarse conservando correo, documento e historial.
-- El Administrador de Sucursal edita solo empleados de su sucursal, sin cambiarles la sucursal ni asignar el rol Administrador General.
-- Toda modificación se registra con campo, valor anterior, valor nuevo, usuario y fecha-hora; si no hay cambios, no se registra nada.
+- **RN-02:** Las funciones dependen del rol. El Administrador de Sucursal gestiona solo su sucursal; el General, las tres.
+- **RN-03:** El documento y el correo de un empleado son únicos. El tipo y el número de documento no se editan.
+- **RN-16:** Toda acción relevante queda registrada con usuario, fecha y hora, y con el valor anterior y el nuevo cuando aplique.
 
 ### Criterios de aceptación
 

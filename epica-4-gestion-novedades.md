@@ -73,17 +73,7 @@ Que el empleado pueda reportar una novedad no sirve de nada si nadie la lee. Hoy
 
 ### Reglas de negocio
 
-- El Administrador de Sucursal ve únicamente novedades de empleados de su sucursal. El Administrador General ve las de las tres y puede alternar entre ellas.
-- Cada novedad muestra el turno programado, el horario reportado y la diferencia en minutos entre ambos, calculada por el sistema.
-- Una novedad tiene dos estados: reportada y revisada.
-- Al marcar una novedad como revisada se registra el nombre del revisor y la fecha y hora.
-- Una novedad revisada no puede volver al estado reportada.
-- El supervisor no puede modificar ni eliminar el contenido de una novedad, la haya reportado quien la haya reportado.
-- El comentario del revisor es visible para el empleado que reportó la novedad.
-- La bandeja muestra por defecto las novedades del día en curso, con acceso al histórico mediante el filtro de fechas.
-- Revisar una novedad no altera el turno programado, la asignación ni las marcas de asistencia.
-- Las novedades de un empleado que pasó a inactivo siguen siendo consultables en el histórico.
-- Ningún empleado con rol operativo tiene acceso a esta bandeja.
+- **RN-02:** Las funciones dependen del rol. El Administrador de Sucursal gestiona solo su sucursal; el General, las tres.
 
 ### Supuestos
 
@@ -269,17 +259,9 @@ El caso describe el intercambio de turnos como un proceso caótico en el que el 
 
 ### Reglas de negocio
 
-- A la bandeja solo llegan las solicitudes que el compañero ya aceptó. Una solicitud aún sin respuesta del compañero no se muestra para aprobación.
-- El Administrador de Sucursal solo ve y resuelve solicitudes cuyos turnos pertenecen a su sucursal. El Administrador General puede resolver las de las tres.
-- Un supervisor no puede aprobar ni rechazar una solicitud en la que él sea el solicitante o el compañero.
-- Al aprobar, el sistema vuelve a verificar todas las reglas del intercambio. Si alguna dejó de cumplirse, no aplica el cambio y explica cuál falló.
-- Aprobar intercambia los turnos de ambos empleados y les avisa a los dos. Ninguno conserva su turno original.
-- Rechazar exige un motivo escrito, deja ambos horarios sin cambios y el motivo es visible para los dos empleados.
-- Una solicitud que llegó al inicio del turno sin resolverse queda vencida y ya no se puede aprobar ni rechazar.
-- Una solicitud resuelta no se reabre. Revertir un intercambio ya aplicado exige una nueva solicitud.
-- La bandeja ordena las solicitudes por la proximidad del turno más cercano de los dos involucrados.
-- Cada decisión queda registrada con el usuario que la tomó, la fecha y hora, y el motivo cuando corresponde.
-- Ningún empleado con rol operativo tiene acceso a esta bandeja.
+- **RN-10:** Solo se intercambia un turno propio, publicado y futuro, entre empleados activos de la misma sucursal y perfil. El resultado debe cumplir las reglas de programación.
+- **RN-11:** El cambio exige aceptación del compañero y luego aprobación del administrador, que revalida las reglas. El horario cambia solo al aprobar.
+- **RN-16:** Toda acción relevante queda registrada con usuario, fecha y hora, y con el valor anterior y el nuevo cuando aplique.
 
 ### Supuestos
 
@@ -483,19 +465,9 @@ Lo que el empleado no reporta simplemente no existe para el sistema, y el vacío
 
 ### Reglas de negocio
 
-- Solo se registran novedades sobre empleados de la propia sucursal. El Administrador General puede hacerlo en las tres.
-- Solo se registran novedades sobre turnos cuya hora de inicio ya pasó.
-- El supervisor no puede modificar ni eliminar una novedad reportada por el empleado.
-- Si el empleado ya reportó una novedad del mismo tipo sobre ese turno, no se registra otra igual: la observación se agrega como comentario de la existente.
-- La descripción es obligatoria en todos los tipos.
-- En los tipos que implican un horario real, se aplican las mismas validaciones que rigen el reporte del empleado: la hora debe ser coherente con el turno programado y no superar las 22:00.
-- En el tipo ausencia no se indica horario real, porque no hubo jornada trabajada.
-- Toda novedad registrada por el supervisor queda identificada como tal, con su nombre y el momento en que la registró.
-- Una novedad registrada por el supervisor nace en estado revisada, porque la registra quien revisa.
-- El plazo para registrar una novedad es de 48 horas desde el fin del turno.
-- El supervisor puede corregir una novedad que él mismo registró dentro de ese plazo, y cada corrección queda en el historial.
-- El empleado afectado puede consultar la novedad y el nombre de quien la registró.
-- Registrar una novedad no altera el turno programado ni las marcas de asistencia.
+- **RN-02:** Las funciones dependen del rol. El Administrador de Sucursal gestiona solo su sucursal; el General, las tres.
+- **RN-12:** Una novedad se registra sobre un turno ya iniciado, dentro de las 48 h siguientes a su fin. Tipo y descripción son obligatorios.
+- **RN-16:** Toda acción relevante queda registrada con usuario, fecha y hora, y con el valor anterior y el nuevo cuando aplique.
 
 ### Supuestos
 

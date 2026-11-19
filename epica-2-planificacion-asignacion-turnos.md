@@ -68,15 +68,9 @@ Hoy cada horario se escribe a mano en Excel, celda por celda, lo que obliga a re
 
 ### Reglas de negocio
 
-- Un turno se compone de nombre, hora de inicio, hora de fin y cero o más descansos.
-- La hora de inicio y la hora de fin deben estar dentro de la franja de operación 06:00–22:00.
-- La hora de fin debe ser posterior a la hora de inicio; ningún turno cruza la medianoche.
-- Cada descanso debe estar contenido en el rango del turno y no puede solaparse con otro descanso.
-- La duración efectiva es la duración total menos la suma de los descansos, y debe ser mayor que 0.
-- El nombre del turno es único en el catálogo, sin distinguir mayúsculas.
-- Un turno que ya tiene asignaciones no se elimina: se inactiva y deja de ofrecerse
-- Modificar un turno no altera las asignaciones ya publicadas, que conservan el horario con el que se publicaron.
-- El Administrador General crea, edita e inactiva turnos
+- **RN-4:** Todo turno tiene nombre único, queda dentro de 06:00–22:00, no cruza la medianoche y sus descansos están dentro del turno sin solaparse. Su duración efectiva debe ser mayor que cero.
+- **RN-5:** Un turno con asignaciones se inactiva, no se elimina. Modificarlo no altera lo ya publicado.
+- **RN-16:** Toda acción relevante queda registrada con usuario, fecha y hora, y con el valor anterior y el nuevo cuando aplique.
 
 ### Criterios de aceptación
 
@@ -248,14 +242,11 @@ Este es el problema central del caso. Hoy la asignación se hace a mano en Excel
 
 ### Reglas de negocio
 
-- Solo se asignan turnos a empleados en estado Activo y de la misma sucursal de la programación.
-- El sistema rechaza la asignación si el empleado tiene registrado ese día un descanso, vacaciones o una incapacidad. Es la regla que da sentido a la historia.
-- Un empleado no puede tener dos asignaciones el mismo día.
-- Al superar 42 horas efectivas en la semana, el sistema bloquea la asignación e indica el total acumulado.
-- Una semana está en estado Borrador o Publicada. En Borrador se edita libremente; una vez Publicada, cada cambio genera una versión nueva y notifica al empleado afectado.
-- No se crean asignaciones con fecha anterior a la fecha actual.
-- El Administrador de Sucursal programa únicamente en su sucursal.
-- Toda asignación, cambio y publicación se registra con usuario, fecha-hora y valores anterior y nuevo.
+- **RN-6:** La semana (lunes a domingo) está en Borrador o Publicada. El empleado solo ve lo publicado. Todo cambio posterior genera nueva versión y notifica.
+- **RN-7:** Solo se asignan turnos a empleados Activos de la sucursal, y no con fecha pasada.
+- **RN-8:** Un empleado no puede tener dos turnos el mismo día ni superar 42 horas efectivas por semana.
+- **RN-9:** No se asigna turno a quien tenga ese día descanso, vacaciones, incapacidad o permiso aprobado.
+- **RN-16:** Toda acción relevante queda registrada con usuario, fecha y hora, y con el valor anterior y el nuevo cuando aplique.
 
 ### Criterios de aceptación
 
@@ -427,13 +418,8 @@ La descripción de la épica pide expresamente "verificar la asignación de cada
 
 ### Reglas de negocio
 
-- La malla se presenta por sucursal y por semana de lunes a domingo.
-- Cada celda muestra el nombre del turno y su horario, o el estado de no disponibilidad del empleado ese día.
-- El Administrador General puede cambiar de sucursal; el Administrador de Sucursal solo ve la propia.
-- La malla indica de forma visible si la semana está en Borrador o Publicada, y la fecha-hora de la última publicación.
-- La malla se muestra en modo de solo lectura: ninguna acción de esta pantalla modifica asignaciones.
-- Los empleados inactivos no aparecen en la malla de semanas futuras, pero sí en las semanas ya publicadas donde tenían turnos.
-- El totalizador por empleado suma la duración efectiva, descontando los descansos definidos en el turno.
+- **RN-02:** Las funciones dependen del rol. El Administrador de Sucursal gestiona solo su sucursal; el General, las tres.
+- **RN-6:** La semana (lunes a domingo) está en Borrador o Publicada. El empleado solo ve lo publicado. Todo cambio posterior genera nueva versión y notifica.
 
 ### Criterios de aceptación
 
