@@ -1,3 +1,4 @@
+```mermaid
 classDiagram
     direction LR
 
@@ -124,3 +125,4 @@ classDiagram
     cssClass "Incumplimientos,MarcacionEmpleado,PlanificadorTareas,RegistroSupervisor" servicio
     cssClass "EstadoIncumplimiento,EstadoJornada,OrigenMarca,TipoIncumplimiento,TipoMarca" enumeration
     cssClass "Asignacion,ConsultaDisponibilidad,ConsultaHorarios,Empleado,ServicioNotificaciones,SolicitudesCambio" otrobloque
+```
