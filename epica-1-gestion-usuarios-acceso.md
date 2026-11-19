@@ -231,8 +231,7 @@ El personal trabaja en turnos dentro de una franja de 16 horas diarias los 7 dí
 
 ### Reglas de negocio
 
-- **RN-17:** El enlace de recuperación es de un solo uso y caduca a los 30 minutos de su emisión.
-- **RN-18:** La nueva contraseña debe tener al menos 8 caracteres, con una mayúscula, una minúscula y un dígito, y ser distinta de la vigente.
+- **RN-17:** El enlace de recuperación es de un solo uso y caduca a los 60 minutos de su emisión.
 
 ### Criterios de aceptación
 
