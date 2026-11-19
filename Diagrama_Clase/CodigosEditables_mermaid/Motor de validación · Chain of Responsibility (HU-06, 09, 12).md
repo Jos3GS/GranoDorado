@@ -1,3 +1,4 @@
+```mermaid
 classDiagram
     direction TB
 
@@ -72,3 +73,4 @@ classDiagram
 
     classDef otrobloque fill:#ffffff,stroke:#9ca3af,stroke-dasharray:4 3,color:#6b7280
     cssClass "AprobacionCambios,ConsultaDisponibilidad,ProgramacionSemanal,SolicitudesCambio" otrobloque
+```
