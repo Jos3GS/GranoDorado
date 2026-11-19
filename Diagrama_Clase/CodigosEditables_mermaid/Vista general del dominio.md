@@ -1,3 +1,4 @@
+```mermaid
 classDiagram
     direction LR
 
@@ -30,3 +31,4 @@ classDiagram
     SolicitudCambio "0..*" --> "2" Empleado : solicitante y compañero
     SolicitudCambio "1" *-- "1..*" CambioDeEstado : historial
     EventoAuditoria "0..*" --> "1" Empleado : ejecutado por
+```
