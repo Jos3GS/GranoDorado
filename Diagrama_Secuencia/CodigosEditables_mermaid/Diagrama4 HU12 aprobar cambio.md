@@ -1,3 +1,4 @@
+```mermaid
 ---
 title: "sd HU-12 Aprobar cambio de turno (Épica 4)"
 ---
@@ -63,3 +64,4 @@ sequenceDiagram
     deactivate CVM
     CS-->>-AD: Muestra la solicitud aprobada o el motivo del rechazo
     deactivate AD
+```
