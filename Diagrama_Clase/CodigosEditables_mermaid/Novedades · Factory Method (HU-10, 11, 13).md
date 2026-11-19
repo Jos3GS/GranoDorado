@@ -1,3 +1,4 @@
+```mermaid
 classDiagram
     direction TB
 
@@ -112,3 +113,4 @@ classDiagram
     cssClass "BandejaNovedades,RegistroNovedadSupervisor,ReporteNovedades" servicio
     cssClass "EstadoNovedad,TipoNovedad" enumeration
     cssClass "Asignacion,ConsultaHorarios,Empleado" otrobloque
+```
